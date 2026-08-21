@@ -1,0 +1,568 @@
+@import "tailwindcss";
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * MAISON — design tokens
+ *
+ * Two layers, on purpose:
+ *
+ *   1. RAW PALETTE — plain custom properties in :root. Deliberately NOT inside
+ *      @theme, so Tailwind does not generate a `bg-bone-page` utility for every
+ *      swatch. These are the only literal colours in the codebase.
+ *
+ *   2. SEMANTIC TOKENS — inside @theme, each one pointing at a raw swatch.
+ *      These generate the utilities components actually use (bg-ground,
+ *      text-ink, border-line …).
+ *
+ * Re-skinning then means re-pointing semantics at different raws. Four states
+ * share ONE set of semantic names:
+ *
+ *   :root                              light (default, and what the server renders)
+ *   prefers-color-scheme: dark         dark, unless the user explicitly chose light
+ *   :root[data-theme="dark"]           dark, explicitly chosen
+ *   [data-skin="room"]                 always dark — the live bidding room is a
+ *                                      *place*, not a theme, so it stays dark
+ *                                      even for a light-mode visitor
+ *
+ * Because plain `@theme` (not `@theme inline`) emits utilities as
+ * `var(--color-x)`, all of this works through ordinary cascade — a component
+ * written with `bg-surface text-ink` is correct in every state and never needs a
+ * `dark:` variant. Custom properties inherit, so [data-skin="room"] on a wrapper
+ * beats :root for everything inside it regardless of specificity.
+ *
+ * ⚠ The two dark blocks below are duplicates by necessity (a media query and a
+ *   selector cannot be merged). Keep them in sync.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/* ── 1. Raw palette ──────────────────────────────────────────────────────── */
+:root {
+  /*
+   * Grounds carry a warm hue at the same lightness as the neutrals they
+   * replaced — #141414 → #191310 is the same darkness, just no longer grey.
+   * Holding lightness steady means contrast ratios against the ink are
+   * unchanged, so the page gains colour without losing legibility.
+   *
+   * Saturation stays low on purpose. A background that announces its colour
+   * competes with the lots, and the lots are photographs of objects.
+   */
+
+  /* Bone — warm ivory ground */
+  --bone-page: #faf6ef;
+  --bone-card: #f4efe4;
+  --bone-inset: #e9e2d4;
+
+  /* Roast — warm brown-black grounds */
+  --roast-page: #191310;
+  --roast-card: #241c16;
+  --roast-inset: #322820;
+
+  /* Umber Ink — on light. Warmed to match the ground; pure grey type on a warm
+     ivory reads as a mismatch rather than as neutral. */
+  --umber-ink: #1c1714;
+  --umber-soft: #453d34;
+  --umber-muted: #746a5d;
+  --umber-faint: #a59a8b;
+
+  /* Cream — ink on dark */
+  --cream-ink: #f6f1e8;
+  --cream-soft: #ded6c8;
+  --cream-muted: #a89e90;
+  --cream-faint: #7a7167;
+
+  /* Hairlines — tinted rather than pure black/white, so rules sit in the same
+     warm family as the grounds instead of reading as grey scratches on them. */
+  --rule-light: rgba(60, 42, 26, 0.10);
+  --rule-light-strong: rgba(60, 42, 26, 0.20);
+  --rule-dark: rgba(246, 236, 222, 0.09);
+  --rule-dark-strong: rgba(246, 236, 222, 0.21);
+
+  /* Quiet Signal Accents */
+  --chestnut: #8c5a38;
+  --amber-burnt: #8c5a38;
+  --amber-gold: #c48b48;
+  --amber-flare: #c48b48;
+  --rust-deep: #b84328;
+  --rust-bright: #d95538;
+  --olive-deep: #3b6b45;
+  --olive-bright: #4e8c5b;
+  --gold-quiet: #b08243;
+
+  /* Easing */
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /*
+   * Paper grain, tiled at 200px. An SVG feTurbulence the browser rasterises
+   * once — no image request, no binary asset in the repo, and it stays crisp at
+   * any device pixel ratio.
+   *
+   * Desaturated so it tints nothing, and at this alpha it darkens a light
+   * ground and lifts a dark one by roughly the same amount, which is why one
+   * texture serves both themes. Keep it low: the moment grain is *visible* as
+   * noise rather than felt as texture, it stops reading as premium.
+   *
+   * Two knobs, both in the data URI: `baseFrequency` is speck size (higher =
+   * finer) and the rect's `opacity` is strength. 0.9 / 0.18 is a deliberately
+   * quiet setting — push opacity to ~0.3 if you want the paper to read louder.
+   */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23g)' opacity='0.18'/%3E%3C/svg%3E");
+}
+
+/* ── 2. Semantic tokens — light is the default ───────────────────────────── */
+@theme {
+  /*
+   * Helvetica Neue first, per the client. macOS/iOS gets the genuine face;
+   * everyone else falls through to Inter, which is close enough in proportion
+   * that the layout does not shift between the two.
+   *
+   * Arial sits AFTER Inter on purpose. Windows has Arial, so putting it earlier
+   * would mean Windows never reaches the webfont — and Arial's Cyrillic is
+   * noticeably weaker than Inter's for a page set entirely in it.
+   */
+  --font-sans:
+    "Helvetica Neue", "HelveticaNeue", Helvetica, var(--font-inter), Arial,
+    sans-serif;
+
+  --color-ground: var(--bone-page);
+  --color-surface: var(--bone-card);
+  --color-raise: var(--bone-inset);
+
+  --color-line: var(--rule-light);
+  --color-line-strong: var(--rule-light-strong);
+
+  --color-ink: var(--umber-ink);
+  --color-ink-soft: var(--umber-soft);
+  --color-muted: var(--umber-muted);
+  --color-faint: var(--umber-faint);
+
+  --color-accent: var(--chestnut);
+  --color-accent-ink: var(--bone-page);
+  --color-flare: var(--amber-burnt);
+  --color-rust: var(--rust-deep);
+  --color-olive: var(--olive-deep);
+  --color-gold: var(--gold-quiet);
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* ── Dark: system preference, unless the user explicitly chose light ─────── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-ground: var(--roast-page);
+    --color-surface: var(--roast-card);
+    --color-raise: var(--roast-inset);
+
+    --color-line: var(--rule-dark);
+    --color-line-strong: var(--rule-dark-strong);
+
+    --color-ink: var(--cream-ink);
+    --color-ink-soft: var(--cream-soft);
+    --color-muted: var(--cream-muted);
+    --color-faint: var(--cream-faint);
+
+    --color-accent: var(--amber-gold);
+    --color-accent-ink: var(--roast-page);
+    --color-flare: var(--amber-flare);
+    --color-rust: var(--rust-bright);
+    --color-olive: var(--olive-bright);
+    --color-gold: var(--amber-gold);
+
+    color-scheme: dark;
+  }
+}
+
+/* ── Dark: explicit choice, and the always-dark live room ────────────────── */
+:root[data-theme="dark"],
+[data-skin="room"] {
+  --color-ground: var(--roast-page);
+  --color-surface: var(--roast-card);
+  --color-raise: var(--roast-inset);
+
+  --color-line: var(--rule-dark);
+  --color-line-strong: var(--rule-dark-strong);
+
+  --color-ink: var(--cream-ink);
+  --color-ink-soft: var(--cream-soft);
+  --color-muted: var(--cream-muted);
+  --color-faint: var(--cream-faint);
+
+  --color-accent: var(--amber-gold);
+  --color-accent-ink: var(--roast-page);
+  --color-flare: var(--amber-flare);
+  --color-rust: var(--rust-bright);
+  --color-olive: var(--olive-bright);
+  --color-gold: var(--amber-gold);
+
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    /* Hairlines everywhere read as one system; opt out per element. */
+    border-color: var(--color-line);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  /*
+   * ── Backdrop ───────────────────────────────────────────────────────────
+   * A fixed, non-interactive layer holding two soft accent blooms and a fine
+   * paper grain. It keeps large flat fills from reading as dead screen space,
+   * which is the usual failure of a minimal palette.
+   *
+   * Why a fixed pseudo-element rather than background-image on <body>:
+   *   - `background-attachment: fixed` is the obvious way to anchor a gradient
+   *     to the viewport, and it janks badly on iOS Safari. Most of this
+   *     audience is on phones.
+   *   - A gradient painted across the <body> box stretches with the document,
+   *     so the same CSS looks completely different on a short page and a long
+   *     one. Anchored to the viewport it is consistent everywhere.
+   *
+   * z-index: -1 paints it above the canvas background but below all content.
+   * <body>'s background propagates to the canvas, so nothing covers it.
+   *
+   * It is a sibling layer, never an ancestor, so it cannot become the
+   * containing block for the room's `position: fixed` bid panel — see the
+   * warning on room-in below.
+   */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      var(--grain),
+      radial-gradient(
+        55rem 38rem at 88% -8%,
+        color-mix(in oklab, var(--color-accent) 22%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        48rem 34rem at -10% 20%,
+        color-mix(in oklab, var(--color-flare) 15%, transparent),
+        transparent 65%
+      ),
+      /* Third bloom, low and olive, so the field is not one flat wash of
+         amber — the eye reads two hues as depth and one as a gradient. */
+        radial-gradient(
+          40rem 30rem at 50% 108%,
+          color-mix(in oklab, var(--color-olive) 10%, transparent),
+          transparent 62%
+        );
+    /* One value per layer: grain tiles, the three blooms do not. A short list
+       would cycle and tile a gradient. */
+    background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+    background-size: 200px 200px, auto, auto, auto;
+  }
+
+  body {
+    background-color: var(--color-ground);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Numbers must never reflow as they tick. */
+  [data-numerals] {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-flare);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  ::selection {
+    background-color: var(--color-flare);
+    color: var(--color-ground);
+  }
+
+  /*
+   * Scroll reveal.
+   *
+   * The hidden state is scoped to `.js`, which the inline script in <head> adds
+   * before first paint. If that script never runs — JS disabled, script error,
+   * bot — the hidden rule simply never matches and everything renders visible.
+   * A reveal must never be the reason content is invisible.
+   */
+  .js [data-reveal="hidden"] {
+    opacity: 0;
+    transform: translateY(var(--reveal-y, 14px));
+  }
+
+  [data-reveal] {
+    transition:
+      opacity 0.75s var(--ease-out-soft) var(--reveal-delay, 0ms),
+      transform 0.75s var(--ease-out-soft) var(--reveal-delay, 0ms);
+  }
+}
+
+@layer components {
+  /*
+   * The small caps label that carries most of the "premium editorial" feel.
+   * Wide tracking + small size + muted colour = it recedes until you look.
+   */
+  .eyebrow {
+    font-size: 0.6875rem; /* 11px */
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  /* Editorial display setting for large numerals and titles. */
+  .display {
+    /*
+     * 600, not 300. The client asked for Helvetica Neue and explicitly not the
+     * light cut — and they are right for this material: hairline weights at
+     * display size look elegant on a white gallery page but go weak and papery
+     * on a dark ground, which is most of this site. A medium-bold grotesque at
+     * 11rem reads as confident; the same size at 300 reads as tentative.
+     */
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 0.92;
+  }
+
+  /* Page gutter — one place to change the whole site's horizontal rhythm. */
+  .gutter {
+    width: 100%;
+    margin-inline: auto;
+    max-width: 78rem;
+    padding-inline: 1.25rem;
+  }
+
+  @media (min-width: 768px) {
+    .gutter {
+      padding-inline: 2.5rem;
+    }
+  }
+
+  /* Hairline-boxed card, skin-agnostic. */
+  .plate {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-line);
+  }
+}
+
+/* ── Keyframes ─────────────────────────────────────────────────────────── */
+
+/*
+ * The clock heartbeat and the bid-arrival slide used to live here. They are now
+ * driven by framer-motion inside BidClock and BidFeed, where the feed needs
+ * AnimatePresence for exit animations that CSS cannot express — so the CSS
+ * versions were deleted rather than left to rot as a second, silently divergent
+ * definition of the same motion.
+ */
+
+/* Round change / price change acknowledgement. */
+@keyframes flare-in {
+  0% {
+    opacity: 0;
+    transform: translateY(0.35em);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ring-out {
+  from {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+/* Entrance for above-the-fold content, which is already in view on load and so
+   cannot wait for an intersection. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * The room's arrival — a slow fade, matching the drop into a dark space.
+ *
+ * ⚠ Opacity ONLY. Do not add transform/scale/filter here, however tempting.
+ * This animates <main>, which contains the bid panel, and a transformed
+ * ancestor becomes the containing block for its `position: fixed` descendants —
+ * so a scale here un-pins the panel from the viewport for the whole animation
+ * and bottoms it out against <main> instead, hundreds of pixels below the fold.
+ * Phone users would watch the bid button fly up into place on every load.
+ */
+@keyframes room-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/*
+ * Slow ambient drift for the hero glow. 18s and low amplitude on purpose: it
+ * should read as the page breathing, not as something moving. Anything faster
+ * competes with the copy for attention, which is the opposite of the point.
+ *
+ * Safe to transform — it is an absolutely positioned decorative layer with no
+ * `position: fixed` descendants.
+ */
+@keyframes aura-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate3d(4%, -3%, 0) scale(1.14);
+    opacity: 0.85;
+  }
+}
+
+/* Sheen that crosses the primary CTA every few seconds, so a button sitting in
+   an otherwise still hero still signals it is pressable. */
+@keyframes cta-sheen {
+  0% {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(230%) skewX(-18deg);
+  }
+}
+
+/*
+ * Touch devices have no hover, so `group-hover` alone would strand every phone
+ * on the dithered plate permanently. There the reveal is scroll-driven instead:
+ * DitherLayer's observer sets data-revealed as a plate crosses the middle of the
+ * screen, and only this rule acts on it.
+ *
+ * Deliberately unlayered. Tailwind's `opacity-100` lives in @layer utilities,
+ * and an unlayered rule beats any layered one regardless of specificity — which
+ * is what makes this override reliable without !important.
+ */
+@media (hover: none) {
+  .dither-layer[data-revealed="true"] {
+    opacity: 0;
+  }
+}
+
+/* Softens a shared-element morph at mid-flight. */
+@keyframes via-blur {
+  30% {
+    filter: blur(3px);
+  }
+}
+
+@utility animate-flare-in {
+  animation: flare-in 0.5s var(--ease-out-soft) both;
+}
+
+@utility animate-ring-out {
+  animation: ring-out 1.1s var(--ease-out-soft) infinite;
+}
+
+@utility animate-rise-in {
+  animation: rise-in 0.8s var(--ease-out-soft) both;
+}
+
+@utility animate-aura {
+  animation: aura-drift 18s var(--ease-in-out-soft) infinite;
+}
+
+@utility animate-cta-sheen {
+  animation: cta-sheen 2.6s var(--ease-in-out-soft) infinite;
+  animation-delay: 1.2s;
+}
+
+@utility animate-room-in {
+  animation: room-in 0.9s var(--ease-out-soft) both;
+}
+
+/*
+ * The same grain as the body backdrop, for surfaces that paint their own opaque
+ * ground and therefore cover it — the live room, which needs the dark palette
+ * while the shell around it may be light.
+ */
+@utility grain {
+  background-image: var(--grain);
+  background-size: 200px 200px;
+  background-repeat: repeat;
+}
+
+/* Hide scrollbar on the bid feed / round rail without losing scrollability. */
+@utility scroll-quiet {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ── View transitions ──────────────────────────────────────────────────────
+ * Two uses:
+ *   .morph  — a lot's plate morphing from catalogue grid into the lot page.
+ *   root    — the whole-page crossfade when the theme is switched, driven by
+ *             document.startViewTransition() in ThemeToggle.
+ */
+::view-transition-group(.morph) {
+  animation-duration: 420ms;
+  animation-timing-function: var(--ease-out-soft);
+}
+
+::view-transition-image-pair(.morph) {
+  animation-name: via-blur;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 380ms;
+  animation-timing-function: var(--ease-in-out-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+
+  /* Reveals end at their visible state, so killing the transition above is
+     safe — but view transitions must be stopped explicitly. */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

@@ -1,0 +1,84 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# MAISON — local stack
+#
+#   docker compose up -d db          Postgres only; run the app on the host.
+#   docker compose --profile app up  Postgres + the app in a container.
+#   docker compose --profile tools up -d adminer   a DB browser on :8080
+#
+# The default is Postgres only, and that is the recommended way to develop:
+# `npm run dev` on the host gets hot reload without a bind mount, which on
+# Windows is both slow and prone to node_modules confusion. The `app` profile
+# exists for testing the real production image.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: maison-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: maison
+      POSTGRES_PASSWORD: maison
+      POSTGRES_DB: maison
+      # Deterministic collation. Without it the image picks a locale from the
+      # host, and text ordering then differs between a developer's machine and
+      # the server — which is the kind of difference that shows up as one
+      # failing test nobody can reproduce.
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - maison-pgdata:/var/lib/postgresql/data
+      # Runs once, on an empty data directory. Creates the separate database
+      # the integration tests truncate — see db/init/01-test-db.sql.
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # `pg_isready` alone reports ready before the init scripts have finished,
+      # so anything depending on this would race the test database into
+      # existence. Querying it is the actual readiness condition.
+      test: ["CMD-SHELL", "pg_isready -U maison -d maison && psql -U maison -d maison_test -c 'SELECT 1' > /dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  app:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: maison-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # `db`, not localhost — inside the compose network the service name is
+      # the host. This is the single most common reason a containerised app
+      # cannot reach a containerised database.
+      DATABASE_URL: postgres://maison:maison@db:5432/maison
+      NODE_ENV: production
+      # ⚠ Production requires an SMS provider (see src/lib/env.ts). This stack
+      # is for testing, so it is pointed at the log-only path by running with
+      # NODE_ENV=production but a stubbed URL. Replace before deploying.
+      SMS_API_URL: ${SMS_API_URL:-}
+      NEXT_PUBLIC_ROUND_TIME_SCALE: ${NEXT_PUBLIC_ROUND_TIME_SCALE:-1}
+      PORT: 3000
+    ports:
+      - "3000:3000"
+
+  adminer:
+    profiles: ["tools"]
+    image: adminer:latest
+    container_name: maison-adminer
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+
+volumes:
+  maison-pgdata:

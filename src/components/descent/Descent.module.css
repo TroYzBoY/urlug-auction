@@ -1,0 +1,758 @@
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE DESCENT — stage layout.
+ *
+ * Scoped as a CSS Module rather than added to globals.css: none of this is
+ * reusable, all of it is bespoke to one route, and globals.css is the shared
+ * design system. The only things this reaches for globally are the live depth
+ * tokens the shader publishes (--descent-*).
+ *
+ * Every scene is the same shape — a tall wrapper with a 100svh sticky stage
+ * inside it. The wrapper's extra height IS the pin duration, so scene timing
+ * is set in one number per scene and nothing has to agree with JavaScript.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+.root {
+  position: relative;
+  color: var(--descent-ink, #1c1714);
+  /* Fallback ground for the moment before the first shader frame, and for
+     good on machines with no WebGL. */
+  background: linear-gradient(
+    180deg,
+    var(--descent-ground-hi, #faf6ef) 0%,
+    var(--descent-ground, #e9e2d4) 72%
+  );
+}
+
+/* ── canvases ─────────────────────────────────────────────────────────────── */
+.root canvas[data-shaft] {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: translateZ(0);
+}
+.root canvas[data-shaft="field"] {
+  z-index: 0;
+}
+/* Held at 0 between scenes so a full-screen alpha layer is not composited
+   over the page every frame for nothing. */
+.root canvas[data-shaft="burn"] {
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+}
+:global(html[data-no-gl]) .root canvas[data-shaft] {
+  display: none;
+}
+
+.vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  background: radial-gradient(
+    120% 90% at 50% 12%,
+    transparent 40%,
+    rgb(0 0 0 / 0.26) 100%
+  );
+  mix-blend-mode: multiply;
+  transform: translateZ(0);
+}
+
+/* ── floating marks, never a bar ───────────────────────────────────────────── */
+.float {
+  position: fixed;
+  top: var(--descent-margin);
+  z-index: 60;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--descent-ink, #1c1714);
+}
+.mark {
+  left: var(--descent-margin);
+  font-weight: 800;
+  letter-spacing: 0.3em;
+}
+.jump {
+  right: var(--descent-margin);
+}
+.float a {
+  color: inherit;
+  text-decoration: none;
+  opacity: 0.62;
+  transition:
+    opacity 0.45s var(--ease-out-soft),
+    text-shadow 0.45s var(--ease-out-soft);
+}
+.float a:hover,
+.float a:focus-visible {
+  opacity: 1;
+  text-shadow:
+    0 0 18px var(--descent-glow),
+    0 0 42px var(--descent-glow);
+  outline: none;
+}
+
+/* ── the shared scene shape ────────────────────────────────────────────────── */
+.root {
+  --descent-margin: clamp(1.1rem, 4vw, 4.5rem);
+  --t-micro: 0.6875rem;
+  --t-head: clamp(2rem, 5vw, 4.25rem);
+  --t-mono: clamp(3.5rem, 14vw, 13rem);
+}
+
+.scene {
+  position: relative;
+  z-index: 2;
+}
+.stage {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  min-height: 520px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--descent-margin) * 2.2) var(--descent-margin);
+  transform: translateZ(0);
+}
+
+/* Pin durations. One number per scene, and the only place timing lives. */
+.s1 { height: 230svh; }
+.s2 { height: 310svh; }
+.s3 { height: 420svh; }
+.s4 { height: 290svh; }
+.s5 { height: 270svh; }
+
+/* The floor's name — diegetic, never a counter. */
+.floor {
+  position: absolute;
+  left: var(--descent-margin);
+  bottom: var(--descent-margin);
+  display: flex;
+  align-items: center;
+  gap: 0.9em;
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--descent-muted, #746a5d);
+}
+.floor::before {
+  content: "";
+  width: clamp(28px, 5vw, 64px);
+  height: 1px;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--descent-muted, #746a5d);
+}
+
+/* Masked character roll — the connective typography of the whole piece. */
+.ch {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+.chIn {
+  display: inline-block;
+  will-change: transform;
+  transform: translate3d(0, calc(var(--roll, 0) * 100%), 0);
+}
+
+/* The opening roll, on arrival rather than on scroll.
+   `backwards`, never `both`: `both` would keep the animation's end state
+   forever and permanently outrank the scroll-driven transform above, so the
+   wordmark would refuse to leave when you scrolled. */
+.s1 .chIn {
+  animation: descentRollIn 0.95s var(--ease-out-soft) backwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+@keyframes descentRollIn {
+  from { transform: translate3d(0, 118%, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+/* ═══ 01 · ГУДАМЖ ═══════════════════════════════════════════════════════════ */
+.s1Wrap {
+  position: relative;
+  width: 100%;
+  max-width: 1400px;
+  text-align: center;
+  will-change: transform;
+}
+.slate {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: clamp(2rem, 6vh, 4rem);
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--descent-muted, #746a5d);
+  opacity: var(--fade, 1);
+  transform: translate3d(0, calc(var(--lift, 0) * -30px), 0);
+}
+.wordmark {
+  margin: 0;
+  font-weight: 800;
+  font-size: clamp(3.2rem, 16vw, 15rem);
+  line-height: 0.82;
+  letter-spacing: -0.02em;
+}
+.s1Line {
+  margin: clamp(1.4rem, 3vh, 2.6rem) 0 0;
+  font-weight: 300;
+  font-size: var(--t-head);
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  opacity: var(--lineFade, 1);
+  transform: translate3d(0, calc((1 - var(--lineFade, 1)) * -60px), 0);
+}
+.s1Line b {
+  font-weight: 800;
+}
+.s1Sub {
+  margin: clamp(1.2rem, 2.4vh, 2rem) 0 0;
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--descent-muted, #746a5d);
+  opacity: var(--fade, 1);
+}
+.portal {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(78vw, 900px);
+  height: min(78vw, 900px);
+  pointer-events: none;
+  will-change: transform, opacity;
+  transform: scale(var(--portalScale, 1));
+  opacity: var(--portalFade, 1);
+}
+.portal rect {
+  fill: none;
+  stroke: var(--descent-ink, #1c1714);
+  vector-effect: non-scaling-stroke;
+}
+.cue {
+  position: absolute;
+  left: 50%;
+  bottom: var(--descent-margin);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9em;
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--descent-muted, #746a5d);
+  opacity: var(--fade, 1);
+}
+.cue i {
+  display: block;
+  width: 1px;
+  height: 44px;
+  background: currentColor;
+  opacity: 0.45;
+  transform-origin: top;
+  animation: descentDrop 2.4s var(--ease-out-soft) infinite;
+}
+@keyframes descentDrop {
+  0% { transform: scaleY(0); }
+  45% { transform: scaleY(1); }
+  100% { transform: scaleY(0); transform-origin: bottom; }
+}
+
+/* ═══ 02 · ҮҮД ══════════════════════════════════════════════════════════════ */
+.s2Wrap {
+  position: relative;
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(1.6rem, 4vh, 3rem);
+}
+.s2Title {
+  text-align: center;
+  opacity: var(--titleFade, 1);
+  transform: translate3d(0, calc((1 - var(--titleFade, 1)) * 26px), 0);
+}
+.s2Title h2 {
+  margin: 0.55rem 0 0;
+  font-weight: 800;
+  font-size: var(--t-head);
+  line-height: 1;
+  letter-spacing: -0.015em;
+}
+/* The zoom scales this box from the bid dial's centre, so the camera pushes
+   into the left clock rather than into the gap between them. */
+.dials {
+  position: relative;
+  width: 100%;
+  /* Dials are square and sized off this band's HEIGHT, so the height must
+     also be capped against viewport WIDTH — two squares wider than half the
+     container overlap in the middle. */
+  height: min(38vh, 360px, 32vw);
+  transform-origin: 22% 50%;
+  transform: scale(var(--zoom, 1));
+  will-change: transform;
+}
+.dial {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  aspect-ratio: 1;
+  will-change: transform, opacity;
+}
+.dialBid {
+  left: 8%;
+  transform: translate3d(calc(var(--dialA, 0) * 1%), 0, 0);
+  opacity: var(--dialFade, 1);
+}
+.dialRound {
+  right: 8%;
+  transform: translate3d(calc(var(--dialB, 0) * 1%), 0, 0);
+  opacity: var(--roundFade, 1);
+}
+.dial svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.dial circle,
+.dial line {
+  fill: none;
+  stroke: var(--descent-ink, #1c1714);
+  vector-effect: non-scaling-stroke;
+}
+.rim { opacity: 0.28; stroke-width: 1; }
+.tick { opacity: 0.35; }
+.sweep {
+  stroke: var(--color-accent, #8c5a38);
+  stroke-width: 2;
+  opacity: 0.9;
+}
+.dialVal {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: clamp(1.6rem, 3.4vw, 3rem);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.coRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: clamp(1.5rem, 5vw, 4rem);
+  width: 100%;
+}
+.callout {
+  width: min(38%, 360px);
+}
+.laser {
+  height: 1px;
+  background: var(--color-accent, #8c5a38);
+  opacity: 0.7;
+  transform-origin: left center;
+  transform: scaleX(var(--laser, 1));
+  will-change: transform;
+}
+.callout h3 {
+  margin: 0 0 0.5em;
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--color-accent, #8c5a38);
+}
+.callout p {
+  margin: 0;
+  font-weight: 300;
+  opacity: 0.78;
+}
+.calloutTxt {
+  padding-top: 0.9em;
+  opacity: var(--txtFade, 1);
+  transform: translate3d(0, calc((1 - var(--txtFade, 1)) * 16px), 0);
+}
+/* Only the round clock's callout leaves — the bid clock's stays, because the
+   camera is about to push into the bid clock and that text is its caption. */
+.coRound {
+  text-align: right;
+  opacity: var(--coFade, 1);
+}
+.coRound .laser {
+  transform-origin: right center;
+}
+
+/* ═══ 03 · ШАТ ══════════════════════════════════════════════════════════════ */
+.s3 .stage {
+  padding: 0;
+}
+.s3Wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.axis {
+  position: absolute;
+  left: var(--descent-margin);
+  right: var(--descent-margin);
+  top: 50%;
+  height: 1px;
+  background: var(--descent-line, rgba(60, 42, 26, 0.16));
+}
+.axis::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-accent, #8c5a38);
+}
+/* height:auto with rows that refuse to shrink. With height:100% the six 34vh
+   rows get flex-shrunk to fit the viewport, the rail ends up a third of its
+   intended length, and every round lands off the axis. */
+.rail {
+  position: absolute;
+  top: 0;
+  height: auto;
+  width: 46%;
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+}
+/* Percentages here resolve against the rail's OWN height (6 × 34svh), which is
+   what makes the round-crosses-the-axis maths in Descent.tsx viewport
+   independent. */
+.railA {
+  left: var(--descent-margin);
+  transform: translate3d(0, calc(var(--railA, 0) * 1%), 0);
+}
+.railB {
+  right: var(--descent-margin);
+  align-items: flex-end;
+  text-align: right;
+  transform: translate3d(0, calc(var(--railB, 0) * 1%), 0);
+}
+.row {
+  flex: 0 0 34svh;
+  height: 34svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  opacity: 0.16;
+  transition: opacity 0.55s var(--ease-out-soft);
+}
+.rowOn {
+  opacity: 1;
+}
+.railA .n {
+  font-weight: 800;
+  font-size: clamp(2.4rem, 7vw, 6rem);
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.railA .lab,
+.railB .dur {
+  margin-top: 0.7em;
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--descent-muted, #746a5d);
+}
+.railB .clock {
+  font-weight: 800;
+  line-height: 0.88;
+  letter-spacing: -0.035em;
+  color: var(--color-accent, #8c5a38);
+}
+.s3Note {
+  position: absolute;
+  left: 50%;
+  bottom: var(--descent-margin);
+  transform: translateX(-50%);
+  text-align: center;
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--descent-muted, #746a5d);
+}
+
+/* ═══ 04 · БОСГО ════════════════════════════════════════════════════════════ */
+.flood {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    120% 100% at 50% 60%,
+    var(--rust-bright, #d95538) 0%,
+    transparent 72%
+  );
+  opacity: var(--flood, 0);
+  mix-blend-mode: screen;
+  will-change: opacity;
+}
+.s4Wrap {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  text-align: center;
+}
+.s4Stack {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.s4Stack > * {
+  grid-area: 1 / 1;
+}
+.shear {
+  position: relative;
+  display: block;
+  opacity: var(--shearFade, 1);
+  transform: scale(var(--shearScale, 1));
+  will-change: transform, opacity;
+}
+.half {
+  display: block;
+  font-weight: 800;
+  font-size: var(--t-mono);
+  line-height: 0.84;
+  letter-spacing: -0.045em;
+  will-change: transform;
+}
+.halfTop {
+  clip-path: polygon(0 0, 100% 0, 100% 52%, 0 62%);
+  transform: translate3d(calc(var(--shear, 0) * -14%), 0, 0);
+}
+.halfBot {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(0 62%, 100% 52%, 100% 100%, 0 100%);
+  transform: translate3d(calc(var(--shear, 0) * 14%), 0, 0);
+}
+/* Knocked out of the flood rather than tinted with it — rust type on a rust
+   field is the one word here that must not be hard to read. */
+.hammer {
+  margin: 0;
+  font-weight: 800;
+  font-size: var(--t-mono);
+  line-height: 0.84;
+  letter-spacing: 0.02em;
+  color: var(--cream-ink, #f6f1e8);
+  text-shadow: 0 0 60px rgb(25 19 16 / 0.45);
+  opacity: var(--hammerFade, 0);
+  transform: scale(var(--hammerScale, 1));
+  will-change: transform, opacity;
+}
+.s4Sub {
+  margin: 1.4rem 0 0;
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--descent-muted, #746a5d);
+  opacity: var(--subFade, 0);
+}
+
+/* ═══ 05 · ТАНХИМ ═══════════════════════════════════════════════════════════ */
+.door {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.door i {
+  display: block;
+  width: min(64vw, 780px);
+  height: min(52vh, 560px);
+  background:
+    radial-gradient(70% 100% at 50% 100%, rgb(196 139 72 / 0.55) 0%, transparent 70%),
+    linear-gradient(180deg, rgb(196 139 72 / 0.06) 0%, rgb(196 139 72 / 0.3) 100%);
+  clip-path: inset(0 calc((1 - var(--door, 0)) * 50%) 0 calc((1 - var(--door, 0)) * 50%));
+  /* Feathered, or the gradient's own bounding box shows and the doorway reads
+     as a lit rectangle rather than as spill. */
+  -webkit-mask-image: radial-gradient(78% 88% at 50% 92%, #000 18%, rgb(0 0 0 / 0.45) 58%, transparent 100%);
+  mask-image: radial-gradient(78% 88% at 50% 92%, #000 18%, rgb(0 0 0 / 0.45) 58%, transparent 100%);
+  opacity: var(--doorFade, 0);
+  will-change: clip-path, opacity;
+}
+.s5Wrap {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+}
+.s5Wrap h2 {
+  margin: 0;
+  font-weight: 800;
+  font-size: var(--t-head);
+  line-height: 1;
+  letter-spacing: -0.015em;
+}
+.s5Lede {
+  margin: 1.1rem auto 0;
+  max-width: 38ch;
+  font-weight: 300;
+  font-size: clamp(1.05rem, 1.5vw, 1.375rem);
+  line-height: 1.45;
+  opacity: calc(var(--ledeFade, 1) * 0.82);
+  transform: translate3d(0, calc((1 - var(--ledeFade, 1)) * 20px), 0);
+}
+
+/* ═══ epilogue ══════════════════════════════════════════════════════════════ */
+.epilogue {
+  position: relative;
+  z-index: 2;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: clamp(5rem, 16vh, 11rem) var(--descent-margin)
+    calc(var(--descent-margin) * 2);
+}
+.enter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.6rem;
+  padding: clamp(4rem, 12vh, 8rem) 0 clamp(3rem, 8vh, 5rem);
+  text-align: center;
+}
+.enter a {
+  font-weight: 800;
+  font-size: clamp(1.6rem, 4.4vw, 3.4rem);
+  letter-spacing: -0.02em;
+  color: var(--descent-ink, #1c1714);
+  text-decoration: none;
+  transition:
+    color 0.5s var(--ease-out-soft),
+    text-shadow 0.5s var(--ease-out-soft);
+}
+.enter a:hover,
+.enter a:focus-visible {
+  color: var(--amber-gold, #c48b48);
+  text-shadow:
+    0 0 30px var(--descent-glow),
+    0 0 80px var(--descent-glow);
+  outline: none;
+}
+.enter small {
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--descent-muted, #746a5d);
+}
+
+/* ── narrow screens ───────────────────────────────────────────────────────── */
+@media (max-width: 760px) {
+  /* Dials stay paired and shrink; the callouts stack, because two columns of
+     prose at this width is neither readable nor calm. */
+  .dials { height: min(22vh, 180px, 34vw); }
+  .dialBid { left: 4%; }
+  .dialRound { right: 4%; }
+  .coRow { flex-direction: column; gap: 1.3rem; }
+  .callout { width: 100%; }
+  .callout p { font-size: 0.9rem; }
+  .coRound { text-align: left; }
+  .coRound .laser { transform-origin: left center; }
+  .rail { width: calc(50% - var(--descent-margin)); }
+}
+
+/* ── reduced motion: nothing is hidden by an animation ────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  /* Scenes stop being viewport-height stages and become plain sections.
+     Everything driven by a custom property is forced to its resolved state,
+     because the engine never publishes a second frame. */
+  .scene { height: auto !important; }
+  .stage {
+    position: relative;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    display: block;
+    padding: clamp(4rem, 12vh, 8rem) var(--descent-margin);
+  }
+  .floor { position: static; margin-top: 2.5rem; }
+  .cue, .portal, .door { display: none; }
+
+  .s1 .chIn { animation: none; }
+  .chIn { transform: none; }
+  .slate, .s1Sub, .s1Line, .s2Title, .callout, .coRound, .calloutTxt,
+  .s5Lede, .dialBid, .dialRound {
+    opacity: 1;
+    transform: none;
+  }
+  .s1Wrap { text-align: left; transform: none; }
+  .laser { transform: scaleX(1); }
+
+  .s2Wrap { align-items: stretch; }
+  /* The dials are absolute inside a fixed-height band; both have to become
+     flow boxes together or the clocks collapse to nothing. */
+  .dials {
+    height: auto;
+    display: flex;
+    justify-content: center;
+    gap: clamp(1.5rem, 5vw, 3rem);
+    transform: none;
+  }
+  .dial {
+    position: static;
+    height: auto;
+    width: min(38vw, 240px);
+  }
+
+  .s3 .stage { padding: clamp(4rem, 12vh, 8rem) var(--descent-margin); }
+  .s3Wrap { overflow: visible; display: flex; gap: var(--descent-margin); }
+  .rail {
+    position: static;
+    width: 50%;
+    transform: none !important;
+  }
+  .row { flex: none; height: auto; padding: 1.2rem 0; opacity: 1; }
+  .axis { display: none; }
+  .s3Note { position: static; transform: none; margin-top: 2rem; }
+
+  /* The stack overlays the shear and the hammer in one grid cell, which only
+     works because one of them is animated away. */
+  .s4Stack { display: block; }
+  .s4Stack > * { grid-area: auto; }
+  .shear { opacity: 1; transform: none; }
+  .halfTop { clip-path: none; transform: none; }
+  .halfBot { display: none; }
+  .hammer { opacity: 1; transform: none; margin-top: 0.25em; }
+  .s4Sub { opacity: 1; }
+  .flood { opacity: 0; }
+
+  .cue i { animation: none; }
+}
