@@ -132,6 +132,13 @@ one somebody would want to leave no trace.
 ⚠ Accounts are identified and authenticated by **phone number**. `users.email`
 is contact information; nothing in the auth path reads it.
 
+⚠ `--create --password` puts a password in shell history. Prefer registering
+through `/register` and then promoting by phone — that way the password is
+chosen by the person who owns it and never passes through a terminal. If a
+bootstrap account is created with a typed password, delete it once a real admin
+exists; the last-admin guard makes that safe, and it refuses if it would leave
+nobody.
+
 ### Payments
 
 Wired end to end except for the provider itself. `createTopup` opens a `pending`
