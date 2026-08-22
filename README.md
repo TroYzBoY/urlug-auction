@@ -400,6 +400,28 @@ Removed and not restored:
 The burn renderer is still compiled but never drawn: bringing it back is one
 branch, and a shader that has been proven is worth keeping proven.
 
+### The footer
+
+Three bands, one rule between each: brand and navigation, then the legal
+identity, then the copyright line.
+
+It was two blocks — a dense left column carrying the wordmark, the format line,
+a four-line address and an 18+ badge, and seven links thrown into a single
+`flex-wrap` on the right. Two things made that read as clutter:
+
+- **No grouping.** Seven peer links in one wrap means the reader parses each one
+  to find out what kind of thing it is. Three labelled columns answer that
+  before they read a single link.
+- **Everything in `eyebrow`.** It is a *label* style — wide tracking, uppercase,
+  muted — and it works because it recedes. Applied to seven links it stops
+  receding and becomes a wall. It now labels the columns, which is its job, and
+  the links are sentence case at a readable size.
+
+The phone and email are `tel:` and `mailto:` links rather than text. A phone
+number on a phone that cannot be tapped is a phone number somebody has to
+retype. The format figures come from `auction.ts`, so the footer cannot be the
+one place still claiming six rounds after somebody changes it to seven.
+
 ### Where the descent ends
 
 It used to end at a **line**. Two separate causes, both needing a fix:
