@@ -76,6 +76,7 @@ export async function register(
     name: formData.get("name"),
     phone: formData.get("phone"),
     password: formData.get("password"),
+    passwordConfirm: formData.get("passwordConfirm"),
     dateOfBirth: formData.get("dateOfBirth"),
     terms: formData.get("terms") === "on",
   });

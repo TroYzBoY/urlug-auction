@@ -67,15 +67,31 @@ export const dateOfBirthSchema = z
   }, "Төрсөн огноо буруу байна.")
   .refine((v) => isOldEnough(new Date(v)), MINIMUM_AGE_MESSAGE);
 
-export const registerSchema = z.object({
-  name: nameSchema,
-  phone: phoneSchema,
-  password: passwordSchema,
-  dateOfBirth: dateOfBirthSchema,
-  terms: z.literal(true, {
-    message: "Дүрэм, нөхцөлийг зөвшөөрөх шаардлагатай.",
-  }),
-});
+export const registerSchema = z
+  .object({
+    name: nameSchema,
+    phone: phoneSchema,
+    password: passwordSchema,
+    /*
+     * Checked on the server, not only in the browser. The confirmation exists
+     * to catch a typo in a field nobody can read back, and a typo that reaches
+     * the database is an account whose owner cannot sign in to it — recoverable
+     * only through the SMS reset, which costs a message and a support request.
+     *
+     * Not `passwordSchema`: the length rule belongs to the password itself, and
+     * applying it twice reports "at least 8 characters" against the second box
+     * when the real fault is in the first.
+     */
+    passwordConfirm: z.string(),
+    dateOfBirth: dateOfBirthSchema,
+    terms: z.literal(true, {
+      message: "Дүрэм, нөхцөлийг зөвшөөрөх шаардлагатай.",
+    }),
+  })
+  .refine((v) => v.password === v.passwordConfirm, {
+    message: "Нууц үг хоёулаа таарахгүй байна.",
+    path: ["passwordConfirm"],
+  });
 
 export const loginSchema = z.object({
   phone: phoneSchema,

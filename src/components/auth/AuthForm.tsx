@@ -59,6 +59,7 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo?: string
         {isRegister && (
           <Field
             id={nameId}
+            name="name"
             label={t.auth.name}
             type="text"
             autoComplete="name"
@@ -68,6 +69,7 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo?: string
 
         <Field
           id={phoneId}
+          name="phone"
           label={t.auth.phone}
           type="tel"
           inputMode="tel"
@@ -112,10 +114,12 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo?: string
         {isRegister && (
           <Field
             id={confirmId}
+            name="passwordConfirm"
             label={t.auth.passwordConfirm}
             type="password"
             autoComplete="new-password"
             required
+            minLength={8}
           />
         )}
 
@@ -239,7 +243,19 @@ function Field({
   id,
   label,
   ...input
-}: { id: string; label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+}: {
+  id: string;
+  label: string;
+  /*
+   * Required here, rather than left optional as InputHTMLAttributes has it. An
+   * input with no `name` is not submitted at all, and it fails silently: the
+   * field looks right, the browser sends nothing, and the action reads null.
+   * That is exactly what happened — name, phone and the password confirmation
+   * were all rendered through this component and none of them ever reached the
+   * server. Requiring it makes the compiler catch the next omission.
+   */
+  name: string;
+} & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div>
       <label htmlFor={id} className="eyebrow">
