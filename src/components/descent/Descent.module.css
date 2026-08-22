@@ -519,22 +519,32 @@
 /* ═══ 04 · БОСГО ════════════════════════════════════════════════════════════ */
 
 /*
- * The rust flood is gone.
+ * The hammer's red.
  *
- * It washed most of the viewport in `--rust-bright` at the hammer moment,
- * scrubbed by scroll — a full-screen colour change, which is the thing the
- * whole redesign was about removing. Scene 04's drama now comes from the
- * geometry and the timing, which is where it was always stronger.
+ * A full-bleed rust wash, scrubbed by `--flood` as the shear resolves into
+ * "ЦОХИВ". It is the one place in the piece where colour flooding the screen is
+ * the right answer: the hammer falling IS the moment, and everything else in
+ * the descent is deliberately quiet so that this reads as an event rather than
+ * as more decoration.
  *
- * The element is still rendered so `--flood` has somewhere to land and the
- * scene keeps its stacking context; it simply paints nothing.
+ * `screen` blending rather than a plain paint, so it lifts the ground toward
+ * rust instead of covering it — the geometry stays legible through it.
  */
 .flood {
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
+  background: radial-gradient(
+    120% 100% at 50% 60%,
+    var(--rust-bright, #cf5f34) 0%,
+    transparent 72%
+  );
+  opacity: var(--flood, 0);
+  mix-blend-mode: screen;
+  will-change: opacity;
 }
+
 .s4Wrap {
   position: relative;
   z-index: 2;
@@ -599,35 +609,59 @@
 }
 
 /* ═══ 05 · ТАНХИМ ═══════════════════════════════════════════════════════════ */
+
+/*
+ * The hall's amber — the answer to scene 04's red.
+ *
+ * This used to be a clipped RECTANGLE: a lit doorway 780×560 that widened as
+ * you scrolled, masked at the edges so its bounding box did not show. The shape
+ * was the idea, and the idea did not survive being looked at — a hard-edged
+ * lozenge of light sitting in the middle of a dark screen reads as a panel
+ * rather than as a doorway, and no amount of feathering fixed the fact that it
+ * was a box.
+ *
+ * It is now the same full-bleed wash as `.flood`, in amber instead of rust:
+ * red for the hammer, gold for the room you walk into. Two scenes, one visual
+ * grammar, and the pairing is the point — the piece resolves from the violence
+ * of the hammer into the warmth of the hall.
+ *
+ * `--door` still scrubs it, so the light still arrives as you descend; it now
+ * arrives as the room filling with light rather than as a rectangle growing.
+ */
 .door {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  z-index: 1;
   pointer-events: none;
 }
 .door i {
   display: block;
-  width: min(64vw, 780px);
-  height: min(52vh, 560px);
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    120% 100% at 50% 72%,
+    var(--amber-gold, #c98a4b) 0%,
+    transparent 74%
+  );
   /*
-   * Cut hard — 0.55 → 0.16 on the spill, 0.3 → 0.08 on the wash.
+   * Driven by BOTH scrubbed values, multiplied.
    *
-   * The doorway opening is a shape, and the shape is the point; at the old
-   * strength the amber behind it lit a third of the screen and read as the
-   * background changing colour rather than as light coming through a gap.
+   *   --door      how far the light has come up (eased over the first 60%)
+   *   --doorFade  the scene's own entrance and exit
+   *
+   * A single opacity would have to pick one of those and lose the other; the
+   * product gives light that rises with the descent and still fades out with
+   * the scene rather than cutting.
+   *
+   * The 0.75 keeps the hall a shade under the hammer, whose flood peaks at
+   * 0.85. They are the same gesture and should not be the same volume — the
+   * hammer is an event, the hall is a place you arrive in.
    */
-  background:
-    radial-gradient(70% 100% at 50% 100%, rgb(196 139 72 / 0.16) 0%, transparent 70%),
-    linear-gradient(180deg, rgb(196 139 72 / 0.02) 0%, rgb(196 139 72 / 0.08) 100%);
-  clip-path: inset(0 calc((1 - var(--door, 0)) * 50%) 0 calc((1 - var(--door, 0)) * 50%));
-  /* Feathered, or the gradient's own bounding box shows and the doorway reads
-     as a lit rectangle rather than as spill. */
-  -webkit-mask-image: radial-gradient(78% 88% at 50% 92%, #000 18%, rgb(0 0 0 / 0.45) 58%, transparent 100%);
-  mask-image: radial-gradient(78% 88% at 50% 92%, #000 18%, rgb(0 0 0 / 0.45) 58%, transparent 100%);
-  opacity: var(--doorFade, 0);
-  will-change: clip-path, opacity;
+  opacity: calc(var(--door, 0) * var(--doorFade, 0) * 0.75);
+  mix-blend-mode: screen;
+  will-change: opacity;
 }
+
 .s5Wrap {
   position: relative;
   z-index: 2;

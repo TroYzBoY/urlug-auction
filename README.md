@@ -366,20 +366,39 @@ them by a noise-driven luminance and that distance *is* how blotchy the ground
 looks. Enough for the geometry to sit in air; little enough that a still frame
 reads as one colour.
 
-The full-screen colour washes went with it:
+### Two washes, and only two
+
+The ambient colour is gone; the *deliberate* colour stayed. Scenes 04 and 05
+each carry one full-bleed radial wash, and they are a pair:
+
+| Scene | Colour | Scrubbed by |
+| ----- | ------ | ----------- |
+| 04 БОСГО — the hammer | rust, peaking at 0.85 | `--flood` |
+| 05 ТАНХИМ — the hall | amber, peaking at 0.75 | `--door × --doorFade` |
+
+Red for the hammer, gold for the room you walk into. The piece is quiet
+everywhere else precisely so these two read as events rather than as more
+decoration, and the hall sits a shade under the hammer on purpose — the hammer
+is a moment, the hall is a place you arrive in. Both use `screen` blending, so
+they lift the ground toward the colour instead of covering it and the geometry
+stays legible through them.
+
+Scene 05 used to be a clipped **rectangle**: a lit doorway 780×560 that widened
+as you scrolled, masked at the edges so its bounding box would not show. The
+shape was the idea and the idea did not survive being looked at — a hard-edged
+lozenge of light in the middle of a dark screen reads as a panel, and no amount
+of feathering changes the fact that it is a box. As a wash it reads as the room
+filling with light.
+
+Removed and not restored:
 
 | Removed | What it did |
 | ------- | ----------- |
-| `.flood` | Washed most of the viewport in rust at the hammer moment. |
 | the burn canvas | A viewport-sized WebGL alpha pass composited over everything — the expensive one, on a phone. |
 | the vignette, cut 0.26 → 0.10 | Darkened the corners by a quarter, which against a dark ground is a pool of shadow rather than a lens. |
-| the doorway spill, cut 0.55 → 0.16 | Lit a third of the screen amber; the doorway is a *shape*, and the shape was the point. |
 
-Scene 04's drama now comes from geometry and timing, which is where it was
-always stronger. The `.flood` element is still rendered so the scene keeps its
-stacking context and `--flood` has somewhere to land; it paints nothing. The
-burn renderer is still compiled — bringing it back is one branch, and a shader
-that has been proven is worth keeping proven.
+The burn renderer is still compiled but never drawn: bringing it back is one
+branch, and a shader that has been proven is worth keeping proven.
 
 Both smoothing stages were also loosened — Lenis `lerp` 0.085 → 0.06 and
 `SCRUB_TAU` 0.11 → 0.2 — so the shaft keeps moving briefly after the finger
