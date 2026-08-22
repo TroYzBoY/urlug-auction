@@ -400,6 +400,27 @@ Removed and not restored:
 The burn renderer is still compiled but never drawn: bringing it back is one
 branch, and a shader that has been proven is worth keeping proven.
 
+### ⚠ The hero ticker used to make prices up
+
+`LiveTicker` picked a random live lot every 2.1 seconds and added one to three
+points to a number held only in the browser, then rendered it labelled
+**"сүүлийн хаялт"** — last bid. Nothing in it had ever touched the server. It
+was also handed `openingPts` rather than the current price, so even the base
+figure was wrong: a lot's opening price, presented as the most recent bid on it.
+
+The comment justifying it said in as many words that a line which keeps changing
+tells a visitor other people are bidding now, and that this is the reason to
+come in. That is the same thing as the simulated rival bidders removed from the
+room before launch — fabricated activity shown to real people — and on the front
+page it is the first claim the house makes about itself.
+
+It now shows the real standing price and the real bid count, which is what the
+invented movement was pretending to convey. A lot with no bids reads as a lot
+with no bids. The figure is a snapshot as of page load and does not tick: making
+it live would mean an SSE connection per lot for a hero strip, and the room is
+one tap away and genuinely live. `Lot` gained a `currentPts` so a summary can
+show what a lot is actually at.
+
 ### The footer
 
 Three bands, one rule between each: brand and navigation, then the legal

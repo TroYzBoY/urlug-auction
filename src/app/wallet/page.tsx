@@ -86,14 +86,18 @@ export default async function WalletPage(props: PageProps<"/wallet">) {
         empty={t.account.transactionsEmpty}
         isEmpty={topups.length === 0}
       >
+        {/*
+          Points and ₮ share one cell rather than taking a column each. They are
+          the same fact twice — the price is the point count times POINT_MNT —
+          so stacking them frees the width that made this scroll on a phone.
+        */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[32rem] border-collapse text-sm">
+          <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-y border-line text-left">
                 <th className="eyebrow py-3 pr-4 font-normal">
                   {t.account.balance}
                 </th>
-                <th className="eyebrow py-3 pr-4 font-normal">₮</th>
                 <th className="eyebrow py-3 pr-4 font-normal">
                   {t.lot.startsAt}
                 </th>
@@ -103,11 +107,11 @@ export default async function WalletPage(props: PageProps<"/wallet">) {
             <tbody>
               {topups.map((row) => (
                 <tr key={row.id} className="border-b border-line">
-                  <td data-numerals className="py-3 pr-4 text-ink">
-                    +{pts(row.points)}
-                  </td>
-                  <td data-numerals className="py-3 pr-4 text-muted">
-                    {groupNumber(row.amountMnt)}₮
+                  <td data-numerals className="py-3 pr-4">
+                    <span className="text-ink">+{pts(row.points)}</span>
+                    <span className="block text-xs text-muted">
+                      {groupNumber(row.amountMnt)}₮
+                    </span>
                   </td>
                   <td data-numerals className="py-3 pr-4 text-muted">
                     {lotDate(row.createdAt)}

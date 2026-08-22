@@ -90,6 +90,7 @@ function toLot(row: LotRow, live: SettledState): Lot {
     image: row.image ?? undefined,
     status: STATUS_OF[live.outcome],
     startsAt: row.starts_at.toISOString(),
+    currentPts: live.currentPts,
     ...(live.outcome === "sold"
       ? {
           hammerPts: live.currentPts,

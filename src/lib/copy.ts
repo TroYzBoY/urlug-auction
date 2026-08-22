@@ -72,7 +72,10 @@ export const t = {
     ctaSecondary: "Журмыг үзэх",
     liveNow: "Шууд эхэлсэн",
     rightNow: "Яг одоо",
-    lastBid: "сүүлийн хаялт",
+    /* `lastBid` устгагдсан. Тэр нь LiveTicker-ийн зохиосон тоог шошголж
+       байсан бөгөөд шошго нь ч буруу байв — нээлтийн үнийг "сүүлийн хаялт"
+       гэж нэрлэж байсан. */
+    bidsSoFar: (n: number) => `${n} хаялт`,
 
     /* Slate — the metadata strip across the top of the opening frame, set like
        a film slate or the masthead of a Swiss journal. */

@@ -47,22 +47,10 @@
    * competes with the lots, and the lots are photographs of objects.
    */
 
-  /* Bone — warm ivory ground */
-  --bone-page: #faf6ef;
-  --bone-card: #f4efe4;
-  --bone-inset: #e9e2d4;
-
   /* Roast — warm brown-black grounds */
   --roast-page: #191310;
   --roast-card: #241c16;
   --roast-inset: #322820;
-
-  /* Umber Ink — on light. Warmed to match the ground; pure grey type on a warm
-     ivory reads as a mismatch rather than as neutral. */
-  --umber-ink: #1c1714;
-  --umber-soft: #453d34;
-  --umber-muted: #746a5d;
-  --umber-faint: #a59a8b;
 
   /* Cream — ink on dark */
   --cream-ink: #f6f1e8;
@@ -70,23 +58,16 @@
   --cream-muted: #a89e90;
   --cream-faint: #7a7167;
 
-  /* Hairlines — tinted rather than pure black/white, so rules sit in the same
+  /* Hairlines — tinted cream rather than pure white, so rules sit in the same
      warm family as the grounds instead of reading as grey scratches on them. */
-  --rule-light: rgba(60, 42, 26, 0.10);
-  --rule-light-strong: rgba(60, 42, 26, 0.20);
   --rule-dark: rgba(246, 236, 222, 0.09);
   --rule-dark-strong: rgba(246, 236, 222, 0.21);
 
   /* Quiet Signal Accents */
-  --chestnut: #8c5a38;
-  --amber-burnt: #8c5a38;
   --amber-gold: #c48b48;
   --amber-flare: #c48b48;
-  --rust-deep: #b84328;
   --rust-bright: #d95538;
-  --olive-deep: #3b6b45;
   --olive-bright: #4e8c5b;
-  --gold-quiet: #b08243;
 
   /* Easing */
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
@@ -110,10 +91,13 @@
     sans-serif;
 
   /*
-   * The one palette. The `bone-*` and `umber-*` raws above are the light
-   * swatches. Nothing points at them any more; they are kept because deleting
-   * a whole palette is easy to undo badly, and because a second skin — a print
-   * stylesheet, a light email template — would start from them.
+   * The one palette.
+   *
+   * The light swatches — `bone-*`, `umber-*`, `rule-light*`, and the deep
+   * variants of each accent — are gone. They were kept for a while after the
+   * site went dark-only, on the theory that a second skin might want them. Ten
+   * unused custom properties are not a head start on a second skin; they are
+   * ten things a reader has to check are unused. `git log` has them.
    */
   --color-ground: var(--roast-page);
   --color-surface: var(--roast-card);

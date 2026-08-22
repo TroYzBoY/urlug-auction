@@ -111,6 +111,11 @@ export default async function AdminPage() {
         <div className="mb-5">
           <CreateLotForm />
         </div>
+        {/*
+          These two stay wide and scroll. The bidder-facing tables were made to
+          fit a phone; this is a staff tool used at a desk, and dropping columns
+          from it would cost an operator information they came here for.
+        */}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[44rem] border-collapse text-sm">
             <thead>

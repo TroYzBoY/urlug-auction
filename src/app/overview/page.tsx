@@ -119,11 +119,17 @@ export default async function OverviewPage() {
               className="border-t border-line pt-4"
             >
               <LiveTicker
+                /*
+                  The lot's REAL standing price and bid count. This used to
+                  pass `openingPts`, which the ticker then labelled as the last
+                  bid and nudged upward in the browser — see LiveTicker.
+                */
                 lots={liveLots.map((l) => ({
                   id: l.id,
                   code: l.code,
                   title: l.title,
-                  startPts: l.openingPts,
+                  currentPts: l.currentPts ?? l.openingPts,
+                  bidCount: l.bidCount ?? 0,
                 }))}
               />
               <p

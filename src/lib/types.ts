@@ -38,6 +38,15 @@ export interface Lot {
   status: LotStatus;
   /** ISO timestamp — when this lot's 2h45m session opens. */
   startsAt: string;
+  /**
+   * The standing price, in points, for a lot that is live.
+   *
+   * Equal to `openingPts` until somebody bids. Present so a summary — the hero
+   * ticker, a card — can show what a lot is ACTUALLY at rather than what it
+   * opened at. It is a snapshot as of the render; the room's SSE stream is what
+   * keeps a price live.
+   */
+  currentPts?: number;
 
   /* ── Result, present only once a lot has been through the room ─────────── */
   /** Hammer price in points. Set when status is "sold". */

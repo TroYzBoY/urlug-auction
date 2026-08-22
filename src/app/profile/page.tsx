@@ -231,16 +231,24 @@ export default async function ProfilePage() {
         empty={t.account.bidHistoryEmpty}
         isEmpty={bids.length === 0}
       >
-        {/* Wide table, narrow phone. The wrapper scrolls, the page does not. */}
+        {/*
+          Fits a phone rather than scrolling sideways.
+          The round is dropped below sm — it is the least actionable of the
+          four, and the three that remain (which lot, what you bid, how it
+          ended) are the reason anybody opens this. A horizontal scrollbar
+          inside a vertical page is a control people do not find.
+        */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[36rem] border-collapse text-sm">
+          <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-y border-line text-left">
                 <th className="eyebrow py-3 pr-4 font-normal">{t.lot.lot}</th>
                 <th className="eyebrow py-3 pr-4 font-normal">
                   {t.room.currentPrice}
                 </th>
-                <th className="eyebrow py-3 pr-4 font-normal">{t.room.round}</th>
+                <th className="eyebrow hidden py-3 pr-4 font-normal sm:table-cell">
+                  {t.room.round}
+                </th>
                 <th className="eyebrow py-3 font-normal">{t.lot.result}</th>
               </tr>
             </thead>
@@ -267,7 +275,10 @@ export default async function ProfilePage() {
                   <td data-numerals className="py-3 pr-4 text-ink">
                     {pts(bid.points)}
                   </td>
-                  <td data-numerals className="py-3 pr-4 text-muted">
+                  <td
+                    data-numerals
+                    className="hidden py-3 pr-4 text-muted sm:table-cell"
+                  >
                     {bid.round}
                   </td>
                   <td className="py-3">
