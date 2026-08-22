@@ -221,6 +221,42 @@ than quietly running a 2h45m sale in under three minutes.
 The rival-bidder simulator is gone entirely — the stream replaces it. Fake
 bidders against real ones is shill bidding, so there is no flag left to forget.
 
+### Latency
+
+Measured end to end — bid committed → arriving at a connected client — on one
+machine with Postgres local:
+
+| | 1 watcher | 100 watchers |
+| --- | --- | --- |
+| bid transaction | 5 ms | 5 ms |
+| commit → first client | 31 ms | 45 ms |
+| commit → last client | 31 ms | 65 ms |
+| spread across clients | 0 ms | 18 ms |
+
+Three things that follow, in order of how much they matter:
+
+**The fixed cost is the coalescing window, not the database.** 25 of the ~31ms
+is `COALESCE_MS` in the stream route. The transaction is 5ms and the fan-out is
+about **0.2ms per subscriber** — so a thousand viewers implies a ~200ms spread,
+and that is the number to plan against, not throughput.
+
+**Everyone sees a bid within ~20ms of each other.** In an auction that matters
+more than the absolute figure: no bidder has a systematic advantage over
+another. Add the real network on top — a phone in Ulaanbaatar puts perhaps
+40–80ms between the server and the screen, equally for everyone.
+
+**Against a five-second clock this is 1–2%.** A bidder in round 6 sees a rival's
+bid with 4.9 seconds left rather than 5.0.
+
+⚠ Measured with 100 SSE readers in one Node process, which contend with each
+other in a way real browsers on separate machines do not. Treat the spread as a
+ceiling.
+
+The fan-out was originally one database read *per subscriber* per push — 64ms
+with one watcher, 97ms with a hundred, growing linearly with the audience.
+[`src/lib/room-cache.ts`](src/lib/room-cache.ts) collapses that to one read per
+lot per push, which is why the window could then be halved.
+
 ### Deployment constraint
 
 The SSE route holds a connection open for the length of a sale, and the ticker

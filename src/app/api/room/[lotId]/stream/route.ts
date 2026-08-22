@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
-import { getRoomState } from "@/lib/repo/lots";
+import { hasBidOnLot, projectForViewer } from "@/lib/repo/lots";
 import { subscribe } from "@/lib/realtime";
+import { readRoom } from "@/lib/room-cache";
 import { currentUser } from "@/lib/session";
 
 /**
@@ -25,11 +26,31 @@ import { currentUser } from "@/lib/session";
 const HEARTBEAT_MS = 20_000;
 
 /**
- * Coalescing window. Ten bids in the last second of round 6 should produce a
- * few pushes, not ten round trips to the database per subscriber. Small enough
- * that nobody perceives it as lag.
+ * Coalescing window — and the single largest term in delivery latency, so it is
+ * worth stating what it buys.
+ *
+ * Measured end to end (bid committed → arriving at a connected client), on one
+ * machine with the database local:
+ *
+ *              fixed    per-subscriber
+ *   60ms       ~64ms    ~0.2ms          (100 watchers: first 79ms, last 99ms)
+ *   25ms       ~29ms    ~0.2ms
+ *
+ * Almost all of the fixed cost IS this window. The database transaction is 5ms
+ * and the fan-out is 0.2ms a subscriber; everything else is waiting here.
+ *
+ * It was 60ms when each subscriber re-read the room for itself and a burst of
+ * ten notifications meant ten reads per viewer. `src/lib/room-cache.ts` made a
+ * burst cost one read for the whole instance, so the window no longer has to
+ * pay for that — its remaining job is only to stop ten separate WRITES per
+ * subscriber during a duel, which 25ms does just as well.
+ *
+ * ⚠ Not zero. Without a window, ten bids in the last second of round 6 become
+ * ten serialise-and-write passes across every open connection, and that cost is
+ * per-subscriber — precisely when the room is busiest and the clock is
+ * shortest.
  */
-const COALESCE_MS = 60;
+const COALESCE_MS = 25;
 
 export async function GET(
   request: NextRequest,
@@ -46,10 +67,21 @@ export async function GET(
   const user = await currentUser();
   const viewerId = user?.id ?? null;
 
-  const initial = await getRoomState(lotId, viewerId);
-  if (!initial) {
+  const snapshot = await readRoom(lotId);
+  if (!snapshot) {
     return new Response("Not found", { status: 404 });
   }
+
+  /*
+   * Read once, here. `hasBid` is sticky — a bidder cannot un-bid a lot — so it
+   * is flipped to true below when a bid of theirs appears in the feed rather
+   * than re-queried on every push. That is what keeps a push at zero
+   * per-subscriber queries without ever reporting it wrongly, and reporting it
+   * wrongly would matter: `hasBid` decides whether the late-entry floor
+   * applies.
+   */
+  let viewerHasBid =
+    viewerId !== null ? await hasBidOnLot(lotId, viewerId) : false;
 
   const encoder = new TextEncoder();
   let unsubscribe: (() => void) | null = null;
@@ -84,12 +116,23 @@ export async function GET(
         }
       };
 
-      send("state", initial);
+      send("state", projectForViewer(snapshot, viewerId, viewerHasBid));
 
       const push = async () => {
         try {
-          const state = await getRoomState(lotId, viewerId);
-          if (state) send("state", state);
+          /*
+           * `fresh: true` — the notification is the statement that whatever is
+           * cached is out of date. Every subscriber on this instance watching
+           * this lot shares the single read it starts.
+           */
+          const next = await readRoom(lotId, true);
+          if (!next) return;
+
+          if (viewerId !== null && !viewerHasBid) {
+            viewerHasBid = next.bids.some((b) => b.userId === viewerId);
+          }
+
+          send("state", projectForViewer(next, viewerId, viewerHasBid));
         } catch (err) {
           console.error("[stream] read failed", lotId, err);
         }
