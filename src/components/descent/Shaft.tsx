@@ -143,6 +143,21 @@ const C = {
   duskInset: [122, 106, 89],
   roast: [25, 19, 16],
   roastInset: [50, 40, 32],
+
+  /*
+   * The shaft's two tones, and they are deliberately CLOSE — four code values
+   * apart, against the twenty-five that `roast` → `roastInset` gave.
+   *
+   * The shader mixes between them by a noise-driven luminance, so the distance
+   * between them IS how blotchy the ground looks. At twenty-five the field read
+   * as patches of light and dark rather than as depth, which is the same
+   * mistake the page backdrop was making with its three coloured blooms.
+   *
+   * Four is enough for the geometry to sit in air rather than on a flat fill,
+   * and little enough that a still frame reads as one colour.
+   */
+  shaftLo: [23, 18, 14],
+  shaftHi: [27, 22, 18],
   umberInk: [28, 23, 20],
   umberMute: [116, 106, 93],
   creamInk: [246, 241, 232],
@@ -271,7 +286,7 @@ function draw(r: Renderer, mode: number, hi: RGB, lo: RGB, s: DescentState) {
  * ─────────────────────────────────────────────────────────────────────────────
  */
 function depthColors() {
-  return { hi: C.roastInset, lo: C.roast };
+  return { hi: C.shaftHi, lo: C.shaftLo };
 }
 
 export function Shaft() {
@@ -324,27 +339,25 @@ export function Shaft() {
 
     const root = document.documentElement.style;
     let published = false;
-    let burnOn = false;
 
     const unsub = descent.subscribe((s) => {
       const { hi, lo } = depthColors();
 
       if (field) draw(field, 0, hi, lo, s);
 
-      if (burn) {
-        if (s.burn > 0.004) {
-          if (!burnOn) {
-            burnOn = true;
-            burnCv.style.opacity = "1";
-          }
-          draw(burn, 1, hi, lo, s);
-        } else if (burnOn) {
-          burnOn = false;
-          burnCv.style.opacity = "0";
-          burn.gl.clearColor(0, 0, 0, 0);
-          burn.gl.clear(burn.gl.COLOR_BUFFER_BIT);
-        }
-      }
+      /*
+       * The burn layer is held off.
+       *
+       * It composited a full-screen alpha pass over the page at the dramatic
+       * moments — the second of the two colour washes the redesign set out to
+       * remove, and the more expensive one: a viewport-sized WebGL surface
+       * blended over everything, on a phone.
+       *
+       * The canvas and its renderer are still created rather than deleted.
+       * Bringing it back is this one branch, and a shader that has been
+       * compiled and proven is worth keeping compiled.
+       */
+      void burn;
 
       /*
        * Hand the descent's colour to CSS once.

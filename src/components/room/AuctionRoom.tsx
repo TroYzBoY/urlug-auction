@@ -86,7 +86,7 @@ export function AuctionRoom({
   const roundTotalMs = (spec.durationMin * 60_000) / ROUND_TIME_SCALE;
 
   return (
-    <div className="grain min-h-dvh bg-ground text-ink">
+    <div className="min-h-dvh bg-ground text-ink">
       <Header minimal />
 
       {/*

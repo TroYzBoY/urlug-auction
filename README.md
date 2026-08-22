@@ -268,7 +268,21 @@ at the execution limit and every bidder reconnects every few minutes for hours.
 
 ## Design system
 
-Dark, everywhere, always. Tokens live in
+Dark, everywhere, always, and **flat**. The ground is a single fill and nothing
+paints over it.
+
+There used to be a fixed backdrop layer carrying three soft accent blooms —
+amber in one corner, flare in another, olive along the bottom — plus a paper
+grain, on the theory that large flat fills read as dead screen space. On a light
+ground that was true. On a dark one it was not: the blooms read as uneven
+patches of colour rather than as depth, and the grain, whose alpha was tuned to
+darken a light page and lift a dark one by the same amount, was simply visible
+as speckle against roast.
+
+⚠ If the field ever needs lifting again, use **one** very low-contrast wash.
+The eye reads two hues as blotching long before it reads them as depth.
+
+Tokens live in
 [`src/app/globals.css`](src/app/globals.css) in two layers: a **raw palette** of
 plain custom properties (the only literal colours in the codebase, deliberately
 outside `@theme` so Tailwind does not emit a utility per swatch), and **semantic
@@ -346,9 +360,26 @@ shifting underneath text that was trying to be read, and the custom-property
 rewrite it required invalidated style for the whole document several times a
 second while somebody was reading it.
 
-Now `depthColors` returns one fixed pair, published once. The geometry, the
-parallax and the burn are all still scroll-driven; only the palette is fixed, so
-the eye has one thing changing instead of two.
+Now `depthColors` returns one fixed pair, published once — and the two tones are
+four code values apart rather than twenty-five, because the shader mixes between
+them by a noise-driven luminance and that distance *is* how blotchy the ground
+looks. Enough for the geometry to sit in air; little enough that a still frame
+reads as one colour.
+
+The full-screen colour washes went with it:
+
+| Removed | What it did |
+| ------- | ----------- |
+| `.flood` | Washed most of the viewport in rust at the hammer moment. |
+| the burn canvas | A viewport-sized WebGL alpha pass composited over everything — the expensive one, on a phone. |
+| the vignette, cut 0.26 → 0.10 | Darkened the corners by a quarter, which against a dark ground is a pool of shadow rather than a lens. |
+| the doorway spill, cut 0.55 → 0.16 | Lit a third of the screen amber; the doorway is a *shape*, and the shape was the point. |
+
+Scene 04's drama now comes from geometry and timing, which is where it was
+always stronger. The `.flood` element is still rendered so the scene keeps its
+stacking context and `--flood` has somewhere to land; it paints nothing. The
+burn renderer is still compiled — bringing it back is one branch, and a shader
+that has been proven is worth keeping proven.
 
 Both smoothing stages were also loosened — Lenis `lerp` 0.085 → 0.06 and
 `SCRUB_TAU` 0.11 → 0.2 — so the shaft keeps moving briefly after the finger

@@ -15,14 +15,13 @@
 
 .root {
   position: relative;
-  color: var(--descent-ink, #1c1714);
+  color: var(--descent-ink, #f4ece2);
   /* Fallback ground for the moment before the first shader frame, and for
      good on machines with no WebGL. */
-  background: linear-gradient(
-    180deg,
-    var(--descent-ground-hi, #faf6ef) 0%,
-    var(--descent-ground, #e9e2d4) 72%
-  );
+  /* Flat, and the same colour the shader paints. The fallbacks matter: they
+     are what a machine with no WebGL sees, and they were still the old light
+     palette. */
+  background: var(--descent-ground, #17120e);
 }
 
 /* ── canvases ─────────────────────────────────────────────────────────────── */
@@ -48,15 +47,24 @@
   display: none;
 }
 
+/*
+ * The vignette. Cut from 0.26 to 0.10, and its inner edge pushed out.
+ *
+ * At the old strength it darkened the corners by a quarter, which against a
+ * dark ground is a visible pool of shadow rather than a lens effect — the same
+ * complaint as the blooms on the body backdrop, arriving from the other
+ * direction. What is left is enough to stop the shaft's edges reading as a
+ * hard rectangle, and not enough to see as a shape of its own.
+ */
 .vignette {
   position: fixed;
   inset: 0;
   z-index: 20;
   pointer-events: none;
   background: radial-gradient(
-    120% 90% at 50% 12%,
-    transparent 40%,
-    rgb(0 0 0 / 0.26) 100%
+    130% 100% at 50% 20%,
+    transparent 62%,
+    rgb(0 0 0 / 0.1) 100%
   );
   mix-blend-mode: multiply;
   transform: translateZ(0);
@@ -71,7 +79,7 @@
   font-weight: 500;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--descent-ink, #1c1714);
+  color: var(--descent-ink, #f4ece2);
 }
 .mark {
   left: var(--descent-margin);
@@ -141,7 +149,7 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--descent-muted, #746a5d);
+  color: var(--descent-muted, #a89e90);
 }
 .floor::before {
   content: "";
@@ -157,7 +165,7 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--descent-muted, #746a5d);
+  color: var(--descent-muted, #a89e90);
 }
 
 /* Masked character roll — the connective typography of the whole piece. */
@@ -202,7 +210,7 @@
   font-weight: 500;
   letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: var(--descent-muted, #746a5d);
+  color: var(--descent-muted, #a89e90);
   opacity: var(--fade, 1);
   transform: translate3d(0, calc(var(--lift, 0) * -30px), 0);
 }
@@ -231,7 +239,7 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--descent-muted, #746a5d);
+  color: var(--descent-muted, #a89e90);
   opacity: var(--fade, 1);
 }
 .portal {
@@ -247,7 +255,7 @@
 }
 .portal rect {
   fill: none;
-  stroke: var(--descent-ink, #1c1714);
+  stroke: var(--descent-ink, #f4ece2);
   vector-effect: non-scaling-stroke;
 }
 .cue {
@@ -263,7 +271,7 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--descent-muted, #746a5d);
+  color: var(--descent-muted, #a89e90);
   opacity: var(--fade, 1);
 }
 .cue i {
@@ -342,7 +350,7 @@
 .dial circle,
 .dial line {
   fill: none;
-  stroke: var(--descent-ink, #1c1714);
+  stroke: var(--descent-ink, #f4ece2);
   vector-effect: non-scaling-stroke;
 }
 .rim { opacity: 0.28; stroke-width: 1; }
@@ -487,7 +495,7 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--descent-muted, #746a5d);
+  color: var(--descent-muted, #a89e90);
 }
 .railB .clock {
   font-weight: 800;
@@ -505,23 +513,27 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--descent-muted, #746a5d);
+  color: var(--descent-muted, #a89e90);
 }
 
 /* ═══ 04 · БОСГО ════════════════════════════════════════════════════════════ */
+
+/*
+ * The rust flood is gone.
+ *
+ * It washed most of the viewport in `--rust-bright` at the hammer moment,
+ * scrubbed by scroll — a full-screen colour change, which is the thing the
+ * whole redesign was about removing. Scene 04's drama now comes from the
+ * geometry and the timing, which is where it was always stronger.
+ *
+ * The element is still rendered so `--flood` has somewhere to land and the
+ * scene keeps its stacking context; it simply paints nothing.
+ */
 .flood {
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background: radial-gradient(
-    120% 100% at 50% 60%,
-    var(--rust-bright, #d95538) 0%,
-    transparent 72%
-  );
-  opacity: var(--flood, 0);
-  mix-blend-mode: screen;
-  will-change: opacity;
 }
 .s4Wrap {
   position: relative;
@@ -582,7 +594,7 @@
   font-weight: 500;
   letter-spacing: 0.3em;
   text-transform: uppercase;
-  color: var(--descent-muted, #746a5d);
+  color: var(--descent-muted, #a89e90);
   opacity: var(--subFade, 0);
 }
 
@@ -598,9 +610,16 @@
   display: block;
   width: min(64vw, 780px);
   height: min(52vh, 560px);
+  /*
+   * Cut hard — 0.55 → 0.16 on the spill, 0.3 → 0.08 on the wash.
+   *
+   * The doorway opening is a shape, and the shape is the point; at the old
+   * strength the amber behind it lit a third of the screen and read as the
+   * background changing colour rather than as light coming through a gap.
+   */
   background:
-    radial-gradient(70% 100% at 50% 100%, rgb(196 139 72 / 0.55) 0%, transparent 70%),
-    linear-gradient(180deg, rgb(196 139 72 / 0.06) 0%, rgb(196 139 72 / 0.3) 100%);
+    radial-gradient(70% 100% at 50% 100%, rgb(196 139 72 / 0.16) 0%, transparent 70%),
+    linear-gradient(180deg, rgb(196 139 72 / 0.02) 0%, rgb(196 139 72 / 0.08) 100%);
   clip-path: inset(0 calc((1 - var(--door, 0)) * 50%) 0 calc((1 - var(--door, 0)) * 50%));
   /* Feathered, or the gradient's own bounding box shows and the doorway reads
      as a lit rectangle rather than as spill. */
@@ -652,7 +671,7 @@
   font-weight: 800;
   font-size: clamp(1.6rem, 4.4vw, 3.4rem);
   letter-spacing: -0.02em;
-  color: var(--descent-ink, #1c1714);
+  color: var(--descent-ink, #f4ece2);
   text-decoration: none;
   transition:
     color 0.5s var(--ease-out-soft),
@@ -671,7 +690,7 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--descent-muted, #746a5d);
+  color: var(--descent-muted, #a89e90);
 }
 
 /* ── narrow screens ───────────────────────────────────────────────────────── */

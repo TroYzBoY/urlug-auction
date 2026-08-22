@@ -92,21 +92,6 @@
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
 
-  /*
-   * Paper grain, tiled at 200px. An SVG feTurbulence the browser rasterises
-   * once — no image request, no binary asset in the repo, and it stays crisp at
-   * any device pixel ratio.
-   *
-   * Desaturated so it tints nothing, and at this alpha it darkens a light
-   * ground and lifts a dark one by roughly the same amount, which is why one
-   * texture serves both themes. Keep it low: the moment grain is *visible* as
-   * noise rather than felt as texture, it stops reading as premium.
-   *
-   * Two knobs, both in the data URI: `baseFrequency` is speck size (higher =
-   * finer) and the rect's `opacity` is strength. 0.9 / 0.18 is a deliberately
-   * quiet setting — push opacity to ~0.3 if you want the paper to read louder.
-   */
-  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23g)' opacity='0.18'/%3E%3C/svg%3E");
 }
 
 /* ── 2. Semantic tokens ──────────────────────────────────────────────────── */
@@ -126,9 +111,9 @@
 
   /*
    * The one palette. The `bone-*` and `umber-*` raws above are the light
-   * swatches; they are kept because the grain texture and a few borders still
-   * reference the scale, and because deleting a palette is easy to undo badly.
-   * Nothing here points at them.
+   * swatches. Nothing points at them any more; they are kept because deleting
+   * a whole palette is easy to undo badly, and because a second skin — a print
+   * stylesheet, a light email template — would start from them.
    */
   --color-ground: var(--roast-page);
   --color-surface: var(--roast-card);
@@ -177,56 +162,24 @@
 
   /*
    * ── Backdrop ───────────────────────────────────────────────────────────
-   * A fixed, non-interactive layer holding two soft accent blooms and a fine
-   * paper grain. It keeps large flat fills from reading as dead screen space,
-   * which is the usual failure of a minimal palette.
    *
-   * Why a fixed pseudo-element rather than background-image on <body>:
-   *   - `background-attachment: fixed` is the obvious way to anchor a gradient
-   *     to the viewport, and it janks badly on iOS Safari. Most of this
-   *     audience is on phones.
-   *   - A gradient painted across the <body> box stretches with the document,
-   *     so the same CSS looks completely different on a short page and a long
-   *     one. Anchored to the viewport it is consistent everywhere.
+   * There isn't one. The ground is a flat fill and nothing paints over it.
    *
-   * z-index: -1 paints it above the canvas background but below all content.
-   * <body>'s background propagates to the canvas, so nothing covers it.
+   * A fixed pseudo-element used to carry three soft accent blooms — amber in
+   * one corner, flare in another, olive along the bottom — plus a fine paper
+   * grain, on the theory that large flat fills read as dead screen space. On a
+   * light ground that was true. On a dark one it was not: the blooms read as
+   * uneven patches of colour rather than as depth, and the grain, which sat at
+   * an alpha tuned to darken a light page and lift a dark one by the same
+   * amount, was simply visible as speckle against roast.
    *
-   * It is a sibling layer, never an ancestor, so it cannot become the
-   * containing block for the room's `position: fixed` bid panel — see the
-   * warning on room-in below.
+   * A flat ground is also cheaper in the one place it matters: no compositing
+   * layer over the whole viewport, on phones, while a clock is running.
+   *
+   * If the field ever needs lifting again, do it with ONE very low-contrast
+   * wash rather than three hues — the eye reads two colours as blotching long
+   * before it reads them as depth.
    */
-  body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background-image:
-      var(--grain),
-      radial-gradient(
-        55rem 38rem at 88% -8%,
-        color-mix(in oklab, var(--color-accent) 22%, transparent),
-        transparent 70%
-      ),
-      radial-gradient(
-        48rem 34rem at -10% 20%,
-        color-mix(in oklab, var(--color-flare) 15%, transparent),
-        transparent 65%
-      ),
-      /* Third bloom, low and olive, so the field is not one flat wash of
-         amber — the eye reads two hues as depth and one as a gradient. */
-        radial-gradient(
-          40rem 30rem at 50% 108%,
-          color-mix(in oklab, var(--color-olive) 10%, transparent),
-          transparent 62%
-        );
-    /* One value per layer: grain tiles, the three blooms do not. A short list
-       would cycle and tile a gradient. */
-    background-repeat: repeat, no-repeat, no-repeat, no-repeat;
-    background-size: 200px 200px, auto, auto, auto;
-  }
-
   body {
     background-color: var(--color-ground);
     color: var(--color-ink);
@@ -364,16 +317,7 @@
   animation: ring-out 1.1s var(--ease-out-soft) infinite;
 }
 
-/*
- * The same grain as the body backdrop, for surfaces that paint their own opaque
- * ground and therefore cover it — the live room, which needs the dark palette
- * while the shell around it may be light.
- */
-@utility grain {
-  background-image: var(--grain);
-  background-size: 200px 200px;
-  background-repeat: repeat;
-}
+
 
 /* Hide scrollbar on the bid feed / round rail without losing scrollability. */
 @utility scroll-quiet {
