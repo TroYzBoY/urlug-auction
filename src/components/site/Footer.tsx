@@ -14,7 +14,19 @@ import { groupNumber } from "@/lib/format";
  */
 export function Footer() {
   return (
-    <footer className="mt-24 border-t border-line">
+    /*
+     * `relative z-10` and an explicit ground, both for the landing.
+     *
+     * The Descent's shader canvas is `position: fixed` with `z-index: 0`, and a
+     * positioned element at z-index 0 paints ABOVE every static block in the
+     * same stacking context — including this one, which sits after the descent
+     * in the flow. Without a stacking context of its own the footer is painted
+     * over by a full-viewport canvas.
+     *
+     * The background is explicit for the same reason: a transparent footer
+     * shows whatever is behind it, and behind it is the shaft.
+     */
+    <footer className="relative z-10 mt-24 border-t border-line bg-ground">
       <div className="gutter flex flex-col gap-8 py-12 md:flex-row md:items-start md:justify-between">
         <div className="max-w-md">
           <p className="text-[0.9375rem] font-bold tracking-[0.2em] text-ink">

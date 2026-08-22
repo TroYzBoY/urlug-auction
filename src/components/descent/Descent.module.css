@@ -18,10 +18,9 @@
   color: var(--descent-ink, #f4ece2);
   /* Fallback ground for the moment before the first shader frame, and for
      good on machines with no WebGL. */
-  /* Flat, and the same colour the shader paints. The fallbacks matter: they
-     are what a machine with no WebGL sees, and they were still the old light
-     palette. */
-  background: var(--descent-ground, #17120e);
+  /* Flat, and the same colour the shader paints — which is also the page's
+     ground. The fallback matters: it is what a machine with no WebGL sees. */
+  background: var(--descent-ground, #191310);
 }
 
 /* ── canvases ─────────────────────────────────────────────────────────────── */
@@ -56,6 +55,40 @@
  * direction. What is left is enough to stop the shaft's edges reading as a
  * hard rectangle, and not enough to see as a shape of its own.
  */
+/*
+ * ── The tail ────────────────────────────────────────────────────────────────
+ *
+ * The descent ends into the footer, and it used to end at a LINE: the shader
+ * canvas is `position: fixed`, so scrolling past the last scene swapped a lit
+ * shaft for a flat ground in one frame.
+ *
+ * Two things fix it, and both are needed.
+ *
+ *   1. `shaftLo` is now exactly `--roast-page`, so the two grounds are the same
+ *      colour and there is nothing to see at the join.
+ *   2. This — a band of the page's own ground fading up over the last screen of
+ *      the descent, so the shaft's texture and its geometry dissolve out rather
+ *      than being cut off.
+ *
+ * `position: absolute` inside `.root`, not fixed: it belongs to the END of the
+ * descent, and a fixed layer would sit over every scene.
+ */
+.tail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100svh;
+  z-index: 30;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in oklab, var(--color-ground) 65%, transparent) 55%,
+    var(--color-ground) 100%
+  );
+}
+
 .vignette {
   position: fixed;
   inset: 0;

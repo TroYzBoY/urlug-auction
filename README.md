@@ -400,6 +400,25 @@ Removed and not restored:
 The burn renderer is still compiled but never drawn: bringing it back is one
 branch, and a shader that has been proven is worth keeping proven.
 
+### Where the descent ends
+
+It used to end at a **line**. Two separate causes, both needing a fix:
+
+- The shader's darkest tone was `#17120e` and the page's ground is `#191310`.
+  The canvas is `position: fixed`, so the two grounds meet on screen and four
+  code values of difference is visible. `shaftLo` is now exactly
+  `--roast-page`; if the palette moves, it moves with it.
+- Nothing dissolved the shaft into the page. `.tail` is a band of the page's own
+  ground fading up over the last screen of the descent, so the texture and the
+  geometry fade out instead of being cut off. It is `absolute` inside `.root`
+  rather than `fixed` — it belongs to the end of the piece, not to every scene.
+
+The footer needed `relative z-10` and an explicit ground for the same reason.
+A `position: fixed` element at `z-index: 0` paints above every *static* block in
+the same stacking context, so a full-viewport canvas was painting over a footer
+that came after it in the flow — and a transparent footer shows whatever is
+behind it, which was the shaft.
+
 Both smoothing stages were also loosened — Lenis `lerp` 0.085 → 0.06 and
 `SCRUB_TAU` 0.11 → 0.2 — so the shaft keeps moving briefly after the finger
 stops. ⚠ There is a ceiling on that: past roughly 0.3 the lag reads as

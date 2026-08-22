@@ -448,6 +448,14 @@ export function Descent() {
           <small>{t.home.pointNote}</small>
         </div>
       </div>
+
+      {/*
+        The dissolve into the page below. Rendered last so it paints over the
+        final scene, and absolutely positioned at the bottom of the descent so
+        it only exists there — see `.tail` in the stylesheet for why the shaft
+        used to end at a visible line.
+      */}
+      <div className={s.tail} aria-hidden />
     </div>
   );
 }

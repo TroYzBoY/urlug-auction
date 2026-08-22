@@ -145,19 +145,22 @@ const C = {
   roastInset: [50, 40, 32],
 
   /*
-   * The shaft's two tones, and they are deliberately CLOSE — four code values
-   * apart, against the twenty-five that `roast` → `roastInset` gave.
+   * The shaft's two tones.
    *
-   * The shader mixes between them by a noise-driven luminance, so the distance
-   * between them IS how blotchy the ground looks. At twenty-five the field read
-   * as patches of light and dark rather than as depth, which is the same
-   * mistake the page backdrop was making with its three coloured blooms.
+   * ⚠ `shaftLo` IS `--roast-page` (#191310), exactly. The shader canvas is
+   * `position: fixed` and the footer below the descent has no ground of its
+   * own, so the shaft's darkest tone and the page's ground meet on screen. When
+   * they were four code values apart — #17120e against #191310 — scrolling out
+   * of the descent showed a visible change of colour where none was intended.
+   * If the palette moves, this moves with it.
    *
-   * Four is enough for the geometry to sit in air rather than on a flat fill,
-   * and little enough that a still frame reads as one colour.
+   * `shaftHi` is four values up. The shader mixes between the two by a
+   * noise-driven luminance, so that distance IS how blotchy the ground looks:
+   * enough for the geometry to sit in air, little enough that a still frame
+   * reads as one colour.
    */
-  shaftLo: [23, 18, 14],
-  shaftHi: [27, 22, 18],
+  shaftLo: [25, 19, 16],
+  shaftHi: [29, 23, 20],
   umberInk: [28, 23, 20],
   umberMute: [116, 106, 93],
   creamInk: [246, 241, 232],
