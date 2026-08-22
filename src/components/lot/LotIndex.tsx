@@ -62,8 +62,6 @@ export function LotIndex({ lots }: { lots: Lot[] }) {
                       category={lot.category}
                       image={lot.image}
                       alt={lot.title}
-                      dither
-                      ditherRes={72}
                       ratio="aspect-square"
                     />
                   </span>

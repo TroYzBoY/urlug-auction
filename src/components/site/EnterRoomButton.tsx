@@ -38,18 +38,21 @@ export function EnterRoomButton({
 }) {
   return (
     <Link href={href} className="group relative inline-block">
+      {/*
+        `whileTap` only. The hover scale went with the rest of the hover-only
+        decoration: it does not exist on touch, which is most of this audience,
+        and a control that grows under a cursor is not telling anyone anything
+        the colour change does not already say.
+
+        The press stays. On touch there IS no hover state, so a control that
+        does not move under the finger reads as broken — which is the note the
+        client made about the original version of this button.
+      */}
       <motion.span
-        whileHover={{ scale: 1.025 }}
         whileTap={{ scale: 0.96 }}
         transition={{ type: "spring", stiffness: 420, damping: 26 }}
         className="relative flex h-11 items-center justify-center gap-2.5 overflow-hidden rounded-full bg-ink px-6 text-[0.75rem] font-medium tracking-[0.14em] text-ground uppercase shadow-sm transition-colors group-hover:bg-accent group-hover:text-accent-ink"
       >
-        {/* Sheen. Clipped by the overflow-hidden parent. */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.45),transparent)]"
-        />
-
         {/* Live dot, matching the one used everywhere else for "running now". */}
         <span aria-hidden className="relative grid size-1.5 place-items-center">
           <span className="absolute size-1.5 rounded-full bg-rust animate-ring-out" />
@@ -58,12 +61,7 @@ export function EnterRoomButton({
 
         {label}
 
-        <span
-          aria-hidden
-          className="transition-transform duration-300 group-hover:translate-x-1"
-        >
-          →
-        </span>
+        <span aria-hidden>→</span>
       </motion.span>
 
       {/*

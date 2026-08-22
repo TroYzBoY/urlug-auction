@@ -1,8 +1,5 @@
-"use client";
-
 import Link from "next/link";
 import { ViewTransition } from "react";
-import { motion } from "framer-motion";
 import { LotPlate } from "./LotPlate";
 import { t } from "@/lib/copy";
 import { lotDate, pts, ptsToMnt } from "@/lib/format";
@@ -29,11 +26,22 @@ export function LotCard({ lot }: { lot: Lot }) {
   const isSold = lot.status === "sold";
   const status = STATUS[lot.status];
 
+  /*
+   * No hover lift and no plate zoom.
+   *
+   * The card used to rise 3px on a spring and the photograph inside it scaled
+   * to 1.02 over 700ms. Two objections, and the second is the real one:
+   *
+   *   1. Neither exists on touch, which is most of this audience. A grid whose
+   *      only affordance is a hover state has no affordance on a phone.
+   *   2. A catalogue of twelve cards that each lift and zoom is a grid that
+   *      will not hold still while you read it.
+   *
+   * The title still changes colour on hover, which is the affordance that
+   * matters: it says the whole card is a link.
+   */
   return (
-    <motion.div
-      whileHover={{ y: -3 }}
-      transition={{ type: "spring", stiffness: 350, damping: 25 }}
-    >
+    <div>
       <Link
         href={`/auction/${lot.id}`}
         className="group block text-left focus-visible:outline-offset-4"
@@ -45,8 +53,6 @@ export function LotCard({ lot }: { lot: Lot }) {
               code={lot.code}
               image={lot.image}
               alt={lot.title}
-              dither
-              className="transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.02]"
             />
           </ViewTransition>
 
@@ -127,7 +133,7 @@ export function LotCard({ lot }: { lot: Lot }) {
           </dl>
         </div>
       </Link>
-    </motion.div>
+    </div>
   );
 }
 

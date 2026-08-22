@@ -331,8 +331,37 @@ information.
 | The shared-element morph | A lot's plate travels from the catalogue grid into the lot page — it says the object you tapped is the object you are looking at. |
 
 **Gone:** scroll reveals, entrance staggers, the drifting aura behind the hero,
-the sheen crossing the CTA, the room's fade-in, and the whole-page theme
-crossfade.
+the sheen crossing the CTA, the room's fade-in, the whole-page theme crossfade,
+the catalogue's hover lift and plate zoom, and the halftone dither.
+
+### Hover is not an affordance
+
+Most of what was removed from the catalogue was hover-only: cards rose 3px on a
+spring, their photographs scaled to 1.02 over 700ms, the CTA grew under the
+cursor and its arrow slid right. None of that exists on touch, which is most of
+this audience — a grid whose only affordance is a hover state has no affordance
+on a phone. And twelve cards that each lift and zoom is a grid that will not
+hold still while you read it.
+
+What is left is the part that works everywhere: the title changes colour, which
+says the whole card is a link, and the CTA still moves under a press, because a
+control that does not is read as broken on touch.
+
+Dropping framer-motion from `LotCard` also let it stop being a Client
+Component. The catalogue now ships no JavaScript for its cards.
+
+### The halftone
+
+`DitherLayer` rendered each photograph as a 1-bit ordered dither — a Bayer
+threshold matrix, the newsprint look — that resolved to the real image on hover,
+or on scroll where there is no hover. It was carefully built and it was a
+deliberate editorial idea: the catalogue as a printed index, the lot's own page
+showing the object plainly.
+
+It is gone because it did the one thing a catalogue must not: it stood between a
+bidder and the object. On a dark site it was worse than that — its "paper" was
+the plate's warm ground, a light swatch, so a lot without a photograph became a
+bright dotted rectangle on a near-black page.
 
 The scroll reveals are worth a note, because removing them removed real work.
 `reveal-manager.ts` tracked element position rather than intersection events,

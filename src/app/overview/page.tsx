@@ -167,8 +167,6 @@ export default async function OverviewPage() {
                 category={live.category}
                 image={live.image}
                 alt={live.title}
-                dither
-                ditherRes={520}
                 ratio="aspect-[4/5] sm:aspect-[16/9] lg:aspect-[21/9]"
                 className="transition-transform duration-[1200ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.03]"
               />
