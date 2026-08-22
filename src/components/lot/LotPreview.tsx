@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ViewTransition } from "react";
 import { Footer } from "@/components/site/Footer";
-import { Header } from "@/components/site/Header";
+import { SiteHeader } from "@/components/site/SiteHeader";
 import { LotPlate } from "./LotPlate";
 import { bidClockLabel, lotDate, pts, ptsToMnt } from "@/lib/format";
 import { ROUNDS, TOTAL_ROUNDS } from "@/lib/auction";
@@ -30,7 +30,7 @@ export function LotPreview({ lot }: { lot: Lot }) {
 
   return (
     <>
-      <Header />
+      <SiteHeader />
 
       <main className="gutter pt-10 pb-16 md:pt-16">
         <Link href="/lots" className="eyebrow transition-colors hover:text-ink">

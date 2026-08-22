@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Footer } from "@/components/site/Footer";
-import { Header } from "@/components/site/Header";
+import { SiteHeader } from "@/components/site/SiteHeader";
 import { Reveal } from "@/components/site/Reveal";
 import { LotCard } from "@/components/lot/LotCard";
 import { Pagination } from "@/components/lot/Pagination";
@@ -79,7 +79,7 @@ export default async function LotsPage(props: PageProps<"/lots">) {
 
   return (
     <>
-      <Header />
+      <SiteHeader />
 
       <main className="pt-28 md:pt-36">
         <section className="gutter border-b border-line/40 pb-10 md:pb-14">

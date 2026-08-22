@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch cancels the first. CI on a superseded commit
+# tells you nothing and holds a runner while the one you care about queues.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: typecheck · lint · unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # `next typegen` first: PageProps, LayoutProps and RouteContext are
+      # generated into .next/types, so `tsc --noEmit` on a clean checkout fails
+      # without it. `npm run typecheck` runs both.
+      #
+      # No DATABASE_URL. src/lib/env.ts reads through getters and src/lib/db.ts
+      # creates the pool lazily, so nothing here needs production credentials.
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      - run: npm test
+
+  integration:
+    name: integration (Postgres)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: maison
+          POSTGRES_PASSWORD: maison
+          POSTGRES_DB: maison_test
+        ports:
+          - 5432:5432
+        # Without this the steps start before Postgres accepts connections and
+        # the first test fails with ECONNREFUSED on a cold runner.
+        options: >-
+          --health-cmd "pg_isready -U maison"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run test:db
+        env:
+          # Named `_test` because test/db.ts refuses to TRUNCATE anything else.
+          TEST_DATABASE_URL: postgres://maison:maison@localhost:5432/maison_test
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+        env:
+          # The one value a build genuinely needs: metadataBase and sitemap.ts
+          # emit absolute URLs. Everything else is read at runtime.
+          NEXT_PUBLIC_SITE_URL: https://example.com
+          NEXT_PUBLIC_ROUND_TIME_SCALE: "1"

@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { connection } from "next/server";
 import { getLots } from "@/lib/api";
 import { absoluteUrl } from "@/lib/site";
 
@@ -14,6 +15,14 @@ import { absoluteUrl } from "@/lib/site";
  * to back off from the whole site.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  /*
+   * Forces request-time rendering. Without it Next prerenders this at build,
+   * where there is no database — the catch below would swallow the connection
+   * error and bake a sitemap containing only the static pages, permanently.
+   * The failure is silent, which is what makes it worth a line of code.
+   */
+  await connection();
+
   const now = new Date();
 
   const staticPages: MetadataRoute.Sitemap = [

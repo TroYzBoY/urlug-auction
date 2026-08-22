@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ContactForm } from "@/components/contact/ContactForm";
 import { Footer } from "@/components/site/Footer";
-import { Header } from "@/components/site/Header";
+import { SiteHeader } from "@/components/site/SiteHeader";
 import { Reveal } from "@/components/site/Reveal";
 import { t } from "@/lib/copy";
 
@@ -16,7 +16,7 @@ const BEAT = 90;
 export default function ContactPage() {
   return (
     <>
-      <Header />
+      <SiteHeader />
 
       {/* pt-28 clears the fixed pill header, matching the other pages. */}
       <main className="pt-28 md:pt-36">

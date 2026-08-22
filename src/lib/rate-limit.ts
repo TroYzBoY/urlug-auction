@@ -42,6 +42,9 @@ export const LIMITS = {
   otpSend: { max: 4, windowSec: 3600 },
   otpVerify: { max: 10, windowSec: 900 },
   passwordReset: { max: 5, windowSec: 3600 },
+  /* Opening a top-up costs nothing, but a flood of pending rows is still
+     noise in the one table an accountant will read. */
+  topup: { max: 10, windowSec: 3600 },
   contact: { max: 5, windowSec: 3600 },
 } as const satisfies Record<string, Limit>;
 

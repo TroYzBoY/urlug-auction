@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Footer } from "@/components/site/Footer";
-import { Header } from "@/components/site/Header";
+import { SiteHeader } from "@/components/site/SiteHeader";
 import { Reveal } from "@/components/site/Reveal";
 import { POINT_MNT, ROUNDS, TOTAL_ROUNDS } from "@/lib/auction";
 import { bidClockLabel, groupNumber } from "@/lib/format";
@@ -21,7 +21,7 @@ export default function AboutPage() {
 
   return (
     <>
-      <Header />
+      <SiteHeader />
 
       {/* pt-28 clears the fixed pill header, matching the home page. */}
       <main className="pt-28 md:pt-36">

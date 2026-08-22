@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Footer } from "@/components/site/Footer";
-import { Header } from "@/components/site/Header";
+import { SiteHeader } from "@/components/site/SiteHeader";
 import { EnterRoomButton } from "@/components/site/EnterRoomButton";
 import { LineReveal } from "@/components/site/LineReveal";
 import { LiveTicker } from "@/components/site/LiveTicker";
@@ -40,7 +40,7 @@ export default async function OverviewPage() {
 
   return (
     <>
-      <Header />
+      <SiteHeader />
 
       <main>
         {/* ══ 01 · OPENING FRAME ═══════════════════════════════════════════

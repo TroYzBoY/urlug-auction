@@ -7,6 +7,7 @@ import { publish } from "@/lib/realtime";
 import { currentUser, clientIpFrom } from "@/lib/session";
 import { LIMITS, consume } from "@/lib/rate-limit";
 import { recordDetached } from "@/lib/audit";
+import { log, reportError, timed } from "@/lib/observability";
 import { bidSchema } from "@/lib/validation";
 import type { BidResult } from "@/lib/api";
 
@@ -73,17 +74,33 @@ export async function placeBid(
   }
 
   try {
-    const result = await placeBidInRepo({
-      lotId: parsed.data.lotId,
-      userId: user.id,
-      paddle: user.paddle,
-      points: parsed.data.points,
-      idempotencyKey: parsed.data.idempotencyKey,
-      ip,
-      userAgent,
-    });
+    /*
+     * Timed, because a bid is the one request whose latency is a correctness
+     * concern rather than a comfort one: 900ms in round 6 is a fifth of the
+     * clock, and the bidder experiences it as the site being broken.
+     */
+    const result = await timed(
+      "bid.placed",
+      { lotId: parsed.data.lotId, userId: user.id, points: parsed.data.points },
+      () =>
+        placeBidInRepo({
+          lotId: parsed.data.lotId,
+          userId: user.id,
+          paddle: user.paddle,
+          points: parsed.data.points,
+          idempotencyKey: parsed.data.idempotencyKey,
+          ip,
+          userAgent,
+        }),
+    );
 
     if (!result.ok) {
+      log.info({
+        event: "bid.rejected",
+        lotId: parsed.data.lotId,
+        userId: user.id,
+        reason: result.reason,
+      });
       recordDetached({
         actorUserId: user.id,
         action: "bid.rejected",
@@ -116,7 +133,11 @@ export async function placeBid(
 
     return { ok: true, acceptedPts: result.acceptedPts };
   } catch (err) {
-    console.error("[bid] failed", parsed.data.lotId, err);
+    reportError(err, {
+      event: "bid.error",
+      lotId: parsed.data.lotId,
+      userId: user.id,
+    });
     recordDetached({
       actorUserId: user.id,
       action: "bid.error",

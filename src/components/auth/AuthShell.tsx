@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Header } from "@/components/site/Header";
+import { SiteHeader } from "@/components/site/SiteHeader";
 import { t } from "@/lib/copy";
 
 /**
@@ -24,7 +24,7 @@ export function AuthShell({
 }) {
   return (
     <>
-      <Header />
+      <SiteHeader />
 
       {/* pt-28 clears the fixed pill header, matching the other pages. */}
       <main className="gutter flex min-h-dvh flex-col justify-center pt-28 pb-16 md:pt-36">

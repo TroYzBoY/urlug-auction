@@ -80,11 +80,52 @@ is worth more during development than parity with the deploy image.
 Compose also creates a second database, `maison_test`, for the integration
 tests. `docker compose down -v` destroys both.
 
+### Accounts, money and the legal pages
+
+| Route | |
+| ----- | --- |
+| `/profile` | balance, bid history, lots won |
+| `/wallet` | point packages, top-up and ledger history |
+| `/admin` | staff only — stats, lots, users, audit, ledger drift |
+| `/terms`, `/privacy` | ⚠ drafted, **not reviewed by a lawyer** |
+
+Two things in there are worth knowing before editing them.
+
+**The terms page interpolates its numbers** from `auction.ts` — round count,
+total duration, the late-entry multiplier, the join fee. A terms page is a
+promise about how the system behaves, and one typed out by hand drifts from the
+code the first time a round length changes, leaving the house contractually
+bound to a format it no longer runs.
+
+**Age is a date, not a checkbox.** A checkbox records that someone clicked a
+checkbox; a date of birth is a fact that can be re-checked later, which is what
+matters when the question comes from a regulator rather than from us. Each
+document accepted at registration gets its own `consents` row, so "which text
+were they shown on the day they placed that bid" has an answer.
+
+`src/lib/repo/admin.ts` checks **no** authorisation. `requireAdmin()` in
+`session.ts` is the only gate, and it calls `notFound()` rather than returning a
+403 — a 403 confirms that `/admin` exists.
+
+### Payments
+
+Wired end to end except for the provider itself. `createTopup` opens a `pending`
+row before anyone is redirected, so "the money left my account but the points
+never arrived" has a record to investigate; `settleTopup` locks that row and
+credits once however many times the callback is delivered.
+
+⚠ `src/lib/payments.ts` is a seam, not a QPay integration — that needs merchant
+credentials. In development the wallet redirects to a local route that credits
+without payment, guarded twice: the route 404s when `NODE_ENV=production`, and
+`createInvoice` throws rather than pointing at it. The callback route rejects
+everything until `QPAY_CALLBACK_SECRET` is set, because an endpoint that credits
+points and does not authenticate its caller is a way to mint money by curl.
+
 ### Tests
 
 ```bash
-npm test         # 52 unit tests, no database needed
-npm run test:db  # 38 integration tests against maison_test
+npm test         # 63 unit tests, no database needed
+npm run test:db  # 39 integration tests against maison_test
 npm run test:all
 ```
 

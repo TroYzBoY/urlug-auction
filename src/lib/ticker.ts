@@ -8,6 +8,7 @@ import { recordDetached } from "./audit";
 import { sweep as sweepRateLimits } from "./rate-limit";
 import { sweepSessions } from "./session";
 import { sweepCodes } from "./sms";
+import { expireStaleTopups } from "./repo/topups";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -155,7 +156,16 @@ export async function settleDueAuctions(now = Date.now()): Promise<string[]> {
 }
 
 async function sweepAll(): Promise<void> {
-  await Promise.allSettled([sweepRateLimits(), sweepSessions(), sweepCodes()]);
+  /*
+   * allSettled, not all: these are independent housekeeping jobs, and one
+   * failing must not stop the other three from running for another hour.
+   */
+  await Promise.allSettled([
+    sweepRateLimits(),
+    sweepSessions(),
+    sweepCodes(),
+    expireStaleTopups(),
+  ]);
 }
 
 /**

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { LiveDot } from "@/components/lot/LotCard";
 import { t } from "@/lib/copy";
+import { pts } from "@/lib/format";
 import { ThemeToggle } from "./ThemeToggle";
 
 /**
@@ -24,7 +25,27 @@ const LINKS = [
   { href: "/contact", label: t.nav.contact, desktop: false },
 ] as const;
 
-export function Header({ minimal = false }: { minimal?: boolean }) {
+/**
+ * `account` is read on the SERVER by whatever renders the header and passed
+ * down — this component is a Client Component (it owns the burger menu and the
+ * theme toggle), and a client cannot read a session cookie that is httpOnly.
+ *
+ * Optional, so the pages that have not been converted yet still compile and
+ * simply render the signed-out header.
+ */
+export interface HeaderAccount {
+  paddle: string;
+  balancePts: number;
+  isStaff: boolean;
+}
+
+export function Header({
+  minimal = false,
+  account = null,
+}: {
+  minimal?: boolean;
+  account?: HeaderAccount | null;
+}) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
 
@@ -124,15 +145,36 @@ export function Header({ minimal = false }: { minimal?: boolean }) {
 
           <ThemeToggle />
 
-          <Link href="/login" className="hidden sm:block">
-            <motion.span
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.96 }}
-              className="eyebrow inline-flex h-7.5 items-center rounded-full bg-ink px-3.5 text-[0.625rem] font-bold tracking-[0.14em] text-ground uppercase shadow-sm transition-colors hover:bg-accent hover:text-accent-ink"
-            >
-              {t.nav.enter}
-            </motion.span>
-          </Link>
+          {account ? (
+            /* Signed in: the paddle and the balance, linking to the profile.
+               The balance is here because it is the number that decides whether
+               a bidder can act, and hunting for it mid-sale is the wrong time
+               to discover it is empty. */
+            <Link href="/profile" className="hidden sm:block">
+              <motion.span
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.96 }}
+                data-numerals
+                className="inline-flex h-7.5 items-center gap-2 rounded-full border border-line-strong/30 px-3 text-[0.6875rem] font-medium text-ink-soft transition-colors hover:border-accent hover:text-accent"
+              >
+                <span>{account.paddle}</span>
+                <span aria-hidden className="h-3 w-px bg-line/60" />
+                <span className="font-semibold text-flare">
+                  {pts(account.balancePts)}
+                </span>
+              </motion.span>
+            </Link>
+          ) : (
+            <Link href="/login" className="hidden sm:block">
+              <motion.span
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.96 }}
+                className="eyebrow inline-flex h-7.5 items-center rounded-full bg-ink px-3.5 text-[0.625rem] font-bold tracking-[0.14em] text-ground uppercase shadow-sm transition-colors hover:bg-accent hover:text-accent-ink"
+              >
+                {t.nav.enter}
+              </motion.span>
+            </Link>
+          )}
 
           {/* Burger, phones only. */}
           <button
@@ -176,13 +218,44 @@ export function Header({ minimal = false }: { minimal?: boolean }) {
               removed from this menu on purpose. Without it phones would have no
               route to sign in at all, since the pill version is sm-and-up.
             */}
-            <Link
-              href="/login"
-              onClick={() => setOpen(false)}
-              className="mt-1 block rounded-2xl border-t border-line/40 px-4 py-3 text-sm font-medium text-accent transition-colors hover:bg-raise"
-            >
-              {t.nav.enter}
-            </Link>
+            {account ? (
+              <>
+                {account.isStaff && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setOpen(false)}
+                    className="mt-1 block rounded-2xl border-t border-line/40 px-4 py-3 text-sm font-medium text-ink-soft transition-colors hover:bg-raise hover:text-ink"
+                  >
+                    {t.admin.title}
+                  </Link>
+                )}
+                <Link
+                  href="/wallet"
+                  onClick={() => setOpen(false)}
+                  className="block rounded-2xl px-4 py-3 text-sm font-medium text-ink-soft transition-colors hover:bg-raise hover:text-ink"
+                >
+                  {t.account.walletTitle}
+                </Link>
+                <Link
+                  href="/profile"
+                  onClick={() => setOpen(false)}
+                  className="mt-1 flex items-center justify-between rounded-2xl border-t border-line/40 px-4 py-3 text-sm font-medium text-accent transition-colors hover:bg-raise"
+                >
+                  <span data-numerals>{account.paddle}</span>
+                  <span data-numerals className="text-flare">
+                    {pts(account.balancePts)} {t.common.point}
+                  </span>
+                </Link>
+              </>
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setOpen(false)}
+                className="mt-1 block rounded-2xl border-t border-line/40 px-4 py-3 text-sm font-medium text-accent transition-colors hover:bg-raise"
+              >
+                {t.nav.enter}
+              </Link>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Footer } from "@/components/site/Footer";
-import { Header } from "@/components/site/Header";
+import { SiteHeader } from "@/components/site/SiteHeader";
 import { Reveal } from "@/components/site/Reveal";
 import { RoundLadder } from "@/components/site/RoundLadder";
 import {
@@ -25,7 +25,7 @@ export default function RulesPage() {
 
   return (
     <>
-      <Header />
+      <SiteHeader />
 
       <main className="gutter pt-14 pb-8 md:pt-20">
         <p className="eyebrow animate-rise-in">{t.rules.eyebrow}</p>

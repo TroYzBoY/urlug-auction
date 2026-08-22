@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies, headers } from "next/headers";
+import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import { query, queryOne } from "./db";
 import { env, IS_PRODUCTION } from "./env";
@@ -88,6 +89,31 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
     balancePts: row.balance_pts ?? 0,
   };
 });
+
+/**
+ * The signed-in user, or a redirect. For pages that have nothing to show a
+ * signed-out visitor.
+ */
+export async function requireUser(redirectTo: string): Promise<SessionUser> {
+  const user = await currentUser();
+  if (!user) redirect(`/login?redirect=${encodeURIComponent(redirectTo)}`);
+  return user;
+}
+
+/**
+ * The gate on every admin page and every admin action.
+ *
+ * ⚠ `notFound()`, not `forbidden()`. A 403 confirms that `/admin` exists and
+ * that the visitor merely lacks the role, which is a map for anyone probing;
+ * a 404 tells them nothing they did not already know. The repositories in
+ * `src/lib/repo/admin.ts` do no checking of their own, so this is the only
+ * thing standing in front of them — it must be called first, every time.
+ */
+export async function requireAdmin(): Promise<SessionUser> {
+  const user = await currentUser();
+  if (!user || (user.role !== "admin" && user.role !== "staff")) notFound();
+  return user;
+}
 
 /** Issues a session and sets the cookie. Returns the raw token for tests. */
 export async function createSession(userId: number): Promise<string> {

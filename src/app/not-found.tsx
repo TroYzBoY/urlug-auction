@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { Header } from "@/components/site/Header";
+import { SiteHeader } from "@/components/site/SiteHeader";
 import { t } from "@/lib/copy";
 
 export default function NotFound() {
   return (
     <>
-      <Header />
+      <SiteHeader />
       <main className="gutter grid min-h-[60dvh] place-content-start pt-20">
         <p className="eyebrow">404</p>
         <h1 className="display mt-4 text-[clamp(2.5rem,10vw,5rem)] text-ink">
