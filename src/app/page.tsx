@@ -21,7 +21,7 @@ import { Descent } from "@/components/descent/Descent";
 export default function Page() {
   return (
     <>
-      <main>
+      <main id="main">
         <Descent />
       </main>
       <Footer />

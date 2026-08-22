@@ -93,16 +93,25 @@ const A0 = 0.0582;
 const ASTEP = 1 / 6;
 
 export function Descent() {
-  const stage = [
-    useRef<HTMLDivElement | null>(null),
-    useRef<HTMLDivElement | null>(null),
-    useRef<HTMLDivElement | null>(null),
-    useRef<HTMLDivElement | null>(null),
-    useRef<HTMLDivElement | null>(null),
-  ];
-  const scene = [
-    useSceneRef(0), useSceneRef(1), useSceneRef(2), useSceneRef(3), useSceneRef(4),
-  ];
+  /*
+   * Named rather than held in an array.
+   *
+   * `stage[3]` reads identically to a human but not to `react-hooks/refs`,
+   * which cannot tell an index into a list of ref OBJECTS from an access to a
+   * ref's `.current` and flags every one. Five names cost five lines and remove
+   * five false positives — and the array was never iterated anyway.
+   */
+  const stage0 = useRef<HTMLDivElement | null>(null);
+  const stage1 = useRef<HTMLDivElement | null>(null);
+  const stage2 = useRef<HTMLDivElement | null>(null);
+  const stage3 = useRef<HTMLDivElement | null>(null);
+  const stage4 = useRef<HTMLDivElement | null>(null);
+
+  const scene0 = useSceneRef(0);
+  const scene1 = useSceneRef(1);
+  const scene2 = useSceneRef(2);
+  const scene3 = useSceneRef(3);
+  const scene4 = useSceneRef(4);
 
   const sweepBid = useRef<SVGCircleElement | null>(null);
   const sweepRound = useRef<SVGCircleElement | null>(null);
@@ -142,7 +151,7 @@ export function Descent() {
     };
 
     /* ── 01 · ГУДАМЖ — the monolith docks, then we fall through it ── */
-    const s1 = stage[0].current;
+    const s1 = stage0.current;
     if (s1 && moved(0)) {
       const t = d.scene[0];
       set(s1, {
@@ -157,7 +166,7 @@ export function Descent() {
 
     /* ── 02 · ҮҮД — the two clocks arrive, are dissected, then the camera
           pushes into the bid clock ── */
-    const s2 = stage[1].current;
+    const s2 = stage1.current;
     if (s2 && moved(1)) {
       const t = d.scene[1];
       const arrive = easeOut(seg(t, 0, 0.28));
@@ -194,7 +203,7 @@ export function Descent() {
     }
 
     /* ── 03 · ШАТ — split velocity ── */
-    const s3 = stage[2].current;
+    const s3 = stage2.current;
     if (s3 && moved(2)) {
       const t = d.scene[2];
       set(s3, {
@@ -216,7 +225,7 @@ export function Descent() {
     }
 
     /* ── 04 · БОСГО — the shear, then the hammer ── */
-    const s4 = stage[3].current;
+    const s4 = stage3.current;
     if (s4 && moved(3)) {
       const t = d.scene[3];
       const out = 1 - seg(t, 0.83, 0.95);
@@ -232,7 +241,7 @@ export function Descent() {
     }
 
     /* ── 05 · ТАНХИМ — the door opens ── */
-    const s5 = stage[4].current;
+    const s5 = stage4.current;
     if (s5 && moved(4)) {
       const t = d.scene[4];
       set(s5, {
@@ -255,8 +264,8 @@ export function Descent() {
       </div>
 
       {/* ══ 01 · ГУДАМЖ ═══════════════════════════════════════════════════ */}
-      <section ref={scene[0]} className={`${s.scene} ${s.s1}`}>
-        <div ref={stage[0]} className={s.stage}>
+      <section ref={scene0} className={`${s.scene} ${s.s1}`}>
+        <div ref={stage0} className={s.stage}>
           <svg className={s.portal} viewBox="0 0 100 100" aria-hidden>
             <rect x="6" y="6" width="88" height="88" strokeWidth="1" opacity=".22" />
             <rect x="17" y="17" width="66" height="66" strokeWidth="1" opacity=".16" />
@@ -288,8 +297,8 @@ export function Descent() {
       </section>
 
       {/* ══ 02 · ҮҮД ══════════════════════════════════════════════════════ */}
-      <section ref={scene[1]} className={`${s.scene} ${s.s2}`}>
-        <div ref={stage[1]} className={s.stage}>
+      <section ref={scene1} className={`${s.scene} ${s.s2}`}>
+        <div ref={stage1} className={s.stage}>
           <div className={s.s2Wrap}>
             <div className={s.s2Title}>
               <p className={s.eyebrow}>{t.descent.clocksEyebrow}</p>
@@ -356,8 +365,8 @@ export function Descent() {
       </section>
 
       {/* ══ 03 · ШАТ ══════════════════════════════════════════════════════ */}
-      <section ref={scene[2]} className={`${s.scene} ${s.s3}`}>
-        <div ref={stage[2]} className={s.stage}>
+      <section ref={scene2} className={`${s.scene} ${s.s3}`}>
+        <div ref={stage2} className={s.stage}>
           <div className={s.s3Wrap}>
             <div className={s.axis} />
 
@@ -394,8 +403,8 @@ export function Descent() {
       </section>
 
       {/* ══ 04 · БОСГО ════════════════════════════════════════════════════ */}
-      <section ref={scene[3]} className={`${s.scene} ${s.s4}`}>
-        <div ref={stage[3]} className={s.stage}>
+      <section ref={scene3} className={`${s.scene} ${s.s4}`}>
+        <div ref={stage3} className={s.stage}>
           <div className={s.flood} aria-hidden />
           <div className={s.s4Wrap}>
             <div className={s.s4Stack}>
@@ -416,8 +425,8 @@ export function Descent() {
       </section>
 
       {/* ══ 05 · ТАНХИМ ═══════════════════════════════════════════════════ */}
-      <section ref={scene[4]} className={`${s.scene} ${s.s5}`}>
-        <div ref={stage[4]} className={s.stage}>
+      <section ref={scene4} className={`${s.scene} ${s.s5}`}>
+        <div ref={stage4} className={s.stage}>
           <div className={s.door} aria-hidden>
             <i />
           </div>

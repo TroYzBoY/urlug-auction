@@ -124,10 +124,13 @@ points and does not authenticate its caller is a way to mint money by curl.
 ### Tests
 
 ```bash
-npm test         # 63 unit tests, no database needed
-npm run test:db  # 39 integration tests against maison_test
+npm test          # 72 unit tests, no database needed
+npm run test:db   # 39 integration tests against maison_test
+npm run test:e2e  # 9 browser tests — needs the database up
 npm run test:all
 ```
+
+Three layers, each proving what the one below it cannot.
 
 The split matters. `auction.ts` and `auction-engine.ts` are pure, so the rules
 and the clock are tested in milliseconds with no fixtures — that suite must
@@ -140,8 +143,47 @@ idempotency index really collapses a retry, that a balance really cannot be
 overdrawn, and that `bids` and `ledger_entries` really do refuse UPDATE and
 DELETE.
 
-⚠ Those tests TRUNCATE every table. `test/db.ts` refuses to run against a
-database whose name does not end in `_test`.
+The e2e suite covers what needs all three at once: a session cookie surviving a
+redirect, a form posting to a Server Function, and — the one worth having —
+**an SSE push arriving in a second tab that nobody touched**. That is the most
+load-bearing piece of the room and the one a bidder would experience as a
+frozen price.
+
+⚠ These tests TRUNCATE every table. `test/db.ts` and `e2e/fixtures.ts` both
+refuse to run against a database whose name does not end in `_test`.
+
+### Admin, notifications and settlements
+
+`/admin` is staff-only, gated by `requireAdmin()`, which calls `notFound()`
+rather than returning a 403 — a 403 confirms the route exists. It can create and
+edit lots, close or cancel a running sale, reschedule, suspend an account and
+adjust a balance. Four rules run through all of it:
+
+- **A reason is a required field.** The audit row says *what* happened; *why*
+  only exists if somebody was made to type it at the time.
+- **Cancelling refunds every join fee**, in the same transaction. Voiding a lot
+  people paid to enter and keeping their money is the kind of thing that gets
+  forgotten because the auction code has already moved on.
+- **A balance adjustment appears in the bidder's own history.** A silent
+  correction is indistinguishable from theft from the outside.
+- **There is no `deleteBid` or `setBalance`.** The database refuses them.
+
+Notifications are an **outbox**: the row is written inside the transaction that
+caused it and delivered by the ticker afterwards, so a message can never
+describe a bid that rolled back, and an SMS gateway being down delays delivery
+rather than losing it. The dedupe key for "you were outbid" is per lot and per
+round — round 6's clock is five seconds, and eleven texts in ten seconds is a
+bill as well as an annoyance.
+
+A sold lot opens a **settlement** in the same transaction that hammers it. The
+price is not deducted automatically: the format is designed to sell below
+estimate, so the hammer is almost always more than the points anyone holds, and
+an automatic charge would fail at the exact moment a legal obligation begins.
+
+### Deploying
+
+See [DEPLOY.md](DEPLOY.md). The short version: **not serverless**, and do not
+deploy while a lot is running.
 
 ### The server owns the auction
 

@@ -27,7 +27,7 @@ export function AuthShell({
       <SiteHeader />
 
       {/* pt-28 clears the fixed pill header, matching the other pages. */}
-      <main className="gutter flex min-h-dvh flex-col justify-center pt-28 pb-16 md:pt-36">
+      <main id="main" className="gutter flex min-h-dvh flex-col justify-center pt-28 pb-16 md:pt-36">
         <div className="mx-auto w-full max-w-sm">
           <p className="eyebrow text-muted">{t.brand.name}</p>
 

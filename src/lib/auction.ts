@@ -197,15 +197,33 @@ export function isLegalBid(
 export type Urgency = "calm" | "warm" | "hot";
 
 /**
- * Urgency for the clock's colour and pulse. Uses both absolute seconds and the
- * fraction remaining, because round 6's whole clock is 5 seconds — a purely
- * absolute threshold would render it permanently "hot", and a purely
- * fractional one would leave round 1's last 10 seconds looking calm.
+ * Urgency for the clock's colour and pulse.
+ *
+ * Two thresholds, and the interesting part is how they combine.
+ *
+ *   • A purely FRACTIONAL rule leaves round 1's last ten seconds looking calm —
+ *     10 seconds of a 5-minute clock is 3% gone, so the fraction says nothing
+ *     is happening while a bidder is about to lose the lot.
+ *   • A purely ABSOLUTE rule makes round 6 permanently hot: its whole clock is
+ *     5 seconds, so `sec <= 10` is true from the first frame to the last, and a
+ *     signal that is always on is not a signal.
+ *
+ * So the absolute term applies only to clocks long enough for it to mean
+ * something. Below that, the fraction decides. `SHORT_CLOCK_MS` is 30 seconds:
+ * rounds 1–4 get the absolute rule, rounds 5 and 6 get the fraction, and every
+ * round has a calm start and a hot finish.
+ *
+ * ⚠ An earlier version OR-ed the two unconditionally, which produced exactly
+ * the permanently-hot round 6 the comment claimed to avoid.
  */
+const SHORT_CLOCK_MS = 30_000;
+
 export function urgencyOf(remainingMs: number, totalMs: number): Urgency {
   const sec = remainingMs / 1000;
   const frac = totalMs > 0 ? remainingMs / totalMs : 0;
-  if (sec <= 10 || frac <= 0.2) return "hot";
-  if (sec <= 45 || frac <= 0.5) return "warm";
+  const longClock = totalMs > SHORT_CLOCK_MS;
+
+  if ((longClock && sec <= 10) || frac <= 0.2) return "hot";
+  if ((longClock && sec <= 45) || frac <= 0.5) return "warm";
   return "calm";
 }

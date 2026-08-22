@@ -9,6 +9,7 @@ import {
 } from "../auction";
 import { settle, type EngineState, type SettledState } from "../auction-engine";
 import { record } from "../audit";
+import { enqueue } from "./notifications";
 import type { Bid } from "../types";
 
 /**
@@ -263,7 +264,32 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
       ],
     );
 
-    /* ── 7. Audit ───────────────────────────────────────────────────────── */
+    /* ── 7. Tell whoever was outbid ─────────────────────────────────────── */
+    /*
+     * Queued inside this transaction, so a bid that rolls back cannot leave
+     * somebody a message about it.
+     *
+     * The dedupe key is per lot and per ROUND, not per bid. Round 6's clock is
+     * five seconds; a bidder in a duel can be outbid eleven times in ten
+     * seconds, and eleven text messages is a bill as well as an annoyance. One
+     * per round is enough to say "you are no longer winning this".
+     */
+    if (
+      row.leader_user_id !== null &&
+      row.leader_user_id !== args.userId &&
+      live.currentPts > 0
+    ) {
+      await enqueue(client, {
+        userId: row.leader_user_id,
+        channel: "sms",
+        kind: "bid.outbid",
+        body: `MAISON: ${args.lotId} лот дээр таны үнэ давагдлаа. Одоогийн үнэ ${args.points} оноо.`,
+        href: `/auction/${args.lotId}`,
+        dedupeKey: `outbid:${args.lotId}:${live.round}`,
+      });
+    }
+
+    /* ── 8. Audit ───────────────────────────────────────────────────────── */
     await record(client, {
       actorUserId: args.userId,
       action: "bid.placed",

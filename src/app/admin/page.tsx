@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AccountShell, Panel, Stat } from "@/components/account/AccountShell";
+import {
+  AuctionControls,
+  CreateLotForm,
+  UserControls,
+} from "@/components/admin/AdminForms";
 import { lots, recentAudit, stats, users } from "@/lib/repo/admin";
 import { reconcileBalances } from "@/lib/repo/users";
 import { requireAdmin } from "@/lib/session";
@@ -101,8 +106,11 @@ export default async function AdminPage() {
       <Panel
         heading={t.admin.lots}
         empty="—"
-        isEmpty={lotRows.length === 0}
+        isEmpty={false}
       >
+        <div className="mb-5">
+          <CreateLotForm />
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[44rem] border-collapse text-sm">
             <thead>
@@ -116,7 +124,8 @@ export default async function AdminPage() {
                 <th className="eyebrow py-3 pr-4 font-normal">
                   {t.lot.bidCount}
                 </th>
-                <th className="eyebrow py-3 font-normal">{t.lot.startsAt}</th>
+                <th className="eyebrow py-3 pr-4 font-normal">{t.lot.startsAt}</th>
+                <th className="eyebrow py-3 font-normal">{t.admin.manage}</th>
               </tr>
             </thead>
             <tbody>
@@ -156,8 +165,15 @@ export default async function AdminPage() {
                   <td data-numerals className="py-3 pr-4 text-muted">
                     {lot.bidCount}
                   </td>
-                  <td data-numerals className="py-3 text-muted">
+                  <td data-numerals className="py-3 pr-4 text-muted">
                     {lotDate(lot.opensAt)}
+                  </td>
+                  <td className="py-3 align-top">
+                    <AuctionControls
+                      lotId={lot.lotId}
+                      outcome={lot.outcome}
+                      hasBids={lot.bidCount > 0}
+                    />
                   </td>
                 </tr>
               ))}
@@ -185,7 +201,8 @@ export default async function AdminPage() {
                 <th className="eyebrow py-3 pr-4 font-normal">
                   {t.account.bidsPlaced}
                 </th>
-                <th className="eyebrow py-3 font-normal">{t.home.colStatus}</th>
+                <th className="eyebrow py-3 pr-4 font-normal">{t.home.colStatus}</th>
+                <th className="eyebrow py-3 font-normal">{t.admin.manage}</th>
               </tr>
             </thead>
             <tbody>
@@ -209,7 +226,7 @@ export default async function AdminPage() {
                   <td data-numerals className="py-3 pr-4 text-muted">
                     {user.bidCount}
                   </td>
-                  <td className="py-3">
+                  <td className="py-3 pr-4">
                     <span
                       className={
                         user.status !== "active"
@@ -230,6 +247,9 @@ export default async function AdminPage() {
                         {user.role}
                       </span>
                     )}
+                  </td>
+                  <td className="py-3 align-top">
+                    <UserControls userId={user.id} status={user.status} />
                   </td>
                 </tr>
               ))}

@@ -192,25 +192,44 @@ describe("urgencyOf", () => {
   });
 
   /*
-   * ⚠ Documents actual behaviour, which differs from the intent stated in the
-   * comment on `urgencyOf`. That comment says the fractional term exists so
-   * round 6 is not permanently hot — but the two terms are OR-ed, so the
-   * absolute term (`sec <= 10`) fires for the whole of a 5-second clock and
-   * round 6 is hot from the first frame to the last.
-   *
-   * Left as-is: it is a colour, round 6 genuinely is urgent, and changing it
-   * is a design call rather than a bug fix. The test is here so that whoever
-   * makes that call finds this rather than a passing test that asserts the
-   * opposite of what ships.
+   * Round 6's whole clock is five seconds. The absolute threshold is suppressed
+   * below SHORT_CLOCK_MS precisely so this clock still has a calm start — a
+   * signal that is on from the first frame is not a signal.
    */
-  it("is hot for the whole of round 6's five-second clock", () => {
-    expect(urgencyOf(4_000, 5_000)).toBe("hot");
+  it("gives round 6's five-second clock a calm start and a hot finish", () => {
+    expect(urgencyOf(4_500, 5_000)).toBe("calm");
+    expect(urgencyOf(2_000, 5_000)).toBe("warm");
     expect(urgencyOf(900, 5_000)).toBe("hot");
+  });
+
+  it("does the same for round 5's fifteen seconds", () => {
+    expect(urgencyOf(14_000, 15_000)).toBe("calm");
+    expect(urgencyOf(2_000, 15_000)).toBe("hot");
   });
 
   it("uses the fraction for long clocks, so mid-round is not hot", () => {
     expect(urgencyOf(150_000, 300_000)).toBe("warm");
     expect(urgencyOf(60_000, 300_000)).toBe("hot");
+  });
+
+  it("escalates monotonically across every round's clock", () => {
+    /*
+     * The property that matters more than any single threshold: within one
+     * clock, urgency never goes backwards as time runs out. An earlier version
+     * satisfied the individual cases and still had round 6 pinned at "hot".
+     */
+    const rank = { calm: 0, warm: 1, hot: 2 } as const;
+    for (const total of [300_000, 180_000, 60_000, 30_000, 15_000, 5_000]) {
+      let previous = -1;
+      for (let step = 20; step >= 0; step--) {
+        const current = rank[urgencyOf((total * step) / 20, total)];
+        expect(current).toBeGreaterThanOrEqual(previous);
+        previous = current;
+      }
+      // And every clock ends hot and starts not-hot.
+      expect(urgencyOf(0, total)).toBe("hot");
+      expect(urgencyOf(total, total)).toBe("calm");
+    }
   });
 
   it("does not divide by zero on a zero-length clock", () => {

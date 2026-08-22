@@ -300,10 +300,29 @@ class DescentEngine {
 
 export const descent = new DescentEngine();
 
-/** Runs `fn` once per frame with the shared state. Never re-renders. */
+/**
+ * Runs `fn` once per frame with the shared state. Never re-renders.
+ *
+ * The callback is stored in a ref so the subscription can mount once and still
+ * see the latest closure — resubscribing on every render would tear down and
+ * rebuild the rAF loop sixty times a second.
+ *
+ * ⚠ The assignment is in an EFFECT, not in the render body. Writing
+ * `ref.current = fn` during render is what `react-hooks/refs` flags, and it is
+ * a real hazard under concurrent rendering: a render that React discards would
+ * still have mutated the ref, leaving the loop calling a callback from a tree
+ * that was never committed. The effect runs only for the committed one.
+ *
+ * The loop reads `ref.current` from a frame callback, which is always after
+ * commit, so it never observes the stale value this ordering could imply.
+ */
 export function useDescentFrame(fn: (s: DescentState) => void) {
   const ref = useRef(fn);
-  ref.current = fn;
+
+  useEffect(() => {
+    ref.current = fn;
+  }, [fn]);
+
   useEffect(() => descent.subscribe((s) => ref.current(s)), []);
 }
 

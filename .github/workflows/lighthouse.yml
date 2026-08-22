@@ -1,0 +1,59 @@
+name: Lighthouse
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+# Budgets, not a score to admire.
+#
+# Accessibility and SEO are errors — they are objective and regress silently.
+# Performance is a WARNING, because a Lighthouse run on a shared CI runner is
+# noisy enough that failing a build on it teaches people to ignore the build.
+#
+# Cumulative layout shift is the exception among the performance metrics: this
+# site puts a bid button under a bidder's thumb during a five-second clock, and
+# a layout shift there is a misplaced tap on a real amount of money.
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: maison
+          POSTGRES_PASSWORD: maison
+          POSTGRES_DB: maison
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U maison"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://maison:maison@localhost:5432/maison
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      NEXT_PUBLIC_ROUND_TIME_SCALE: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run db:migrate
+      # A catalogue, so the pages under test have something on them. An empty
+      # /lots scores beautifully and measures nothing.
+      - run: npm run db:seed
+      - run: npm run build
+
+      - name: Start the server
+        run: |
+          npm run start &
+          npx wait-on http://localhost:3000/api/health --timeout 60000
+
+      - run: npx --yes @lhci/cli@0.14.x autorun

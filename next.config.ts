@@ -6,17 +6,30 @@ import type { NextConfig } from "next";
  * matcher deliberately skips. The Content-Security-Policy is the one exception:
  * it carries a nonce, so it has to be minted per request.
  */
+/*
+ * HSTS is OFF unless ENABLE_HSTS=1.
+ *
+ * ⚠ It is the one header here that cannot be taken back. A browser that has
+ * seen it refuses plain HTTP to this domain and every subdomain for two years,
+ * whatever the server later says — so a staging box on http, or a subdomain not
+ * yet on TLS, becomes unreachable for people who visited once. Preload
+ * submission is a further, slower one-way door.
+ *
+ * Shipping it on by default would mean the first person to run this locally
+ * behind a proxy poisons their own browser. Turn it on deliberately, once the
+ * domain and every subdomain serve HTTPS.
+ */
+const HSTS_ENABLED = process.env.ENABLE_HSTS === "1";
+
 const SECURITY_HEADERS = [
-  {
-    /*
-     * Two years, with preload. ⚠ Turn this on only once the domain and every
-     * subdomain are serving HTTPS: a browser that has seen this header refuses
-     * plain HTTP for the whole period and there is no way to take it back
-     * quickly. Preload submission is a further one-way door.
-     */
-    key: "Strict-Transport-Security",
-    value: "max-age=63072000; includeSubDomains; preload",
-  },
+  ...(HSTS_ENABLED
+    ? [
+        {
+          key: "Strict-Transport-Security",
+          value: "max-age=63072000; includeSubDomains; preload",
+        },
+      ]
+    : []),
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
   /*

@@ -1,0 +1,6 @@
+# Generated or vendored — formatting these is churn in every diff.
+.next
+node_modules
+package-lock.json
+public
+*.md

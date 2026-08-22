@@ -19,7 +19,7 @@ export default function ContactPage() {
       <SiteHeader />
 
       {/* pt-28 clears the fixed pill header, matching the other pages. */}
-      <main className="pt-28 md:pt-36">
+      <main id="main" className="pt-28 md:pt-36">
         {/* ── Hero ──────────────────────────────────────────────────────── */}
         <section className="gutter border-b border-line/40 pb-14 md:pb-20">
           <p className="eyebrow animate-rise-in text-muted">

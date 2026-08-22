@@ -1,5 +1,6 @@
 import "server-only";
 import { IS_PRODUCTION } from "./env";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { absoluteUrl } from "./site";
 
 /**
@@ -28,6 +29,14 @@ const QPAY_PASSWORD = process.env.QPAY_PASSWORD ?? null;
 const QPAY_INVOICE_CODE = process.env.QPAY_INVOICE_CODE ?? null;
 /** Shared secret the provider signs its callbacks with. */
 const QPAY_CALLBACK_SECRET = process.env.QPAY_CALLBACK_SECRET ?? null;
+
+/*
+ * The header the signature arrives in. Overridable because providers disagree
+ * — X-Signature, X-Hub-Signature-256, X-QPay-Signature — and the name is the
+ * one thing about this that a sandbox test will immediately tell you.
+ */
+const SIGNATURE_HEADER =
+  process.env.QPAY_SIGNATURE_HEADER ?? "x-qpay-signature";
 
 export const paymentsConfigured = Boolean(
   QPAY_URL && QPAY_USERNAME && QPAY_PASSWORD && QPAY_INVOICE_CODE,
@@ -99,23 +108,44 @@ export async function createInvoice(req: InvoiceRequest): Promise<Invoice> {
  * points and does not authenticate its caller is a way to mint money by curl.
  * The development flow does not go through here — it uses a separate route
  * that is disabled in production.
+ *
+ * ⚠ The scheme below — HMAC-SHA256 over the raw body, hex, in a configurable
+ * header — is the common one, but it is NOT confirmed against QPay's sandbox.
+ * Verify the algorithm, the encoding and the header name before taking real
+ * payments; a signature check that always fails looks exactly like a provider
+ * outage, and one that always passes looks like nothing at all.
  */
 export async function verifyCallback(
-  // Unused until the HMAC check below is written. Named and typed now so the
-  // call site in the callback route is already correct when it is.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   headers: Headers,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   rawBody: string,
 ): Promise<boolean> {
   if (!QPAY_CALLBACK_SECRET) return false;
 
+  const provided = headers.get(SIGNATURE_HEADER);
+  if (!provided) return false;
+
   /*
-   * Compare an HMAC of the raw body against the provider's signature header,
-   * using `timingSafeEqual`. The RAW body matters — re-serialising parsed JSON
-   * changes key order and whitespace, and the signature stops matching.
+   * HMAC of the RAW body. Re-serialising parsed JSON changes key order and
+   * whitespace, and the signature stops matching — which is why the route
+   * reads `request.text()` before it reads `request.json()`.
    */
-  throw new Error(
-    "Callback verification is not implemented. See src/lib/payments.ts.",
-  );
+  const expected = createHmac("sha256", QPAY_CALLBACK_SECRET)
+    .update(rawBody, "utf8")
+    .digest("hex");
+
+  // Providers differ on case and on a `sha256=` prefix; normalise both.
+  const normalised = provided.trim().replace(/^sha256=/i, "").toLowerCase();
+
+  const a = Buffer.from(normalised, "hex");
+  const b = Buffer.from(expected, "hex");
+  /*
+   * Length is checked first because `timingSafeEqual` THROWS on a mismatch
+   * rather than returning false — and an exception here would be caught by the
+   * route and reported as a verification error, which is the same outcome but
+   * noisier. Comparing lengths leaks only the length, which the header already
+   * reveals.
+   */
+  if (a.length !== b.length || a.length === 0) return false;
+
+  return timingSafeEqual(a, b);
 }

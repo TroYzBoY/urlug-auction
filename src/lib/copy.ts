@@ -1,9 +1,30 @@
 /**
  * Every user-facing string, in one place.
  *
- * The site ships Mongolian only. Components import `t` and never inline copy,
- * so adding English later means adding a second dictionary of the same shape
- * and a locale switch — no component edits.
+ * The site ships Mongolian only. Components import `t` and never inline copy.
+ *
+ * ── Adding a second language ─────────────────────────────────────────────────
+ *
+ * The groundwork is this file existing and being complete; the remaining work
+ * is smaller than it looks, but it is not nothing:
+ *
+ *   1. Copy this file to `copy.en.ts` and translate the values. `Dictionary`
+ *      below makes a missing or misspelled key a TYPE ERROR rather than an
+ *      `undefined` rendered into the page.
+ *   2. Add `[locale]` to the route segments, or pick from a cookie in
+ *      `src/proxy.ts`.
+ *   3. Replace the `t` import with a `useTranslations()`-style accessor. That
+ *      is the only mechanical edit across components, and it is one codemod.
+ *
+ * ⚠ Two things do NOT come along for free, and both are in `src/lib/format.ts`:
+ * number grouping (hand-rolled, because Intl's mn-MN separator differs between
+ * Node and browser ICU builds and mismatches on hydration) and dates (built
+ * from UTC parts for the same reason). A second locale needs its own decisions
+ * there, not a switch to Intl.
+ *
+ * The legal pages are a separate problem again: `/terms` and `/privacy` are
+ * binding text, and a translation of them needs the same review the original
+ * needs. Do not machine-translate those.
  */
 export const t = {
   /*
@@ -155,6 +176,13 @@ export const t = {
     bidCount: "Хаялтын тоо",
     aboveEstimate: "Үнэлгээнээс дээш",
     belowEstimate: "Үнэлгээнээс доош",
+
+    /* Дагах — гол нь жагсаалт биш, лот эхлэхэд мэдэгдэл очих нь. Тогтсон
+       цагт эхэлдэг 2ц45м-ын дуудлагад энэ нь оролцох эсэхийг шийднэ. */
+    watch: "Дагах",
+    watching: "Дагаж байна",
+    watchlist: "Дагаж буй лотууд",
+    watchlistEmpty: "Дагаж буй лот алга.",
   },
 
   room: {
@@ -452,6 +480,21 @@ export const t = {
     verifyFirst: "Оноо худалдан авахын өмнө утасны дугаараа баталгаажуулна уу.",
     notSignedIn: "Нэвтэрч орно уу.",
 
+    notifications: "Мэдэгдэл",
+    notificationsEmpty: "Мэдэгдэл алга.",
+    markRead: "Бүгдийг уншсан болгох",
+
+    settlements: "Төлбөр хүлээгдэж буй",
+    settlementsEmpty: "Төлөх зүйл алга.",
+    dueBy: "Хугацаа",
+    overdue: "Хугацаа хэтэрсэн",
+    settlementStatus: {
+      due: "Төлөгдөөгүй",
+      paid: "Төлөгдсөн",
+      waived: "Чөлөөлсөн",
+      forfeited: "Хүчингүй",
+    } as Record<string, string>,
+
     kind: {
       topup: "Цэнэглэлт",
       join_fee: "Нэгдэх төлбөр",
@@ -489,9 +532,44 @@ export const t = {
     ledgerDriftWarning:
       "⚠ Дараах хэрэглэгчдийн кэшлэгдсэн үлдэгдэл гүйлгээний нийлбэртэй таарахгүй байна. Энэ нь мөнгө үүсэж эсвэл алга болсныг илтгэнэ.",
     recentAudit: "Сүүлийн үйлдлүүд",
+
+    /* ── Controls ────────────────────────────────────────────────────────
+     * Устгах чанартай үйлдэл бүр шалтгаан шаарддаг. Аудитын мөр нь "юу
+     * болсныг" хэлнэ; "яагаад" гэдгийг тухайн үед нь бичүүлж байж л мэднэ.
+     */
+    newLot: "Шинэ лот",
+    create: "Үүсгэх",
+    lotId: "Лотын дугаар",
+    lotCode: "Код",
+    category: "Ангилал",
+    image: "Зургийн зам",
+    low: "доод",
+    high: "дээд",
+
+    manage: "Удирдах",
+    close: "Хаах",
+    cancel: "Цуцлах",
+    reschedule: "Хойшлуулах",
+    confirmClose: "Тийм, хаа",
+    confirmCancel: "Тийм, цуцал",
+    applyStatus: "Төлөв өөрчлөх",
+    applyAdjust: "Оноо тохируулах",
+    reasonPlaceholder: "Шалтгаан (аудитад үлдэнэ)",
+    memoPlaceholder: "Тайлбар (хэрэглэгч харна)",
+
+    closeWarning:
+      "Лот тэр дороо дуусч, тухайн үед тэргүүлж байгаа хүн ялагч болно. Буцаах боломжгүй.",
+    cancelWarning:
+      "Лот хүчингүй болж, хэн ч ялахгүй. Нэгдэх төлбөр төлсөн бүх хүнд буцаагдана. Буцаах боломжгүй.",
+    adjustNote:
+      "Энэ гүйлгээ хэрэглэгчийн хэтэвчний түүхэнд харагдана. Чимээгүй засвар бол гаднаас нь хулгайгаас ялгагдахгүй.",
   },
 
   common: {
+    /* Зөвхөн товч дарж шилжих үед харагдана. Танхимд толгой хэсгийн дор лотын
+       зураг, цаг, үнэ байдаг тул гар/дэлгэц уншигчаар хаялтын самбар хүртэл
+       очих зам урт. */
+    skipToContent: "Үндсэн хэсэг рүү очих",
     loading: "Ачаалж байна",
     notFound: "Хуудас олдсонгүй",
     backHome: "Нүүр хуудас",
@@ -503,3 +581,13 @@ export const t = {
     roundWord: "тойрог",
   },
 } as const;
+
+/**
+ * The shape every locale must fill.
+ *
+ * Derived from the Mongolian dictionary rather than declared by hand, so it
+ * cannot fall behind: adding a key here makes every other locale fail to
+ * compile until it has one too. That is the point — a missing translation
+ * should be a build error, not a blank space in a bidder's face.
+ */
+export type Dictionary = typeof t;

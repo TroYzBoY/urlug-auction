@@ -81,7 +81,7 @@ export default async function LotsPage(props: PageProps<"/lots">) {
     <>
       <SiteHeader />
 
-      <main className="pt-28 md:pt-36">
+      <main id="main" className="pt-28 md:pt-36">
         <section className="gutter border-b border-line/40 pb-10 md:pb-14">
           <p className="eyebrow animate-rise-in text-muted">{t.lots.eyebrow}</p>
 

@@ -5,6 +5,11 @@ import "./globals.css";
 import { MotionProvider } from "@/components/site/MotionProvider";
 import { t } from "@/lib/copy";
 import { SITE_URL } from "@/lib/site";
+import {
+  ANALYTICS_DOMAIN,
+  ANALYTICS_SRC,
+  analyticsEnabled,
+} from "@/lib/analytics";
 
 /**
  * Helvetica Neue leads the stack in globals.css; this is what everyone who does
@@ -104,6 +109,36 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: BEFORE_PAINT }} />
       </head>
       <body className="min-h-dvh antialiased">
+        {/*
+          Skip link. Every page here opens with a header, and on the room that
+          header sits above a lot plate, a clock and a price — a keyboard or
+          screen-reader user would otherwise tab through all of it on every
+          navigation to reach the bid panel.
+
+          Visually hidden until focused, which is the whole trick: `sr-only`
+          plus `focus:not-sr-only` means it costs nothing visually and appears
+          the instant somebody tabs into the page.
+        */}
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:bg-ink focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-ground"
+        >
+          {t.common.skipToContent}
+        </a>
+
+        {analyticsEnabled && (
+          /*
+           * `defer`, and nonced so the CSP allows it. Analytics must never be
+           * on the critical path of a page whose whole point is a clock.
+           */
+          <script
+            nonce={nonce}
+            defer
+            src={ANALYTICS_SRC!}
+            {...(ANALYTICS_DOMAIN ? { "data-domain": ANALYTICS_DOMAIN } : {})}
+          />
+        )}
+
         <MotionProvider>{children}</MotionProvider>
       </body>
     </html>

@@ -9,6 +9,13 @@ import { sweep as sweepRateLimits } from "./rate-limit";
 import { sweepSessions } from "./session";
 import { sweepCodes } from "./sms";
 import { expireStaleTopups } from "./repo/topups";
+import {
+  deliverPending,
+  enqueue,
+  sweepNotifications,
+} from "./repo/notifications";
+import { openSettlement } from "./repo/settlements";
+import { watchersOf } from "./repo/watchlist";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -45,9 +52,17 @@ const LOCK_KEY = 0x4d41_4930; // "MAI0"
 const INTERVAL_MS = 250;
 const RETRY_LOCK_MS = 5_000;
 const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+/*
+ * The notification outbox. Not on the 250ms tick — an SMS gateway round trip
+ * takes longer than that, and a delivery pass stacking up behind itself would
+ * starve the clock work that actually has a deadline. Five seconds is well
+ * inside "felt as immediate" for a text message.
+ */
+const OUTBOX_INTERVAL_MS = 5_000;
 
 interface TickerHandle {
   timer: ReturnType<typeof setTimeout> | null;
+  outboxTimer: ReturnType<typeof setInterval> | null;
   sweepTimer: ReturnType<typeof setInterval> | null;
   lockClient: PoolClient | null;
   stopped: boolean;
@@ -119,16 +134,66 @@ export async function settleDueAuctions(now = Date.now()): Promise<string[]> {
         );
         if (!live.changed) return false;
 
+        const wasScheduled = r.outcome === "scheduled";
         await persistSettlement(client, r.lot_id, live);
+
+        /*
+         * The lot just opened. Everyone following it hears once — for a sale
+         * that starts at a fixed time, that message is the difference between
+         * taking part and reading the result afterwards.
+         */
+        if (wasScheduled && live.outcome === "running") {
+          const meta = await client.query<{ code: string }>(
+            "SELECT code FROM lots WHERE id = $1",
+            [r.lot_id],
+          );
+          const code = meta.rows[0]?.code ?? r.lot_id;
+          for (const userId of await watchersOf(r.lot_id)) {
+            await enqueue(client, {
+              userId,
+              channel: "sms",
+              kind: "lot.opening",
+              body: `MAISON: ${code} лотын дуудлага худалдаа эхэллээ.`,
+              href: `/auction/${r.lot_id}`,
+              dedupeKey: `opening:${r.lot_id}`,
+            });
+          }
+        }
 
         if (live.outcome === "sold" || live.outcome === "unsold") {
           /*
            * Settlement is recorded, not charged. Taking the hammer price out of
            * the winner's balance automatically would either overdraw them or
-           * fail silently at the exact moment a legal obligation begins — so
-           * the money side is a deliberate follow-up (invoice, then payment)
-           * rather than a side effect of a clock expiring.
+           * fail silently at the exact moment a legal obligation begins — the
+           * whole format is designed to sell below estimate, so the hammer is
+           * almost always more than the points anyone holds.
+           *
+           * Opened in THIS transaction, so a sold lot and the obligation it
+           * creates come into existence together. A hammer with no invoice is a
+           * lot nobody is chasing.
            */
+          if (live.outcome === "sold") {
+            const winner = await client.query<{
+              leader_user_id: number | null;
+              code: string;
+            }>(
+              `SELECT a.leader_user_id, l.code
+                 FROM auctions a JOIN lots l ON l.id = a.lot_id
+                WHERE a.lot_id = $1`,
+              [r.lot_id],
+            );
+            const leaderId = winner.rows[0]?.leader_user_id ?? null;
+            if (leaderId !== null) {
+              await openSettlement(
+                client,
+                r.lot_id,
+                leaderId,
+                live.currentPts,
+                winner.rows[0]!.code,
+              );
+            }
+          }
+
           recordDetached({
             action: `auction.${live.outcome}`,
             targetType: "lot",
@@ -165,6 +230,7 @@ async function sweepAll(): Promise<void> {
     sweepSessions(),
     sweepCodes(),
     expireStaleTopups(),
+    sweepNotifications(),
   ]);
 }
 
@@ -175,6 +241,7 @@ async function sweepAll(): Promise<void> {
 export async function startTicker(): Promise<void> {
   const handle: TickerHandle = (globalThis.__maisonTicker ??= {
     timer: null,
+    outboxTimer: null,
     sweepTimer: null,
     lockClient: null,
     stopped: false,
@@ -216,6 +283,13 @@ export async function startTicker(): Promise<void> {
   };
 
   handle.timer = setTimeout(loop, INTERVAL_MS);
+
+  handle.outboxTimer = setInterval(() => {
+    void deliverPending().catch((err) =>
+      console.error("[ticker] outbox failed", err),
+    );
+  }, OUTBOX_INTERVAL_MS);
+
   handle.sweepTimer = setInterval(() => {
     void sweepAll().catch((err) => console.error("[ticker] sweep failed", err));
   }, SWEEP_INTERVAL_MS);
@@ -254,8 +328,10 @@ export async function stopTicker(): Promise<void> {
   if (!handle) return;
   handle.stopped = true;
   if (handle.timer) clearTimeout(handle.timer);
+  if (handle.outboxTimer) clearInterval(handle.outboxTimer);
   if (handle.sweepTimer) clearInterval(handle.sweepTimer);
   handle.timer = null;
+  handle.outboxTimer = null;
   handle.sweepTimer = null;
   if (handle.lockClient) {
     try {

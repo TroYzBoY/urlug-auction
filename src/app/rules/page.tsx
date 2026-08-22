@@ -27,7 +27,7 @@ export default function RulesPage() {
     <>
       <SiteHeader />
 
-      <main className="gutter pt-14 pb-8 md:pt-20">
+      <main id="main" className="gutter pt-14 pb-8 md:pt-20">
         <p className="eyebrow animate-rise-in">{t.rules.eyebrow}</p>
         <h1
           className="display mt-5 animate-rise-in text-[clamp(2.75rem,11vw,6rem)] text-ink"

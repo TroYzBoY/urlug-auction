@@ -24,7 +24,7 @@ export default function AboutPage() {
       <SiteHeader />
 
       {/* pt-28 clears the fixed pill header, matching the home page. */}
-      <main className="pt-28 md:pt-36">
+      <main id="main" className="pt-28 md:pt-36">
         {/* ── Hero ──────────────────────────────────────────────────────── */}
         <section className="gutter border-b border-line/40 pb-16 md:pb-24">
           <p className="eyebrow animate-rise-in text-muted">

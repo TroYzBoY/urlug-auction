@@ -3,6 +3,7 @@ import { AuctionRoom } from "@/components/room/AuctionRoom";
 import { LotPreview } from "@/components/lot/LotPreview";
 import { getLot, getRoomState } from "@/lib/api";
 import { currentUser } from "@/lib/session";
+import { isWatching } from "@/lib/repo/watchlist";
 import { t } from "@/lib/copy";
 
 /*
@@ -33,7 +34,14 @@ export default async function AuctionPage(props: PageProps<"/auction/[id]">) {
   const [lot, user] = await Promise.all([getLot(id), currentUser()]);
   if (!lot) notFound();
 
-  if (lot.status !== "live") return <LotPreview lot={lot} />;
+  if (lot.status !== "live") {
+    return (
+      <LotPreview
+        lot={lot}
+        watching={user ? await isWatching(user.id, id) : null}
+      />
+    );
+  }
 
   /*
    * The room's opening state is read here, on the server, and rendered into the
@@ -45,7 +53,14 @@ export default async function AuctionPage(props: PageProps<"/auction/[id]">) {
    * the late-entry floor applies.
    */
   const room = await getRoomState(id, user?.id ?? null);
-  if (!room) return <LotPreview lot={lot} />;
+  if (!room) {
+    return (
+      <LotPreview
+        lot={lot}
+        watching={user ? await isWatching(user.id, id) : null}
+      />
+    );
+  }
 
   return (
     <AuctionRoom

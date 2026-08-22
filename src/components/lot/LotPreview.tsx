@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ViewTransition } from "react";
 import { Footer } from "@/components/site/Footer";
+import { WatchButton } from "./WatchButton";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { LotPlate } from "./LotPlate";
 import { bidClockLabel, lotDate, pts, ptsToMnt } from "@/lib/format";
@@ -15,7 +16,18 @@ import type { Lot } from "@/lib/types";
  * it becomes the bidding screen when the session opens, then the result page
  * afterwards.
  */
-export function LotPreview({ lot }: { lot: Lot }) {
+/**
+ * @param watching  null when signed out — the follow button is then hidden
+ *                  rather than shown disabled, because a control that cannot
+ *                  do anything is worse than one that is not there.
+ */
+export function LotPreview({
+  lot,
+  watching = null,
+}: {
+  lot: Lot;
+  watching?: boolean | null;
+}) {
   const isSold = lot.status === "sold";
   const isUnsold = lot.status === "unsold";
   const isDone = isSold || isUnsold;
@@ -32,7 +44,7 @@ export function LotPreview({ lot }: { lot: Lot }) {
     <>
       <SiteHeader />
 
-      <main className="gutter pt-10 pb-16 md:pt-16">
+      <main id="main" className="gutter pt-10 pb-16 md:pt-16">
         <Link href="/lots" className="eyebrow transition-colors hover:text-ink">
           ← {t.home.allLots}
         </Link>
@@ -159,19 +171,26 @@ export function LotPreview({ lot }: { lot: Lot }) {
             </dl>
 
             {!isDone && (
-              <div className="mt-9 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  className="h-13 bg-accent px-6 text-[0.8125rem] font-bold tracking-[0.14em] text-accent-ink uppercase transition-[transform,opacity] duration-150 active:scale-[0.99]"
+              <div className="mt-9 flex flex-wrap items-center gap-3">
+                {/*
+                  A link, not a button. It used to be a `<button>` with no
+                  handler — it looked like the primary action and did nothing.
+                */}
+                <Link
+                  href="/register"
+                  className="flex h-13 items-center bg-accent px-6 text-[0.8125rem] font-bold tracking-[0.14em] text-accent-ink uppercase transition-[transform,opacity] duration-150 active:scale-[0.99]"
                 >
                   {t.nav.register}
-                </button>
+                </Link>
                 <Link
                   href="/rules"
                   className="flex h-13 items-center border border-line-strong px-6 text-[0.8125rem] font-bold tracking-[0.14em] text-ink uppercase transition-colors hover:border-accent hover:text-accent"
                 >
                   {t.nav.rules}
                 </Link>
+                {watching !== null && (
+                  <WatchButton lotId={lot.id} watching={watching} />
+                )}
               </div>
             )}
           </div>

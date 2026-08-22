@@ -36,7 +36,7 @@ export function LegalPage({
     <>
       <SiteHeader />
 
-      <main className="gutter pt-14 pb-8 md:pt-20">
+      <main id="main" className="gutter pt-14 pb-8 md:pt-20">
         <p className="eyebrow animate-rise-in">{eyebrow}</p>
         <h1
           className="display mt-5 animate-rise-in text-[clamp(2.25rem,8vw,4.5rem)] text-ink"

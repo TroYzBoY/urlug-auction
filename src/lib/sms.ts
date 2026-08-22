@@ -117,6 +117,10 @@ export async function verifyCode(
  * cannot silently swallow a real user's code.
  * ─────────────────────────────────────────────────────────────────────────────
  */
+export async function sendDirect(to: string, text: string): Promise<void> {
+  return sendSms(to, text);
+}
+
 async function sendSms(to: string, text: string): Promise<void> {
   if (!env.smsApiUrl) {
     if (IS_PRODUCTION) throw new Error("SMS provider not configured");

@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 import { AccountShell, Panel, Stat } from "@/components/account/AccountShell";
 import { SignOutButton } from "@/components/account/SignOutButton";
 import { accountSummary, bidHistory, wonLots } from "@/lib/repo/account";
+import { inbox } from "@/lib/repo/notifications";
+import { forUser as settlementsForUser } from "@/lib/repo/settlements";
+import { watched } from "@/lib/repo/watchlist";
+import { MarkReadButton } from "@/components/account/MarkReadButton";
 import { currentUser } from "@/lib/session";
 import { lotDate, pts, ptsToMnt } from "@/lib/format";
 import { t } from "@/lib/copy";
@@ -27,11 +31,17 @@ export default async function ProfilePage() {
    * user id read from a route parameter would be an IDOR on the whole
    * bidder list.
    */
-  const [summary, bids, won] = await Promise.all([
-    accountSummary(user.id),
-    bidHistory(user.id),
-    wonLots(user.id),
-  ]);
+  const [summary, bids, won, notifications, watchlist, settlements] =
+    await Promise.all([
+      accountSummary(user.id),
+      bidHistory(user.id),
+      wonLots(user.id),
+      inbox(user.id),
+      watched(user.id),
+      settlementsForUser(user.id),
+    ]);
+
+  const due = settlements.filter((s) => s.status === "due");
 
   return (
     <AccountShell
@@ -82,6 +92,104 @@ export default async function ProfilePage() {
           </dd>
         </div>
       </dl>
+
+      {/*
+        What the bidder owes leads everything else. A won lot carries a
+        seven-day obligation under the terms, and burying it under a bid history
+        is how a winner misses it.
+      */}
+      {due.length > 0 && (
+        <section className="mt-12">
+          <h2 className="text-lg font-medium tracking-[-0.02em] text-ink">
+            {t.account.settlements}
+          </h2>
+          <ul className="mt-4 border-t border-line">
+            {due.map((row) => (
+              <li
+                key={row.lotId}
+                className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-line py-4"
+              >
+                <span className="min-w-0">
+                  <span data-numerals className="eyebrow text-muted">
+                    {row.code}
+                  </span>
+                  <span className="mt-1 block text-base font-medium text-ink">
+                    {row.title}
+                  </span>
+                </span>
+                <span data-numerals className="text-right">
+                  <span className="block text-base font-medium text-flare">
+                    {pts(row.hammerPts)} {t.common.point}
+                  </span>
+                  <span
+                    className={`block text-xs ${row.overdue ? "text-rust" : "text-muted"}`}
+                  >
+                    {row.overdue ? t.account.overdue : t.account.dueBy}:{" "}
+                    {lotDate(row.dueBy)}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-sm text-muted">{t.account.winnerAction}</p>
+        </section>
+      )}
+
+      <Panel
+        heading={t.account.notifications}
+        empty={t.account.notificationsEmpty}
+        isEmpty={notifications.length === 0}
+        note={<MarkReadButton />}
+      >
+        <ul className="border-t border-line">
+          {notifications.map((n) => (
+            <li
+              key={n.id}
+              className={`border-b border-line py-3 text-sm ${
+                n.readAt ? "text-muted" : "text-ink"
+              }`}
+            >
+              {n.href ? (
+                <Link href={n.href} className="transition-colors hover:text-accent">
+                  {n.body}
+                </Link>
+              ) : (
+                n.body
+              )}
+              <span data-numerals className="mt-0.5 block text-xs text-faint">
+                {lotDate(n.createdAt)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Panel>
+
+      <Panel
+        heading={t.lot.watchlist}
+        empty={t.lot.watchlistEmpty}
+        isEmpty={watchlist.length === 0}
+      >
+        <ul className="border-t border-line">
+          {watchlist.map((lot) => (
+            <li key={lot.lotId} className="border-b border-line py-3.5">
+              <Link
+                href={`/auction/${lot.lotId}`}
+                className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 transition-colors hover:text-accent"
+              >
+                <span>
+                  <span data-numerals className="text-muted">
+                    {lot.code}
+                  </span>{" "}
+                  {lot.title}
+                </span>
+                <span data-numerals className="text-xs text-muted">
+                  {lotDate(lot.opensAt)}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Panel>
 
       <Panel
         heading={t.account.wonLots}

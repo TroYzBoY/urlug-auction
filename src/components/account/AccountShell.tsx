@@ -26,7 +26,7 @@ export function AccountShell({
     <>
       <SiteHeader />
 
-      <main className="gutter pt-28 pb-8 md:pt-32">
+      <main id="main" className="gutter pt-28 pb-8 md:pt-32">
         <div className="flex flex-wrap items-end justify-between gap-6 border-b border-line pb-8">
           <div className="min-w-0">
             <p className="eyebrow">{eyebrow}</p>

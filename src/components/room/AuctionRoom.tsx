@@ -99,7 +99,7 @@ export function AuctionRoom({
         un-pin the panel from the viewport. Same reason nothing here gets a
         `will-change: transform`.
       */}
-      <main className="gutter animate-room-in pt-4 sm:pt-6 pb-64 lg:pt-10 lg:pb-20">
+      <main id="main" className="gutter animate-room-in pt-4 sm:pt-6 pb-64 lg:pt-10 lg:pb-20">
         {/* ── Lot identity ─────────────────────────────────────────────────
          * On phones the object leads: a full-width plate, the name under it,
          * then the catalogue facts, then the note — a catalogue page that

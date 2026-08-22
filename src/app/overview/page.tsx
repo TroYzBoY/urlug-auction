@@ -42,7 +42,7 @@ export default async function OverviewPage() {
     <>
       <SiteHeader />
 
-      <main>
+      <main id="main">
         {/* ══ 01 · OPENING FRAME ═══════════════════════════════════════════
          * A full-viewport title card. Three bands — slate, title, footer —
          * pinned to the top, middle and bottom edges, so the frame reads as

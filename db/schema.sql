@@ -352,3 +352,85 @@ CREATE INDEX IF NOT EXISTS consents_user_idx ON consents (user_id, accepted_at D
 -- Date of birth, for the 18+ requirement. Nullable because the column arrives
 -- after the first accounts did; new registrations require it.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth DATE;
+
+-- ── Watchlist ────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS watchlist (
+  user_id    BIGINT      NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  lot_id     TEXT        NOT NULL REFERENCES lots (id)  ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, lot_id)
+);
+
+CREATE INDEX IF NOT EXISTS watchlist_lot_idx ON watchlist (lot_id);
+
+-- ── Notifications ────────────────────────────────────────────────────────────
+--
+-- An outbox, not a send-and-hope. Rows are written inside the transaction that
+-- caused them and delivered by a worker afterwards, so a notification can never
+-- describe a bid that rolled back, and an SMS gateway being down delays
+-- delivery instead of losing it.
+--
+-- `dedupe_key` is what stops a bidder who is outbid eleven times in the last
+-- ten seconds of round 6 receiving eleven messages.
+
+DO $$ BEGIN
+  CREATE TYPE notification_channel AS ENUM ('sms', 'inapp');
+  EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE notification_status AS ENUM ('pending', 'sent', 'failed', 'skipped');
+  EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id     BIGINT               NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  channel     notification_channel NOT NULL,
+  kind        TEXT                 NOT NULL,
+  body        TEXT                 NOT NULL,
+  href        TEXT,
+  status      notification_status  NOT NULL DEFAULT 'pending',
+  attempts    INT                  NOT NULL DEFAULT 0,
+  -- Unique per (user, key). Two events that should collapse into one message
+  -- share a key; anything genuinely distinct carries a timestamp in its key.
+  dedupe_key  TEXT                 NOT NULL,
+  read_at     TIMESTAMPTZ,
+  sent_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ          NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS notifications_dedupe_idx
+  ON notifications (user_id, dedupe_key);
+CREATE INDEX IF NOT EXISTS notifications_outbox_idx
+  ON notifications (created_at) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS notifications_inbox_idx
+  ON notifications (user_id, id DESC);
+
+-- ── Winner settlement ────────────────────────────────────────────────────────
+--
+-- What a winner owes, tracked separately from the auction row. The auction says
+-- who won and at what price; this says whether they have paid, which is a
+-- different question with a different lifecycle.
+
+DO $$ BEGIN
+  CREATE TYPE settlement_status AS ENUM ('due', 'paid', 'waived', 'forfeited');
+  EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE TABLE IF NOT EXISTS settlements (
+  lot_id     TEXT              PRIMARY KEY REFERENCES lots (id) ON DELETE CASCADE,
+  user_id    BIGINT            NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
+  hammer_pts INT               NOT NULL CHECK (hammer_pts >= 0),
+  status     settlement_status NOT NULL DEFAULT 'due',
+  -- Terms give the winner seven working days to make contact.
+  due_by     TIMESTAMPTZ       NOT NULL,
+  paid_at    TIMESTAMPTZ,
+  note       TEXT,
+  created_at TIMESTAMPTZ       NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ       NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS settlements_user_idx ON settlements (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS settlements_due_idx  ON settlements (due_by) WHERE status = 'due';
