@@ -23,6 +23,31 @@ import { t } from "./copy";
 const CODE_TTL_MIN = 10;
 const MAX_ATTEMPTS = 5;
 
+/**
+ * Whether to skip phone verification altogether.
+ *
+ * On a machine with no SMS provider the code only ever appears in the server
+ * log, and copying it out on every sign-up is friction unrelated to whatever is
+ * being worked on. This turns the step off.
+ *
+ * Three gates, because what it switches off is a real control rather than a
+ * cosmetic one — `placeBid` refuses an unverified account, on the grounds that
+ * a bidder who cannot be reached cannot be handed a lot:
+ *
+ *   1. DEV_SKIP_OTP must be exactly "1"; unset is off.
+ *   2. NODE_ENV must not be production, checked here.
+ *   3. assertRuntimeEnv() refuses to boot a production server that has the
+ *      flag set at all, so gate 2 cannot be the only thing standing between a
+ *      misplaced env file and unverified accounts.
+ *
+ * It never applies to a password reset. Handing out a session is one thing on a
+ * developer's machine; skipping the proof of ownership that guards changing
+ * somebody's password is a different shape of hole, and no more convenient.
+ */
+export function otpBypassed(): boolean {
+  return !IS_PRODUCTION && env.devSkipOtp;
+}
+
 export type OtpPurpose = "verify" | "reset";
 
 /** `randomInt`, not `Math.random` — this value guards an account. */
@@ -101,7 +126,9 @@ export async function verifyCode(
     return row.attempts + 1 >= MAX_ATTEMPTS ? "exhausted" : "invalid";
   }
 
-  await query("UPDATE otp_codes SET consumed_at = now() WHERE id = $1", [row.id]);
+  await query("UPDATE otp_codes SET consumed_at = now() WHERE id = $1", [
+    row.id,
+  ]);
   return "ok";
 }
 
@@ -148,5 +175,7 @@ async function sendSms(to: string, text: string): Promise<void> {
 
 /** Old codes carry no value and are swept hourly with everything else. */
 export async function sweepCodes(): Promise<void> {
-  await query("DELETE FROM otp_codes WHERE created_at < now() - interval '7 days'");
+  await query(
+    "DELETE FROM otp_codes WHERE created_at < now() - interval '7 days'",
+  );
 }

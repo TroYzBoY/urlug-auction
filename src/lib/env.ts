@@ -40,7 +40,9 @@ function optionalInt(name: string, fallback: number): number {
   if (!raw) return fallback;
   const n = Number.parseInt(raw, 10);
   if (!Number.isFinite(n)) {
-    throw new Error(`Environment variable ${name} must be an integer, got "${raw}".`);
+    throw new Error(
+      `Environment variable ${name} must be an integer, got "${raw}".`,
+    );
   }
   return n;
 }
@@ -78,6 +80,20 @@ export const env = {
     return process.env.SMS_SENDER ?? "URLUG";
   },
 
+  /**
+   * Skips phone verification entirely — see `otpBypassed()` in src/lib/sms.ts.
+   * A development convenience for a machine with no SMS provider, where the
+   * only place a code appears is the server log.
+   *
+   * Setting this in a production environment is refused at boot below, rather
+   * than quietly ignored. Verification is not a formality: `placeBid` rejects
+   * an unverified account, because a bidder who cannot be reached cannot be
+   * handed a lot.
+   */
+  get devSkipOtp(): boolean {
+    return process.env.DEV_SKIP_OTP === "1";
+  },
+
   /** Version string recorded against each user's terms acceptance. */
   get termsVersion(): string {
     return process.env.TERMS_VERSION ?? "2026-08-21";
@@ -109,6 +125,19 @@ export function assertRuntimeEnv(): void {
     problems.push(
       "SMS_API_URL is required in production — without it phone verification " +
         "codes are never delivered and nobody can complete registration.",
+    );
+  }
+
+  /*
+   * Refused rather than ignored. Ignoring it would mean a production server
+   * that boots and runs while its operator believes verification is off — and
+   * the more dangerous inverse, a staging box promoted to production with the
+   * flag still in its environment file, silently accepting unverified accounts.
+   */
+  if (IS_PRODUCTION && env.devSkipOtp) {
+    problems.push(
+      "DEV_SKIP_OTP is set in a production environment. It disables phone " +
+        "verification and must never be set outside development — remove it.",
     );
   }
 

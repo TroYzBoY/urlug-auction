@@ -6,18 +6,14 @@ import { env } from "@/lib/env";
 import { REGISTRATION_CONSENTS } from "@/lib/legal";
 import { LIMITS, consume } from "@/lib/rate-limit";
 import { recordDetached } from "@/lib/audit";
-import {
-  fakeVerifyDelay,
-  hashPassword,
-  verifyPassword,
-} from "@/lib/password";
+import { fakeVerifyDelay, hashPassword, verifyPassword } from "@/lib/password";
 import {
   clientIpFrom,
   createSession,
   destroySession,
   revokeAllSessions,
 } from "@/lib/session";
-import { issueCode, verifyCode } from "@/lib/sms";
+import { issueCode, otpBypassed, verifyCode } from "@/lib/sms";
 import {
   createUser,
   findByPhone,
@@ -121,6 +117,27 @@ export async function register(
     return { status: "code-sent", phone: parsed.data.phone };
   }
 
+  /*
+   * Development only — see otpBypassed() in src/lib/sms.ts.
+   *
+   * Where this sits matters more than what it does. It is BELOW the duplicate
+   * branch above, which has already returned. Bypassing there would hand out a
+   * session for an existing account on nothing but its phone number: the one
+   * path through this function where no password is ever checked.
+   */
+  if (otpBypassed()) {
+    await markPhoneVerified(parsed.data.phone);
+    await createSession(created.userId);
+    recordDetached({
+      actorUserId: created.userId,
+      action: "user.verified",
+      detail: { via: "DEV_SKIP_OTP" },
+      ip,
+      userAgent,
+    });
+    redirect("/lots");
+  }
+
   await issueCode(parsed.data.phone, "verify");
   return { status: "code-sent", phone: parsed.data.phone };
 }
@@ -148,7 +165,11 @@ export async function verifyPhone(
     return { status: "error", message: "Хэт олон оролдлого. Түр хүлээнэ үү." };
   }
 
-  const result = await verifyCode(parsed.data.phone, "verify", parsed.data.code);
+  const result = await verifyCode(
+    parsed.data.phone,
+    "verify",
+    parsed.data.code,
+  );
   if (result !== "ok") {
     recordDetached({
       action: "otp.verify_failed",
@@ -258,12 +279,17 @@ export async function login(
     return { status: "error", message: GENERIC_LOGIN_ERROR };
   }
 
-  if (!user.phone_verified_at) {
+  if (!user.phone_verified_at && !otpBypassed()) {
     // Correct credentials, unverified number: send a fresh code rather than
     // stranding them at a form they cannot get past.
     await issueCode(user.phone, "verify");
     return { status: "code-sent", phone: user.phone };
   }
+  /*
+   * Safe to fall through with the bypass on: the password was verified above,
+   * so this is not a way in, only a way past the second factor.
+   */
+  if (!user.phone_verified_at) await markPhoneVerified(user.phone);
 
   await createSession(user.id);
   recordDetached({

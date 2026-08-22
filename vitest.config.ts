@@ -18,6 +18,16 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      /*
+       * Needed here as well as in the integration config now that a unit test
+       * imports a `server-only` module. env.ts and sms.ts carry the marker so
+       * that importing them from a Client Component is a build error rather
+       * than a secret in a JS bundle; under Vitest there is no bundler to give
+       * it meaning, so it resolves to a stub. See test/server-only-stub.ts.
+       */
+      "server-only": fileURLToPath(
+        new URL("./test/server-only-stub.ts", import.meta.url),
+      ),
     },
   },
 });

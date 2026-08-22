@@ -14,6 +14,20 @@ export async function register() {
   const { assertRuntimeEnv } = await import("./lib/env");
   assertRuntimeEnv();
 
+  /*
+   * Said out loud, once per process. A control that is off should be visible in
+   * the place its operator already looks — the alternative is a flag left in an
+   * env file months ago and remembered by nobody.
+   */
+  const { otpBypassed } = await import("./lib/sms");
+  if (otpBypassed()) {
+    console.warn(`
+  DEV_SKIP_OTP=1 - phone verification is OFF. Registering signs you straight
+  in and no code is sent. Development only; the server refuses to boot with
+  this set in production.
+`);
+  }
+
   const { startTicker, bindShutdown } = await import("./lib/ticker");
 
   bindShutdown();
