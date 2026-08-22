@@ -111,15 +111,40 @@ describe("the rules, re-enforced server-side", () => {
     await seedRunningLot(url, { lotId: LOT, currentPts: 1200, round: 4 });
     const user = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
 
-    // Round 4's increment is 2, so 1201 is one point short.
+    /*
+     * Enter the lot first. A bidder with no history on it is a LATE ENTRANT,
+     * and their floor is round × 10 rather than the round's increment — so a
+     * fixture user who has never bid tests the late-entry rule, not this one.
+     * That mistake is what the first run of this test actually caught.
+     */
+    const entry = await placeBid(
+      args({ userId: user.id, paddle: user.paddle, points: 1240 }),
+    );
+    expect(entry.ok).toBe(true);
+
+    // Now they are in, round 4's increment is 2 — so 1241 is one point short.
     const res = await placeBid(
-      args({ userId: user.id, paddle: user.paddle, points: 1201 }),
+      args({ userId: user.id, paddle: user.paddle, points: 1241 }),
     );
 
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.reason).toBe("too-low");
-    expect(res.minNextPts).toBe(1202);
+    expect(res.minNextPts).toBe(1242);
+  });
+
+  it("charges a late entrant the round × 10 floor, not the increment", async () => {
+    await seedRunningLot(url, { lotId: LOT, currentPts: 1200, round: 4 });
+    const user = await seedUser(url, { phone: "99110002", paddle: "Т-101" });
+
+    const res = await placeBid(
+      args({ userId: user.id, paddle: user.paddle, points: 1202 }),
+    );
+
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    // 1200 + (4 × 10), not 1200 + 2.
+    expect(res.minNextPts).toBe(1240);
   });
 
   it("applies the late-entry floor to a bidder new to the lot", async () => {

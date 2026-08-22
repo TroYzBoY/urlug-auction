@@ -151,19 +151,40 @@ describe("passwords", () => {
 });
 
 describe("one-time codes", () => {
-  /** The dev SMS path logs the code; this is how a test reads it. */
+  /**
+   * The dev SMS path logs the code; this is how a test reads it.
+   *
+   * ⚠ Anchored to "код:" rather than matching any six digits. The log line
+   * prints the RECIPIENT before the message — `[sms:dev] → 99110001` — and an
+   * 8-digit Mongolian number contains a 6-digit prefix, so a bare `\d{6}`
+   * captured "991100" and every OTP test that expected a rejection passed for
+   * the wrong reason.
+   */
   async function issueAndCapture(phone: string, purpose: "verify" | "reset") {
     const spy = vi.spyOn(console, "info").mockImplementation(() => {});
     try {
       await sms.issueCode(phone, purpose);
       const logged = spy.mock.calls.flat().join(" ");
-      const code = /(\d{6})/.exec(logged)?.[1];
-      if (!code) throw new Error("No code found in the dev SMS log");
+      const code = /код:\s*(\d{6})/.exec(logged)?.[1];
+      if (!code) {
+        throw new Error(`No code found in the dev SMS log. Logged: ${logged}`);
+      }
       return code;
     } finally {
       spy.mockRestore();
     }
   }
+
+  it("captures a code that is not merely the phone number", async () => {
+    /*
+     * Guards the helper above. Without this, a regex that silently grabs the
+     * wrong six digits makes every "rejects a bad code" assertion pass for a
+     * reason that has nothing to do with the code being bad.
+     */
+    const code = await issueAndCapture("99110001", "verify");
+    expect(code).toHaveLength(6);
+    expect("99110001").not.toContain(code);
+  });
 
   it("accepts the code it issued, once", async () => {
     const code = await issueAndCapture("99110001", "verify");

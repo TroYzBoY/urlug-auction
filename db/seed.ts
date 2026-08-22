@@ -12,7 +12,7 @@
  * schedules every lot relative to `now`, which is meaningless for a real sale.
  */
 import { Client } from "pg";
-import { ROUNDS, bidClockMs, roundEndOffsetMs } from "../src/lib/auction.ts";
+import { bidClockMs, roundEndOffsetMs } from "../src/lib/auction.ts";
 import { LOTS } from "./fixtures/lots.ts";
 
 if (process.env.NODE_ENV === "production") {
@@ -34,18 +34,39 @@ await client.connect();
  * now, so a freshly seeded database has something live to look at immediately
  * rather than a catalogue that starts next Tuesday.
  */
-const TOTAL_MS = roundEndOffsetMs(ROUNDS.length);
+const TOTAL_MS = roundEndOffsetMs(6);
 
+/**
+ * When to open each lot, given the status the fixture claims.
+ *
+ * ⚠ A "live" lot is opened a fraction of ROUND 1'S BID CLOCK ago, not a
+ * fraction of the whole programme. That distinction is the entire correctness
+ * of this function, and getting it wrong is invisible until the server starts.
+ *
+ * The first version used 10% of the 2h45m programme — 16 minutes. Round 1's bid
+ * clock is five minutes, so by the time the ticker ran, every "live" lot had
+ * sat unanswered for eleven minutes past its clock and was correctly hammered
+ * as unsold. The engine was right; the seed data described a state that cannot
+ * exist. `npm run db:seed` produced a catalogue with nothing live in it.
+ */
 function opensAtFor(status: string, index: number): Date {
+  const now = Date.now();
+
   switch (status) {
     case "live":
-      // A little way in, so round 1 is under way but far from over.
-      return new Date(Date.now() - TOTAL_MS * 0.1);
+      /*
+       * A fifth of round 1's clock in. Under way, visibly counting down, and
+       * with four minutes still on the clock for someone to place a bid.
+       */
+      return new Date(now - bidClockMs(1) * 0.2);
+
     case "sold":
     case "unsold":
-      return new Date(Date.now() - TOTAL_MS - 60_000 * (index + 1));
+      // Comfortably past the end of a full programme.
+      return new Date(now - TOTAL_MS - 60_000 * (index + 1));
+
     default:
-      return new Date(Date.now() + 60 * 60_000 * (index + 1));
+      return new Date(now + 60 * 60_000 * (index + 1));
   }
 }
 
@@ -120,10 +141,16 @@ try {
   }
 
   await client.query("COMMIT");
-  console.info(`Seeded ${LOTS.length} lots.`);
+  const live = LOTS.filter((l) => l.status === "live").length;
+  const upcoming = LOTS.filter((l) => l.status === "upcoming").length;
+
+  console.info(`Seeded ${LOTS.length} lots: ${live} live, ${upcoming} upcoming.`);
   console.info(
-    "Every lot starts as 'scheduled'; the ticker promotes the ones whose " +
-      "opening time has passed on its first pass after the server starts.",
+    "Every lot is written as 'scheduled'; the ticker promotes and settles them " +
+      "on its first pass after the server starts. Give it a second, then check:",
+  );
+  console.info(
+    "  SELECT lot_id, outcome FROM auctions WHERE outcome = 'running';",
   );
 } catch (err) {
   await client.query("ROLLBACK");
