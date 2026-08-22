@@ -94,6 +94,15 @@ export function Panel({
   empty: string;
   isEmpty: boolean;
   children: React.ReactNode;
+  /**
+   * A line under the heading: either a sentence, or a control acting on the
+   * whole section. Rendered in a div rather than a p because of the second
+   * case — `<form>` is not permitted inside `<p>`, and the browser does not
+   * merely dislike it: the parser closes the paragraph when it meets the form,
+   * producing a DOM that does not match what React rendered on the server, and
+   * the page fails to hydrate. Nothing here is visibly a paragraph, so the
+   * element buys nothing to weigh against that.
+   */
   note?: React.ReactNode;
 }) {
   return (
@@ -101,7 +110,7 @@ export function Panel({
       <h2 className="text-lg font-medium tracking-[-0.02em] text-ink">
         {heading}
       </h2>
-      {note && <p className="mt-2 text-sm text-muted">{note}</p>}
+      {note && <div className="mt-2 text-sm text-muted">{note}</div>}
 
       {isEmpty ? (
         <p className="mt-5 border-t border-line pt-5 text-sm text-muted">
