@@ -43,10 +43,10 @@ interface Entry {
 }
 
 declare global {
-  var __maisonRoomCache: Map<string, Entry> | undefined;
+  var __urlugRoomCache: Map<string, Entry> | undefined;
 }
 
-const cache: Map<string, Entry> = (globalThis.__maisonRoomCache ??= new Map());
+const cache: Map<string, Entry> = (globalThis.__urlugRoomCache ??= new Map());
 
 /**
  * The current snapshot for a lot, shared with anyone else asking right now.

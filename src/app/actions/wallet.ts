@@ -7,6 +7,7 @@ import { createInvoice } from "@/lib/payments";
 import { LIMITS, consume } from "@/lib/rate-limit";
 import { createTopup, findPackage } from "@/lib/repo/topups";
 import { clientIpFrom, currentUser } from "@/lib/session";
+import { t } from "@/lib/copy";
 
 /**
  * Starting a top-up.
@@ -55,7 +56,7 @@ export async function startTopup(
     const invoice = await createInvoice({
       reference: created.topup.reference,
       amountMnt: created.topup.amountMnt,
-      description: `MAISON — ${created.topup.points} оноо`,
+      description: `${t.brand.name} — ${created.topup.points} оноо`,
     });
     paymentUrl = invoice.paymentUrl;
   } catch (err) {

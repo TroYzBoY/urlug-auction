@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { query, transaction } from "../db";
 import { record } from "../audit";
 import { enqueue } from "./notifications";
+import { t } from "../copy";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -54,7 +55,7 @@ export async function openSettlement(
     channel: "sms",
     kind: "lot.won",
     body:
-      `MAISON: Баяр хүргэе — ${lotCode} лотыг ${hammerPts} оноогоор та авлаа. ` +
+      `${t.brand.name}: Баяр хүргэе — ${lotCode} лотыг ${hammerPts} оноогоор та авлаа. ` +
       `${DUE_DAYS} хоногийн дотор бидэнтэй холбогдоно уу.`,
     href: "/profile",
     dedupeKey: `won:${lotId}`,

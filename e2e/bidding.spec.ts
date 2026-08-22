@@ -125,7 +125,7 @@ test("an unverified account is refused at the panel and at the server", async ({
   const client = new Client({
     connectionString:
       process.env.TEST_DATABASE_URL ??
-      "postgres://maison:maison@localhost:5432/maison_test",
+      "postgres://urlug:urlug@localhost:5432/urlug_test",
   });
   await client.connect();
   await client.query(

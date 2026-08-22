@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# MAISON — production image
+# URLUG — production image
 #
 # Multi-stage. The final image carries the Next.js standalone output and its
 # traced dependencies, not the 400MB of node_modules that built it.

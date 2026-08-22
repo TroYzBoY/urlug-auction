@@ -12,7 +12,7 @@ import type { Page } from "@playwright/test";
 
 const url =
   process.env.TEST_DATABASE_URL ??
-  "postgres://maison:maison@localhost:5432/maison_test";
+  "postgres://urlug:urlug@localhost:5432/urlug_test";
 
 /** ⚠ Guard, not paranoia: `reset()` truncates every table. */
 function assertTestDatabase(): void {

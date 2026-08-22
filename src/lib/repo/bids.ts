@@ -10,6 +10,7 @@ import {
 import { settle, type EngineState, type SettledState } from "../auction-engine";
 import { record } from "../audit";
 import { enqueue } from "./notifications";
+import { t } from "../copy";
 import type { Bid } from "../types";
 
 /**
@@ -283,7 +284,7 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
         userId: row.leader_user_id,
         channel: "sms",
         kind: "bid.outbid",
-        body: `MAISON: ${args.lotId} лот дээр таны үнэ давагдлаа. Одоогийн үнэ ${args.points} оноо.`,
+        body: `${t.brand.name}: ${args.lotId} лот дээр таны үнэ давагдлаа. Одоогийн үнэ ${args.points} оноо.`,
         href: `/auction/${args.lotId}`,
         dedupeKey: `outbid:${args.lotId}:${live.round}`,
       });

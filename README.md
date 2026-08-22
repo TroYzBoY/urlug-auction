@@ -1,4 +1,4 @@
-# MAISON — дуудлага худалдааны танхим
+# URLUG — дуудлага худалдааны танхим
 
 Next.js 16 (App Router, Turbopack), React 19, Tailwind CSS 4, TypeScript,
 Postgres. Mongolian UI. The auction runs on the server: it owns the clocks,
@@ -77,7 +77,7 @@ is worth more during development than parity with the deploy image.
 | `docker compose --profile app up --build` | the real production image, on :3000 |
 | `docker compose --profile tools up -d adminer` | a DB browser on :8080 |
 
-Compose also creates a second database, `maison_test`, for the integration
+Compose also creates a second database, `urlug_test`, for the integration
 tests. `docker compose down -v` destroys both.
 
 ### Accounts, money and the legal pages
@@ -125,7 +125,7 @@ points and does not authenticate its caller is a way to mint money by curl.
 
 ```bash
 npm test          # 72 unit tests, no database needed
-npm run test:db   # 39 integration tests against maison_test
+npm run test:db   # 39 integration tests against urlug_test
 npm run test:e2e  # 9 browser tests — needs the database up
 npm run test:all
 ```
@@ -268,147 +268,101 @@ at the execution limit and every bidder reconnects every few minutes for hours.
 
 ## Design system
 
-Autumn/brown, premium and minimal. Two skins share **one** set of token names in
-[`src/app/globals.css`](src/app/globals.css):
+Dark, everywhere, always. Tokens live in
+[`src/app/globals.css`](src/app/globals.css) in two layers: a **raw palette** of
+plain custom properties (the only literal colours in the codebase, deliberately
+outside `@theme` so Tailwind does not emit a utility per swatch), and **semantic
+tokens** inside `@theme` that point at them.
 
-| Role       | Light shell (browsing) | Dark roast (live room) |
-| ---------- | ---------------------- | ---------------------- |
-| ground     | `#faf7f2` bone         | `#17120e` roast        |
-| surface    | `#f3ede4`              | `#241a13`              |
-| ink        | `#1c1714` umber        | `#f4ece2`              |
-| accent     | `#7a4b2a` chestnut     | `#c98a4b` amber gold   |
-| flare      | `#c6743e` burnt amber  | `#d99a55`              |
-| rust       | `#a3341f` urgency      | `#cf5f34`              |
-| olive      | `#5c6b4b` confirmed    | `#7d8a5f`              |
+| Role | |
+| ---- | --- |
+| ground | `#17120e` roast |
+| surface | `#241a13` |
+| ink | `#f4ece2` cream |
+| accent | `#c98a4b` amber gold |
+| flare | `#d99a55` |
+| rust | `#cf5f34` urgency |
+| olive | `#7d8a5f` confirmed |
 
-Tokens come in two layers: a **raw palette** of plain custom properties (the
-only literal colours in the codebase, deliberately outside `@theme` so Tailwind
-does not emit a utility per swatch), and **semantic tokens** inside `@theme`
-that point at them. Re-skinning is re-pointing semantics at different raws.
+There were four theme states — light, OS-dark, explicitly-dark, and an
+always-dark room skin — and keeping the two dark blocks in step was a standing
+hazard: a token added to the media query but not the selector was right for
+everyone following their OS and wrong for everyone who had used the toggle, and
+the difference was invisible until somebody sent a screenshot.
 
-Because plain `@theme` (not `@theme inline`) emits utilities as
-`var(--color-x)`, all four states below work through ordinary cascade — a
-component written with `bg-surface text-ink` is correct in every one and never
-needs a `dark:` variant. **Add a state by copying a block, not by touching
-components.**
+One palette removes the whole class of bug, and it is what the room already did.
+The bidding room was always dark regardless of theme, because it is a *place*
+rather than a preference. Now the whole site is that place — so the toggle, the
+`data-theme` attribute, the `prefers-color-scheme` branch and the `data-skin`
+override are all gone, along with the theme half of the pre-paint script.
+`src/app/globals.test.ts` fails the build if a second palette creeps back.
 
-| State                          | Resolves to                                    |
-| ------------------------------ | ---------------------------------------------- |
-| `:root`                        | light — the default, and what the server renders |
-| `@media (prefers-color-scheme: dark)` + `:root:not([data-theme="light"])` | dark, following the OS |
-| `:root[data-theme="dark"]`     | dark, explicitly chosen                        |
-| `[data-skin="room"]`           | **always dark** — see below                    |
-
-The live bidding room is a *place*, not a theme, so it stays dark even for a
-light-mode visitor. Custom properties inherit, so `[data-skin="room"]` on the
-wrapper beats `:root` for everything inside it regardless of specificity. The
-room's header therefore drops the theme control — offering a light switch there
-would promise something it will not do.
-
-⚠ The two dark blocks in `globals.css` are duplicates by necessity (a media
-query and a selector cannot be merged). **Keep them in sync.**
-
-### Theme switching
-
-Three states, with **system as the default**, stored in `localStorage`.
-"system" is the *absence* of `data-theme`, which hands the decision back to
-`prefers-color-scheme` — including when the OS flips at sunset.
-
-The inline script in `layout.tsx` applies the saved choice **before first
-paint**; that is what prevents a white flash on load. A cookie would let the
-server read it, but reading cookies in the root layout opts the whole app out of
-static prerendering, so the script is the right trade here.
-
-`ThemeToggle` treats the theme as **external state, not React state** — the
-truth lives in the `data-theme` attribute, and `useSyncExternalStore` reads it.
-Mirroring it into `useState` would need an effect (a cascading render, which the
-`react-hooks/set-state-in-effect` rule exists to catch) and give React a second
-source of truth. Subscribing to `storage` also means changing the theme in one
-tab updates every other open tab for free.
-
-**Type:** Inter (`next/font/google`, latin + cyrillic) — not Manrope, which an
-earlier draft of this file named. Manrope is a geometric sans with circular
-bowls; beside Helvetica it reads as a different typeface, so Mac and Windows
-would have looked like two brands. Inter is a neo-grotesque from the same
-lineage: same closed apertures, same horizontal terminals, and a full Cyrillic
-set the Mongolian copy needs.
-
-Helvetica Neue leads the stack in `globals.css` and can only ever *lead* — it is
-not web-licensed and is absent on Windows and Android. If the client licenses
-it, drop the woff2 files in `public/fonts` and declare `@font-face`; Inter stays
-as the metrical fallback and nothing else changes.
-
----
+**Type:** Inter (`next/font/google`, latin + cyrillic) — a neo-grotesque from
+the same lineage as Helvetica, which leads the stack for anyone who has it.
+Helvetica Neue is not web-licensed and is absent on Windows and Android, so it
+can only ever *lead*, never be served. Inter carries the full Cyrillic set the
+Mongolian copy needs.
 
 ## Motion
 
-Four kinds, and one rule: **no animation may ever be the reason content is
-invisible.**
+Almost none, outside the landing. What is left is there because it carries
+information.
 
-**Scroll reveals** (`Reveal` + `reveal-manager.ts`). The hidden state lives
-behind a `.js` class the head script adds before first paint — no script, no
-hidden rule, content renders plainly.
+| Kept | Why |
+| ---- | --- |
+| The live dot's pulse | Distinguishes a lot taking bids from one that is not, at a glance and without reading a label. |
+| The clock's urgency colour | Calm → warm → hot as a round's clock runs down. See `urgencyOf` in [`auction.ts`](src/lib/auction.ts). |
+| `RollingNumber` on the price | The headline figure rolls rather than swapping, so a change is noticed. |
+| Button press feedback | On touch there is no hover state; a control that does not move under the finger reads as broken. |
+| The shared-element morph | A lot's plate travels from the catalogue grid into the lot page — it says the object you tapped is the object you are looking at. |
 
-The manager deliberately does **not** use `IntersectionObserver`, which is the
-obvious choice and the wrong one. IO only notifies when an intersection ratio
-*crosses a threshold*; jump straight past an element — anchor link, End key,
-`scrollTo`, a browser-restored scroll position — and it goes from ratio 0 (below
-the viewport) to ratio 0 (above it) without crossing anything. No callback, and
-that section sits at opacity 0 forever. So the test is positional instead:
-"has this element's top come past the trigger line", which is true both for
-elements scrolling in and for elements already scrolled beyond.
+**Gone:** scroll reveals, entrance staggers, the drifting aura behind the hero,
+the sheen crossing the CTA, the room's fade-in, and the whole-page theme
+crossfade.
 
-One passive listener and one rAF-throttled pass serve every Reveal on the page,
-and the whole thing detaches once everything is revealed. A `setTimeout`
-backstop covers documents that produce no frames at all (a tab loaded in the
-background, where rAF can stay parked indefinitely) — content ends up visible,
-just un-animated, which nobody can see anyway.
+The scroll reveals are worth a note, because removing them removed real work.
+`reveal-manager.ts` tracked element position rather than intersection events,
+precisely so that jumping past an element — an anchor link, the End key, a
+restored scroll position — still revealed it, which `IntersectionObserver` gets
+wrong. All of that care was in service of never leaving content invisible; not
+hiding it in the first place achieves the same thing with no code. `Reveal`
+survives as a plain wrapper so its thirty call sites keep their `as` and `id`,
+and it is now a Server Component that ships no JavaScript.
 
-**Entrances.** Above-the-fold content uses `rise-in` keyframes with staggered
-`animationDelay` rather than reveals — there is no intersection to wait for. The
-room gets a slower `room-in` fade, matching the drop into a dark space.
+Everything remaining is disabled under `prefers-reduced-motion`, view
+transitions included — those need stopping explicitly, because the browser runs
+them outside the element's own animation timeline.
 
-⚠ **`room-in` is opacity-only and must stay that way.** It animates `<main>`,
-which contains the bid panel, and the panel is `position: fixed` on phones. A
-transformed (or filtered) ancestor becomes the containing block for fixed
-descendants, so adding a `scale` here un-pins the panel from the viewport for the
-whole animation and bottoms it out against `<main>` instead — hundreds of pixels
-below the fold, so phone users watch the bid button fly up into place on every
-load. This was shipped and fixed; the constraint is commented at both the
-keyframes and the usage site. Anything that needs a transform must go on an
-element that is not an ancestor of the panel.
+## The landing
 
-**Shared-element morph.** A lot's plate carries the same
-`<ViewTransition name={...}>` in the catalogue grid and on the lot page, so the
-browser animates one object moving between routes instead of two swapping. Per
-the React docs, `default="none"` stops it crossfading on unrelated transitions —
-and the explicit `share="morph"` must stay, or the pair silently stops morphing.
-Applied only between the light-shell pages; the room is a deliberate hard cut,
-and the room renders two responsive plates, which would collide on name.
+`/` is the Descent: five pinned scenes over a WebGL shaft, scrubbed by scroll.
+It stays — it is the piece that explains the format before anyone reads a rule.
 
-**Theme crossfade.** `document.startViewTransition` fades the whole page in one
-composited step. A colour transition on every element would instead repaint the
-entire tree on every hover, for the sake of one interaction.
+What changed is that **the colour no longer moves**. It used to run a journey:
+bone at the top, dimming through dusk to roast, with a `heat` term pushing the
+lit tone toward chestnut, rust and amber at the dramatic moments. That was the
+thing that read as restless rather than as depth — the page's own colour kept
+shifting underneath text that was trying to be read, and the custom-property
+rewrite it required invalidated style for the whole document several times a
+second while somebody was reading it.
 
-⚠ `startViewTransition` runs its callback on a *later frame*, and a hidden
-document may not produce one for seconds — which would strand the theme change,
-since the attribute write lives in that callback. Hence the
-`visibilityState === "visible"` guard. Measured at several seconds' delay on a
-backgrounded tab before the guard went in.
+Now `depthColors` returns one fixed pair, published once. The geometry, the
+parallax and the burn are all still scroll-driven; only the palette is fixed, so
+the eye has one thing changing instead of two.
 
-Everything is disabled under `prefers-reduced-motion`, view transitions
-included — those need stopping explicitly.
-
----
+Both smoothing stages were also loosened — Lenis `lerp` 0.085 → 0.06 and
+`SCRUB_TAU` 0.11 → 0.2 — so the shaft keeps moving briefly after the finger
+stops. ⚠ There is a ceiling on that: past roughly 0.3 the lag reads as
+unresponsiveness rather than weight, and on a phone it arrives sooner.
 
 ## Layout
 
 ```
 src/
   app/
-    layout.tsx              Inter, metadata, safe area, pre-paint script + CSP nonce
-    globals.css             raw palette → semantic tokens, 4 theme states,
-                            keyframes, reveal rules, view-transition CSS
+    layout.tsx              Inter, metadata, safe area, skip link, CSP nonce
+    globals.css             raw palette → semantic tokens, ONE dark palette,
+                            grain, the live-dot keyframe, view-transition CSS
     page.tsx                home: hero, live lot, round ladder, catalogue, results
     rules/page.tsx          the format in prose + table
     auction/[id]/page.tsx   one URL per lot, three states (see below)
@@ -417,8 +371,8 @@ src/
     api/room/[lotId]/stream/   SSE: RoomState out, nothing in
     forgot/      password reset, both steps on one URL
   components/
-    site/        Header, Footer, RoundLadder, ThemeToggle,
-                 Reveal + reveal-manager
+    site/        SiteHeader (reads the session), Header, Footer,
+                 RoundLadder, Reveal (a plain wrapper now)
     lot/         LotCard, LotPlate, LotPreview
     auth/        AuthForm, AuthShell, OtpForm, ForgotForm
     room/        AuctionRoom, BidClock, BidPanel, BidFeed, RoundRail,

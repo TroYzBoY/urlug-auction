@@ -75,7 +75,7 @@ export const env = {
     return process.env.SMS_API_KEY ?? null;
   },
   get smsSender(): string {
-    return process.env.SMS_SENDER ?? "MAISON";
+    return process.env.SMS_SENDER ?? "URLUG";
   },
 
   /** Version string recorded against each user's terms acceptance. */

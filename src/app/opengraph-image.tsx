@@ -95,8 +95,17 @@ export default function OpengraphImage() {
           <div style={{ display: "flex" }}>
             {first} мин → {last} сек
           </div>
+          {/*
+            "төгрөг", not "₮".
+
+            `next/og` renders with a font it downloads per character set, and it
+            cannot resolve one for U+20AE — the build logs "Failed to load
+            dynamic font for ₮" and the glyph comes out blank or as a box. The
+            word costs three characters of width and always renders.
+          */}
           <div style={{ display: "flex" }}>
-            1 {t.common.point} = {POINT_MNT.toLocaleString("en-US").replace(/,/g, " ")}₮
+            1 {t.common.point} ={" "}
+            {POINT_MNT.toLocaleString("en-US").replace(/,/g, " ")} төгрөг
           </div>
         </div>
       </div>

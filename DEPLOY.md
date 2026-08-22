@@ -1,4 +1,4 @@
-# Deploying MAISON
+# Deploying URLUG
 
 ## What this app needs from a host
 
@@ -42,7 +42,7 @@ npm run db:migrate      # idempotent
 NODE_ENV=production node .next/standalone/server.js
 ```
 
-Or the image: `docker build -t maison . && docker run -p 3000:3000 --env-file .env maison`
+Or the image: `docker build -t urlug . && docker run -p 3000:3000 --env-file .env urlug`
 
 ## Scaling out
 
@@ -108,7 +108,7 @@ remove in a later one).
 
 ```bash
 # Redeploy the previous image; no migration step.
-docker run -p 3000:3000 --env-file .env maison:<previous-sha>
+docker run -p 3000:3000 --env-file .env urlug:<previous-sha>
 ```
 
 ## Monitoring

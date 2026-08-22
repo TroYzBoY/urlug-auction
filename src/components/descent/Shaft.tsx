@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { descent, smoothstep, clamp, type DescentState } from "./useDescent";
+import { descent, type DescentState } from "./useDescent";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -153,11 +153,6 @@ const C = {
 } as const;
 
 type RGB = readonly number[];
-const mix = (a: RGB, b: RGB, t: number): number[] => [
-  a[0] + (b[0] - a[0]) * t,
-  a[1] + (b[1] - a[1]) * t,
-  a[2] + (b[2] - a[2]) * t,
-];
 const css = (c: RGB) => `rgb(${c[0] | 0} ${c[1] | 0} ${c[2] | 0})`;
 
 type Renderer = {
@@ -252,31 +247,31 @@ function draw(r: Renderer, mode: number, hi: RGB, lo: RGB, s: DescentState) {
 }
 
 /**
- * Depth → colour. The descent is not a theme switch; light simply runs out.
- * `hi` is the lit tone and `lo` the shadow, and the shader mixes between them
- * by luminance. `heat` pushes `hi` toward chestnut, rust or amber — one number,
- * and it is the whole drama control.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * DEPTH → COLOUR
+ *
+ * One palette, top to bottom. `hi` is the lit tone and `lo` the shadow; the
+ * shader mixes between them by luminance, which is what gives the shaft its
+ * air. Neither changes as you scroll.
+ *
+ * ── What was here before ─────────────────────────────────────────────────────
+ *
+ * A colour journey: bone at the top, dimming through dusk to roast, with a
+ * `heat` term pushing the lit tone toward chestnut, rust and amber at the
+ * dramatic moments. It was doing a great deal — and it was the thing that read
+ * as restless rather than as depth, because the page's own colour kept moving
+ * underneath text that was trying to be read.
+ *
+ * The geometry, the parallax and the burn are all still driven by scroll. Only
+ * the palette is now fixed, so the eye has one thing changing instead of two.
+ *
+ * ⚠ `hi` and `lo` are deliberately CLOSE together. A wide gap reintroduces the
+ * same problem in miniature — the ground visibly lightening and darkening as
+ * geometry drifts past.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
-function depthColors(s: DescentState) {
-  const dim = smoothstep(0.04, 0.5, s.p);
-
-  let hi = mix(C.bone, C.dusk, dim);
-  let lo = mix(C.boneInset, C.duskInset, dim);
-  hi = mix(hi, C.roastInset, s.night); // roast lifts toward the top
-  lo = mix(lo, C.roast, s.night); //      and bottoms out in the ground
-
-  const heat = clamp(
-    s.burn * 0.35 + s.climax + s.door * 0.55 + s.vel * 0.12,
-    0,
-    1,
-  );
-  let hot = mix(C.chestnut, C.rust, s.climax);
-  hot = mix(hot, C.amber, s.door * 0.8);
-
-  hi = mix(hi, hot, heat * 0.8);
-  lo = mix(lo, hot, heat * 0.22);
-
-  return { hi, lo };
+function depthColors() {
+  return { hi: C.roastInset, lo: C.roast };
 }
 
 export function Shaft() {
@@ -328,12 +323,11 @@ export function Shaft() {
     window.addEventListener("resize", onResize, { passive: true });
 
     const root = document.documentElement.style;
-    let lastNight = -1;
-    let lastLo = -1;
+    let published = false;
     let burnOn = false;
 
     const unsub = descent.subscribe((s) => {
-      const { hi, lo } = depthColors(s);
+      const { hi, lo } = depthColors();
 
       if (field) draw(field, 0, hi, lo, s);
 
@@ -352,36 +346,30 @@ export function Shaft() {
         }
       }
 
-      /* Hand the live depth back to CSS, so type and hairlines follow the
-         light without a single dark: variant anywhere in the landing.
-         Throttled by perceptible change — rewriting custom properties every
-         frame invalidates style for the subtree sixty times a second. */
-      if (
-        Math.abs(s.night - lastNight) < 0.004 &&
-        Math.abs(lo[0] - lastLo) < 1.2
-      ) {
-        return;
-      }
-      lastNight = s.night;
-      lastLo = lo[0];
+      /*
+       * Hand the descent's colour to CSS once.
+       *
+       * It used to be rewritten as the scroll moved, throttled by perceptible
+       * change — and rewriting a custom property on <html> invalidates style
+       * for the whole subtree, so that was a full restyle several times a
+       * second while somebody was reading. With a fixed palette it is one
+       * write for the life of the page.
+       */
+      if (published) return;
+      published = true;
 
+      /*
+       * Published once and then constant. They stay as custom properties
+       * rather than becoming literals in the stylesheet because the CSS
+       * fallback path (`html[data-no-gl]`) reads the same names, so one place
+       * still defines the descent's colour.
+       */
       root.setProperty("--descent-ground", css(lo));
       root.setProperty("--descent-ground-hi", css(hi));
-      root.setProperty("--descent-ink", css(mix(C.umberInk, C.creamInk, s.night)));
-      root.setProperty(
-        "--descent-muted",
-        css(mix(C.umberMute, C.creamMute, s.night)),
-      );
-      root.setProperty(
-        "--descent-line",
-        s.night > 0.5
-          ? `rgba(246,236,222,${(0.09 + 0.1 * s.night).toFixed(3)})`
-          : `rgba(60,42,26,${(0.16 - 0.05 * s.night).toFixed(3)})`,
-      );
-      root.setProperty(
-        "--descent-glow",
-        s.night > 0.5 ? "rgba(196,139,72,.55)" : "rgba(140,90,56,.45)",
-      );
+      root.setProperty("--descent-ink", css(C.creamInk));
+      root.setProperty("--descent-muted", css(C.creamMute));
+      root.setProperty("--descent-line", "rgba(246,236,222,0.14)");
+      root.setProperty("--descent-glow", "rgba(196,139,72,.42)");
     });
 
     return () => {

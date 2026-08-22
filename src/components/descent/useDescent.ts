@@ -75,11 +75,21 @@ const SCENES = 5;
  * like a slideshow being dragged. Damping is what makes a scrub read as
  * motion with mass.
  *
- * ~0.63 of the way there after one tau, ~0.95 after three. 0.11s sits close to
- * the `scrub: 0.6` this was designed against. **This is the feel dial** —
- * raise for heavier and floatier, lower for tighter and more immediate.
+ * ~0.63 of the way there after one tau, ~0.95 after three. **This is the feel
+ * dial** — raise for heavier and floatier, lower for tighter and more
+ * immediate.
+ *
+ * Raised from 0.11 to 0.2. At 0.11 the scenes tracked the scroll closely
+ * enough that a wheel notch or a thumb flick showed up as a small jolt in the
+ * geometry; the piece read as accurate rather than as heavy. Doubling it gives
+ * the shaft mass — it keeps moving briefly after the finger stops, which is
+ * what "smooth" means here.
+ *
+ * ⚠ There is a ceiling. Past roughly 0.3 the lag between the scroll and the
+ * scene becomes legible as unresponsiveness rather than weight, and on a phone
+ * — where a flick is short and fast — that arrives sooner.
  */
-const SCRUB_TAU = 0.11;
+const SCRUB_TAU = 0.2;
 
 /**
  * Past this much distance in one frame, snap instead of gliding. A restored
@@ -186,7 +196,21 @@ class DescentEngine {
      * would put lag between a bidder and the bid panel. The landing is a
      * place too — this one just happens to want inertia.
      */
-    this.lenis = new Lenis({ lerp: 0.085, smoothWheel: true });
+    /*
+     * `lerp` lowered from 0.085 to 0.06: gentler inertia on the scroll
+     * position itself, which is the first of the two smoothing stages. Lower
+     * is heavier here — it is the fraction of the remaining distance covered
+     * each frame.
+     *
+     * `touchMultiplier` below 1 because a phone flick otherwise throws the
+     * page much further than a wheel notch does, and the two should feel like
+     * the same piece.
+     */
+    this.lenis = new Lenis({
+      lerp: 0.06,
+      smoothWheel: true,
+      touchMultiplier: 0.9,
+    });
 
     this.started = performance.now();
     const loop = (now: number) => {

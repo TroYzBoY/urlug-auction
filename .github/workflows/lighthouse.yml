@@ -21,18 +21,18 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: maison
-          POSTGRES_PASSWORD: maison
-          POSTGRES_DB: maison
+          POSTGRES_USER: urlug
+          POSTGRES_PASSWORD: urlug
+          POSTGRES_DB: urlug
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U maison"
+          --health-cmd "pg_isready -U urlug"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
 
     env:
-      DATABASE_URL: postgres://maison:maison@localhost:5432/maison
+      DATABASE_URL: postgres://urlug:urlug@localhost:5432/urlug
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
       NEXT_PUBLIC_ROUND_TIME_SCALE: "1"
 

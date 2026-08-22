@@ -1,63 +1,54 @@
-"use client";
-
-import { useEffect, useRef, useState } from "react";
-import { registerReveal } from "./reveal-manager";
-
 type RevealProps = {
   children: React.ReactNode;
   className?: string;
-  /** Stagger, in ms. Feeds the CSS transition-delay. */
+  /** Accepted and ignored. See the note below. */
   delay?: number;
-  /** Travel distance in px. Smaller for dense rows, larger for big blocks. */
+  /** Accepted and ignored. See the note below. */
   y?: number;
   as?: "div" | "section" | "article" | "li";
   id?: string;
 };
 
 /**
- * Reveals its children once they scroll into view.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * A SECTION WRAPPER. IT NO LONGER REVEALS ANYTHING.
  *
- * Two ways a reveal can leave content permanently invisible, both guarded here,
- * because no animation is worth a blank section:
+ * Scroll reveals are gone from the site. They were the largest source of motion
+ * outside the landing, and on a phone they meant most of a page was invisible
+ * at any moment — you scrolled, waited a beat, then read.
  *
- *   1. No JS. The hidden state lives behind `.js` in globals.css — a class the
- *      inline head script adds before first paint. No script, no hidden rule,
- *      content renders plainly.
- *   2. A missed trigger. Handled in reveal-manager.ts, which watches position
- *      rather than intersection events so that jumping past an element still
- *      reveals it. Once shown, the element is dropped from the watch set and
- *      nothing sets it hidden again.
+ * ── Why the component survives ───────────────────────────────────────────────
+ *
+ * It is used about thirty times across five pages, and it carries `as` and `id`
+ * that those call sites depend on for their heading structure and anchors.
+ * Deleting it would be a mechanical edit of every page for no gain, and would
+ * lose the semantic element choice along the way.
+ *
+ * `delay` and `y` are kept in the signature and ignored. Removing them would
+ * churn every call site to say nothing; leaving them means restoring the
+ * animation later is one file, not thirty.
+ *
+ * ── What went with it ────────────────────────────────────────────────────────
+ *
+ * `reveal-manager.ts` and the `[data-reveal]` rules in `globals.css`. The
+ * manager was careful work — it tracked position rather than intersection
+ * precisely so that jumping past an element with an anchor link or the End key
+ * still revealed it, which `IntersectionObserver` gets wrong. That care was in
+ * service of never leaving content invisible, and not hiding it in the first
+ * place achieves the same thing with no code.
+ *
+ * This is now a Server Component: no "use client", no hook, no JavaScript
+ * shipped for it at all.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 export function Reveal({
   children,
   className = "",
-  delay = 0,
-  y,
   as: Tag = "div",
   id,
 }: RevealProps) {
-  const ref = useRef<HTMLElement | null>(null);
-  const [shown, setShown] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    return registerReveal(el, () => setShown(true));
-  }, []);
-
   return (
-    <Tag
-      ref={ref as React.Ref<never>}
-      id={id}
-      data-reveal={shown ? "shown" : "hidden"}
-      className={className}
-      style={
-        {
-          "--reveal-delay": `${delay}ms`,
-          ...(y !== undefined ? { "--reveal-y": `${y}px` } : {}),
-        } as React.CSSProperties
-      }
-    >
+    <Tag id={id} className={className}>
       {children}
     </Tag>
   );

@@ -14,7 +14,6 @@ export const metadata: Metadata = {
   description: t.lots.lede,
 };
 
-const BEAT = 90;
 
 /** 9 fills the desktop grid exactly (3×3) and the phone grid evenly (2-up). */
 const PAGE_SIZE = 9;
@@ -83,18 +82,16 @@ export default async function LotsPage(props: PageProps<"/lots">) {
 
       <main id="main" className="pt-28 md:pt-36">
         <section className="gutter border-b border-line/40 pb-10 md:pb-14">
-          <p className="eyebrow animate-rise-in text-muted">{t.lots.eyebrow}</p>
+          <p className="eyebrow text-muted">{t.lots.eyebrow}</p>
 
           <h1
-            className="display mt-6 animate-rise-in text-[clamp(2.5rem,7vw,5.5rem)] leading-[0.96] tracking-[-0.035em] text-ink"
-            style={{ animationDelay: `${BEAT}ms` }}
+            className="display mt-6 text-[clamp(2.5rem,7vw,5.5rem)] leading-[0.96] tracking-[-0.035em] text-ink"
           >
             {t.lots.title}
           </h1>
 
           <p
-            className="mt-6 max-w-xl animate-rise-in text-base leading-relaxed text-ink-soft md:text-lg"
-            style={{ animationDelay: `${BEAT * 2}ms` }}
+            className="mt-6 max-w-xl text-base leading-relaxed text-ink-soft md:text-lg"
           >
             {t.lots.lede}
           </p>

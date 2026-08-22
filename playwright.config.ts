@@ -28,7 +28,7 @@ import { defineConfig, devices } from "@playwright/test";
 const PORT = 3100;
 const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
-  "postgres://maison:maison@localhost:5432/maison_test";
+  "postgres://urlug:urlug@localhost:5432/urlug_test";
 
 export default defineConfig({
   testDir: "./e2e",

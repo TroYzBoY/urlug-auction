@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- MAISON — schema
+-- URLUG — schema
 --
 -- Postgres. Apply with `npm run db:migrate` (idempotent — safe to re-run).
 --

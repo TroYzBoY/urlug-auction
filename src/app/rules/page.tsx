@@ -28,24 +28,21 @@ export default function RulesPage() {
       <SiteHeader />
 
       <main id="main" className="gutter pt-14 pb-8 md:pt-20">
-        <p className="eyebrow animate-rise-in">{t.rules.eyebrow}</p>
+        <p className="eyebrow">{t.rules.eyebrow}</p>
         <h1
-          className="display mt-5 animate-rise-in text-[clamp(2.75rem,11vw,6rem)] text-ink"
-          style={{ animationDelay: "90ms" }}
+          className="display mt-5 text-[clamp(2.75rem,11vw,6rem)] text-ink"
         >
           {t.rules.title}
         </h1>
         <p
-          className="mt-6 max-w-xl animate-rise-in text-base leading-relaxed text-ink-soft md:text-lg"
-          style={{ animationDelay: "180ms" }}
+          className="mt-6 max-w-xl text-base leading-relaxed text-ink-soft md:text-lg"
         >
           {t.rules.lede}
         </p>
 
         <p
           data-numerals
-          className="mt-7 animate-rise-in text-sm text-muted"
-          style={{ animationDelay: "270ms" }}
+          className="mt-7 text-sm text-muted"
         >
           {TOTAL_ROUNDS} тойрог · {hours} цаг {minutes} минут · 1{" "}
           {t.common.point} = {groupNumber(POINT_MNT)}₮

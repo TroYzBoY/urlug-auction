@@ -21,7 +21,7 @@ import { hashToken, newToken } from "./password";
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-const COOKIE = "maison_session";
+const COOKIE = "urlug_session";
 
 export interface SessionUser {
   id: number;

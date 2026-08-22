@@ -3,18 +3,11 @@ import { describe, expect, it } from "vitest";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * THE TWO DARK BLOCKS MUST AGREE
+ * STYLESHEET INVARIANTS
  *
- * `globals.css` defines the dark palette twice — once under
- * `@media (prefers-color-scheme: dark)` and once under `:root[data-theme="dark"]`
- * — because a media query and a selector cannot be merged into one rule.
- *
- * They are duplicates by necessity, which means they drift. The failure is
- * quiet and specific: a token added to one block only is correct for everyone
- * following their OS and wrong for everyone who used the toggle, or the other
- * way round. Nobody notices until a screenshot from the wrong half arrives.
- *
- * The README says "keep them in sync". This is that instruction, enforced.
+ * Things that are true of `globals.css` and would break quietly if they stopped
+ * being true — one palette, motion that can be turned off, and reveals that
+ * never hide content from a browser with no JavaScript.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -27,13 +20,6 @@ const raw = readFileSync("src/app/globals.css", "utf8");
  * reads whichever block happens to follow it.
  */
 const css = raw.replace(/\/\*[\s\S]*?\*\//g, "");
-
-/** Every `--token: value;` declaration inside a block, as a sorted list. */
-function declarationsIn(source: string): string[] {
-  return [...source.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)]
-    .map((m) => `${m[1]}: ${m[2]!.trim()}`)
-    .sort();
-}
 
 /**
  * The body of a brace-delimited block starting at `startIndex`, matched by
@@ -53,34 +39,34 @@ function blockAt(source: string, startIndex: number): string {
   throw new Error("Unbalanced braces in globals.css");
 }
 
-describe("the dark palette", () => {
-  const mediaIndex = css.indexOf("@media (prefers-color-scheme: dark)");
-  const explicitIndex = css.indexOf(':root[data-theme="dark"]');
-
-  it("is defined in both places", () => {
-    expect(mediaIndex).toBeGreaterThan(-1);
-    expect(explicitIndex).toBeGreaterThan(-1);
+describe("the palette", () => {
+  /*
+   * These replace a set of tests that checked the two dark blocks agreed with
+   * each other. There is one palette now, so the class of bug they guarded
+   * against — a token added to the media query but not the selector, correct
+   * for OS-dark users and wrong for everyone who used the toggle — cannot
+   * happen. What is worth guarding instead is that it stays that way.
+   */
+  it("has exactly one definition of each semantic colour", () => {
+    const themeBlock = blockAt(css, css.indexOf("@theme"));
+    const names = [...themeBlock.matchAll(/(--color-[\w-]+)\s*:/g)].map(
+      (m) => m[1],
+    );
+    expect(names.length).toBeGreaterThan(10);
+    expect(new Set(names).size).toBe(names.length);
   });
 
-  it("declares exactly the same tokens in both", () => {
-    const media = declarationsIn(blockAt(css, mediaIndex));
-    const explicit = declarationsIn(blockAt(css, explicitIndex));
-
-    expect(media.length).toBeGreaterThan(10);
-    /*
-     * Values too, not just names. A token pointing at `--amber-gold` in one
-     * block and `--amber-flare` in the other is the same class of bug and just
-     * as invisible.
-     */
-    expect(explicit).toEqual(media);
+  it("has no light-mode branch left", () => {
+    // A `prefers-color-scheme` block or a `data-theme` selector would mean a
+    // second palette had crept back in without the toggle to reach it.
+    expect(css).not.toMatch(/@media\s*\(prefers-color-scheme/);
+    expect(css).not.toContain('data-theme');
   });
 
-  it("keeps the always-dark room on the explicit block", () => {
-    // The live room is a PLACE, not a theme: it stays dark for a light-mode
-    // visitor. That only works if `[data-skin="room"]` rides along with the
-    // explicit selector rather than the media query.
-    const between = css.slice(explicitIndex, css.indexOf("{", explicitIndex));
-    expect(between).toContain('[data-skin="room"]');
+  it("declares color-scheme: dark", () => {
+    // Without it the browser paints its own furniture light — a white
+    // scrollbar down the side of a dark page, and a white flash before paint.
+    expect(css).toMatch(/color-scheme:\s*dark/);
   });
 });
 
@@ -111,20 +97,33 @@ describe("motion", () => {
   });
 });
 
-describe("scroll reveals", () => {
-  it("hides only behind the .js class", () => {
+describe("nothing hides content", () => {
+  it("has no rule that starts content at zero opacity", () => {
     /*
-     * The hidden state must be gated on a class that a script adds, so that a
-     * page whose JavaScript failed renders plainly visible rather than blank.
-     * An unconditional `opacity: 0` here is a site that disappears.
+     * This replaces a test that checked the scroll-reveal hidden state was
+     * gated behind a `.js` class, so a page whose JavaScript failed rendered
+     * plainly rather than blank.
+     *
+     * Reveals are gone, so the guard gets stronger: no rule anywhere should
+     * start content invisible. Two things are legitimately exempt, and both are
+     * decorative layers with content BEHIND them rather than inside them:
+     *
+     *   [data-shaft]  the landing's WebGL canvases, held at 0 between scenes
+     *   .dither-layer the halftone overlay on a lot plate, which fading out
+     *                 REVEALS the photograph underneath
      */
-    expect(css).toMatch(/\.js\s+\[data-reveal="hidden"\]\s*\{/);
+    const withoutKeyframes = css.replace(
+      /@keyframes[^{]*\{(?:[^{}]|\{[^{}]*\})*\}/g,
+      "",
+    );
 
-    /*
-     * And the unguarded `[data-reveal]` rule must NOT set opacity — that is
-     * the one that applies with scripting off.
-     */
-    const unguarded = /(?<!\.js )\[data-reveal\]\s*\{([^}]*)\}/.exec(css);
-    if (unguarded) expect(unguarded[1]).not.toMatch(/opacity:\s*0/);
+    const offenders = [...withoutKeyframes.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(([, , body]) => /opacity:\s*0\s*(?:;|$)/.test(body!.trim()))
+      .map(([, selector]) => selector!.trim())
+      .filter(
+        (sel) => !sel.includes("data-shaft") && !sel.includes("dither-layer"),
+      );
+
+    expect(offenders).toEqual([]);
   });
 });

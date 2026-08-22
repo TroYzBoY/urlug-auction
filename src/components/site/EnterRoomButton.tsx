@@ -47,7 +47,7 @@ export function EnterRoomButton({
         {/* Sheen. Clipped by the overflow-hidden parent. */}
         <span
           aria-hidden
-          className="animate-cta-sheen pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.45),transparent)]"
+          className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.45),transparent)]"
         />
 
         {/* Live dot, matching the one used everywhere else for "running now". */}

@@ -60,7 +60,7 @@ export function BidPanel({
         <p className="eyebrow">
           {outcome === "sold" ? t.room.soldNote : t.room.unsold}
         </p>
-        <p className="display mt-2 text-5xl text-flare animate-flare-in">
+        <p className="display mt-2 text-5xl text-flare">
           {outcome === "sold" ? t.room.sold : t.room.unsold}
         </p>
         {outcome === "sold" && (

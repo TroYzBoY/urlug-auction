@@ -86,20 +86,23 @@ export function AuctionRoom({
   const roundTotalMs = (spec.durationMin * 60_000) / ROUND_TIME_SCALE;
 
   return (
-    <div data-skin="room" className="grain min-h-dvh bg-ground text-ink">
+    <div className="grain min-h-dvh bg-ground text-ink">
       <Header minimal />
 
       {/*
-        The room settles in rather than cutting — it is a drop into a dark
-        space, so the entrance is slower than the site's usual rise.
+        No entrance animation. The room used to fade in over ~700ms, which read
+        well and was wrong for the one page where a five-second clock might
+        already be running — the price and the bid button should be legible on
+        the frame they arrive.
 
-        ⚠ `room-in` is an opacity-only fade, and must stay that way. BidPanel is
-        a descendant and is `position: fixed` on phones; any transform, filter or
-        backdrop-filter on this element would make it the containing block and
-        un-pin the panel from the viewport. Same reason nothing here gets a
-        `will-change: transform`.
+        ⚠ If any animation is ever put back here, it must be OPACITY ONLY.
+        BidPanel is a descendant and is `position: fixed` on phones; a
+        transform, filter or backdrop-filter on this element makes it the
+        containing block and un-pins the panel from the viewport, dropping it
+        hundreds of pixels below the fold for the duration. That was shipped
+        once and fixed once.
       */}
-      <main id="main" className="gutter animate-room-in pt-4 sm:pt-6 pb-64 lg:pt-10 lg:pb-20">
+      <main id="main" className="gutter pt-4 sm:pt-6 pb-64 lg:pt-10 lg:pb-20">
         {/* ── Lot identity ─────────────────────────────────────────────────
          * On phones the object leads: a full-width plate, the name under it,
          * then the catalogue facts, then the note — a catalogue page that
@@ -240,7 +243,7 @@ export function AuctionRoom({
             {state.round > 1 && (
               <p
                 key={state.round}
-                className="eyebrow animate-flare-in text-flare"
+                className="eyebrow text-flare"
               >
                 {t.room.roundAdvanced(state.round)} ·{" "}
                 {t.room.roundClockShrunk(bidClockLabel(spec.bidClockSec))}

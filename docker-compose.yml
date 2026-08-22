@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# MAISON — local stack
+# URLUG — local stack
 #
 #   docker compose up -d db          Postgres only; run the app on the host.
 #   docker compose --profile app up  Postgres + the app in a container.
@@ -14,12 +14,12 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: maison-db
+    container_name: urlug-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: maison
-      POSTGRES_PASSWORD: maison
-      POSTGRES_DB: maison
+      POSTGRES_USER: urlug
+      POSTGRES_PASSWORD: urlug
+      POSTGRES_DB: urlug
       # Deterministic collation. Without it the image picks a locale from the
       # host, and text ordering then differs between a developer's machine and
       # the server — which is the kind of difference that shows up as one
@@ -28,7 +28,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - maison-pgdata:/var/lib/postgresql/data
+      - urlug-pgdata:/var/lib/postgresql/data
       # Runs once, on an empty data directory. Creates the separate database
       # the integration tests truncate — see db/init/01-test-db.sql.
       - ./db/init:/docker-entrypoint-initdb.d:ro
@@ -36,7 +36,7 @@ services:
       # `pg_isready` alone reports ready before the init scripts have finished,
       # so anything depending on this would race the test database into
       # existence. Querying it is the actual readiness condition.
-      test: ["CMD-SHELL", "pg_isready -U maison -d maison && psql -U maison -d maison_test -c 'SELECT 1' > /dev/null"]
+      test: ["CMD-SHELL", "pg_isready -U urlug -d urlug && psql -U urlug -d urlug_test -c 'SELECT 1' > /dev/null"]
       interval: 3s
       timeout: 5s
       retries: 20
@@ -47,7 +47,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: maison-app
+    container_name: urlug-app
     restart: unless-stopped
     depends_on:
       db:
@@ -56,7 +56,7 @@ services:
       # `db`, not localhost — inside the compose network the service name is
       # the host. This is the single most common reason a containerised app
       # cannot reach a containerised database.
-      DATABASE_URL: postgres://maison:maison@db:5432/maison
+      DATABASE_URL: postgres://urlug:urlug@db:5432/urlug
       NODE_ENV: production
       # ⚠ Production requires an SMS provider (see src/lib/env.ts). This stack
       # is for testing, so it is pointed at the log-only path by running with
@@ -70,7 +70,7 @@ services:
   adminer:
     profiles: ["tools"]
     image: adminer:latest
-    container_name: maison-adminer
+    container_name: urlug-adminer
     restart: unless-stopped
     depends_on:
       db:
@@ -81,4 +81,4 @@ services:
       ADMINER_DEFAULT_SERVER: db
 
 volumes:
-  maison-pgdata:
+  urlug-pgdata:

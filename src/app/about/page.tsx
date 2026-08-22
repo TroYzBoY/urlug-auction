@@ -13,7 +13,6 @@ export const metadata: Metadata = {
 };
 
 /** Hero lines animate in sequence rather than all at once. */
-const BEAT = 90;
 
 export default function AboutPage() {
   const firstRound = ROUNDS[0];
@@ -27,13 +26,12 @@ export default function AboutPage() {
       <main id="main" className="pt-28 md:pt-36">
         {/* ── Hero ──────────────────────────────────────────────────────── */}
         <section className="gutter border-b border-line/40 pb-16 md:pb-24">
-          <p className="eyebrow animate-rise-in text-muted">
+          <p className="eyebrow text-muted">
             {t.about.eyebrow}
           </p>
 
           <h1
-            className="display mt-6 max-w-4xl animate-rise-in text-[clamp(2.5rem,7vw,5.5rem)] leading-[0.96] tracking-[-0.035em] text-ink"
-            style={{ animationDelay: `${BEAT}ms` }}
+            className="display mt-6 max-w-4xl text-[clamp(2.5rem,7vw,5.5rem)] leading-[0.96] tracking-[-0.035em] text-ink"
           >
             {t.about.headline[0]}
             <br />
@@ -43,8 +41,7 @@ export default function AboutPage() {
           </h1>
 
           <p
-            className="mt-8 max-w-xl animate-rise-in text-base leading-relaxed text-ink-soft md:text-lg"
-            style={{ animationDelay: `${BEAT * 2}ms` }}
+            className="mt-8 max-w-xl text-base leading-relaxed text-ink-soft md:text-lg"
           >
             {t.about.lede}
           </p>

@@ -37,24 +37,21 @@ export function LegalPage({
       <SiteHeader />
 
       <main id="main" className="gutter pt-14 pb-8 md:pt-20">
-        <p className="eyebrow animate-rise-in">{eyebrow}</p>
+        <p className="eyebrow">{eyebrow}</p>
         <h1
-          className="display mt-5 animate-rise-in text-[clamp(2.25rem,8vw,4.5rem)] text-ink"
-          style={{ animationDelay: "90ms" }}
+          className="display mt-5 text-[clamp(2.25rem,8vw,4.5rem)] text-ink"
         >
           {title}
         </h1>
         <p
-          className="mt-6 max-w-2xl animate-rise-in text-base leading-relaxed text-ink-soft"
-          style={{ animationDelay: "180ms" }}
+          className="mt-6 max-w-2xl text-base leading-relaxed text-ink-soft"
         >
           {lede}
         </p>
 
         <p
           data-numerals
-          className="mt-6 animate-rise-in text-sm text-muted"
-          style={{ animationDelay: "270ms" }}
+          className="mt-6 text-sm text-muted"
         >
           {t.legal.lastUpdated}: {version}
         </p>

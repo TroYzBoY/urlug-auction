@@ -3,6 +3,7 @@ import { randomInt } from "node:crypto";
 import { env, IS_PRODUCTION } from "./env";
 import { query, queryOne } from "./db";
 import { hashToken, tokensMatch } from "./password";
+import { t } from "./copy";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -54,8 +55,8 @@ export async function issueCode(
   await sendSms(
     phone,
     purpose === "verify"
-      ? `MAISON баталгаажуулах код: ${code}. ${CODE_TTL_MIN} минутын дотор хүчинтэй.`
-      : `MAISON нууц үг сэргээх код: ${code}. ${CODE_TTL_MIN} минутын дотор хүчинтэй.`,
+      ? `${t.brand.name} баталгаажуулах код: ${code}. ${CODE_TTL_MIN} минутын дотор хүчинтэй.`
+      : `${t.brand.name} нууц үг сэргээх код: ${code}. ${CODE_TTL_MIN} минутын дотор хүчинтэй.`,
   );
 }
 

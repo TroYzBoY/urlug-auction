@@ -28,7 +28,7 @@ types.setTypeParser(types.builtins.INT8, (v) => Number.parseInt(v, 10));
  */
 
 declare global {
-  var __maisonPool: Pool | undefined;
+  var __urlugPool: Pool | undefined;
 }
 
 /**
@@ -43,7 +43,7 @@ declare global {
  * pool on every edit until Postgres refuses connections.
  */
 export function getPool(): Pool {
-  const existing = globalThis.__maisonPool;
+  const existing = globalThis.__urlugPool;
   if (existing) return existing;
 
   const created = new Pool({
@@ -68,7 +68,7 @@ export function getPool(): Pool {
     console.error("[db] idle client error", err);
   });
 
-  globalThis.__maisonPool = created;
+  globalThis.__urlugPool = created;
   return created;
 }
 

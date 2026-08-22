@@ -2,7 +2,7 @@
 
 /*
  * ─────────────────────────────────────────────────────────────────────────────
- * MAISON — design tokens
+ * URLUG — design tokens
  *
  * Two layers, on purpose:
  *
@@ -14,24 +14,24 @@
  *      These generate the utilities components actually use (bg-ground,
  *      text-ink, border-line …).
  *
- * Re-skinning then means re-pointing semantics at different raws. Four states
- * share ONE set of semantic names:
+ * Re-skinning then means re-pointing semantics at different raws.
  *
- *   :root                              light (default, and what the server renders)
- *   prefers-color-scheme: dark         dark, unless the user explicitly chose light
- *   :root[data-theme="dark"]           dark, explicitly chosen
- *   [data-skin="room"]                 always dark — the live bidding room is a
- *                                      *place*, not a theme, so it stays dark
- *                                      even for a light-mode visitor
+ * ── ONE PALETTE ──────────────────────────────────────────────────────────────
+ *
+ * The house is dark, everywhere, always. There is no light mode, no
+ * `prefers-color-scheme` branch, no `data-theme` attribute and no toggle.
+ *
+ * There used to be four states sharing these names, and keeping the two dark
+ * blocks in step was a standing hazard — a token added to one was right for
+ * everyone following their OS and wrong for everyone who had used the toggle,
+ * and the difference was invisible until somebody sent a screenshot. One
+ * palette removes the whole class of bug, and it is what the room already did:
+ * the bidding room was always dark regardless of theme, because it is a *place*
+ * rather than a preference. Now the whole site is that place.
  *
  * Because plain `@theme` (not `@theme inline`) emits utilities as
- * `var(--color-x)`, all of this works through ordinary cascade — a component
- * written with `bg-surface text-ink` is correct in every state and never needs a
- * `dark:` variant. Custom properties inherit, so [data-skin="room"] on a wrapper
- * beats :root for everything inside it regardless of specificity.
- *
- * ⚠ The two dark blocks below are duplicates by necessity (a media query and a
- *   selector cannot be merged). Keep them in sync.
+ * `var(--color-x)`, a component written with `bg-surface text-ink` needs no
+ * `dark:` variant anywhere.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -109,7 +109,7 @@
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23g)' opacity='0.18'/%3E%3C/svg%3E");
 }
 
-/* ── 2. Semantic tokens — light is the default ───────────────────────────── */
+/* ── 2. Semantic tokens ──────────────────────────────────────────────────── */
 @theme {
   /*
    * Helvetica Neue first, per the client. macOS/iOS gets the genuine face;
@@ -124,58 +124,12 @@
     "Helvetica Neue", "HelveticaNeue", Helvetica, var(--font-inter), Arial,
     sans-serif;
 
-  --color-ground: var(--bone-page);
-  --color-surface: var(--bone-card);
-  --color-raise: var(--bone-inset);
-
-  --color-line: var(--rule-light);
-  --color-line-strong: var(--rule-light-strong);
-
-  --color-ink: var(--umber-ink);
-  --color-ink-soft: var(--umber-soft);
-  --color-muted: var(--umber-muted);
-  --color-faint: var(--umber-faint);
-
-  --color-accent: var(--chestnut);
-  --color-accent-ink: var(--bone-page);
-  --color-flare: var(--amber-burnt);
-  --color-rust: var(--rust-deep);
-  --color-olive: var(--olive-deep);
-  --color-gold: var(--gold-quiet);
-
-  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
-}
-
-/* ── Dark: system preference, unless the user explicitly chose light ─────── */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --color-ground: var(--roast-page);
-    --color-surface: var(--roast-card);
-    --color-raise: var(--roast-inset);
-
-    --color-line: var(--rule-dark);
-    --color-line-strong: var(--rule-dark-strong);
-
-    --color-ink: var(--cream-ink);
-    --color-ink-soft: var(--cream-soft);
-    --color-muted: var(--cream-muted);
-    --color-faint: var(--cream-faint);
-
-    --color-accent: var(--amber-gold);
-    --color-accent-ink: var(--roast-page);
-    --color-flare: var(--amber-flare);
-    --color-rust: var(--rust-bright);
-    --color-olive: var(--olive-bright);
-    --color-gold: var(--amber-gold);
-
-    color-scheme: dark;
-  }
-}
-
-/* ── Dark: explicit choice, and the always-dark live room ────────────────── */
-:root[data-theme="dark"],
-[data-skin="room"] {
+  /*
+   * The one palette. The `bone-*` and `umber-*` raws above are the light
+   * swatches; they are kept because the grain texture and a few borders still
+   * reference the scale, and because deleting a palette is easy to undo badly.
+   * Nothing here points at them.
+   */
   --color-ground: var(--roast-page);
   --color-surface: var(--roast-card);
   --color-raise: var(--roast-inset);
@@ -195,6 +149,17 @@
   --color-olive: var(--olive-bright);
   --color-gold: var(--amber-gold);
 
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/*
+ * `color-scheme: dark` tells the browser to paint its own furniture dark —
+ * scrollbars, form controls, the flash of background before first paint. On its
+ * own it is the difference between a dark page and a dark page with a white
+ * scrollbar down the side.
+ */
+:root {
   color-scheme: dark;
 }
 
@@ -292,24 +257,6 @@
     color: var(--color-ground);
   }
 
-  /*
-   * Scroll reveal.
-   *
-   * The hidden state is scoped to `.js`, which the inline script in <head> adds
-   * before first paint. If that script never runs — JS disabled, script error,
-   * bot — the hidden rule simply never matches and everything renders visible.
-   * A reveal must never be the reason content is invisible.
-   */
-  .js [data-reveal="hidden"] {
-    opacity: 0;
-    transform: translateY(var(--reveal-y, 14px));
-  }
-
-  [data-reveal] {
-    transition:
-      opacity 0.75s var(--ease-out-soft) var(--reveal-delay, 0ms),
-      transform 0.75s var(--ease-out-soft) var(--reveal-delay, 0ms);
-  }
 }
 
 @layer components {
@@ -371,18 +318,6 @@
  * definition of the same motion.
  */
 
-/* Round change / price change acknowledgement. */
-@keyframes flare-in {
-  0% {
-    opacity: 0;
-    transform: translateY(0.35em);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @keyframes ring-out {
   from {
     opacity: 0.5;
@@ -391,69 +326,6 @@
   to {
     opacity: 0;
     transform: scale(1.9);
-  }
-}
-
-/* Entrance for above-the-fold content, which is already in view on load and so
-   cannot wait for an intersection. */
-@keyframes rise-in {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/*
- * The room's arrival — a slow fade, matching the drop into a dark space.
- *
- * ⚠ Opacity ONLY. Do not add transform/scale/filter here, however tempting.
- * This animates <main>, which contains the bid panel, and a transformed
- * ancestor becomes the containing block for its `position: fixed` descendants —
- * so a scale here un-pins the panel from the viewport for the whole animation
- * and bottoms it out against <main> instead, hundreds of pixels below the fold.
- * Phone users would watch the bid button fly up into place on every load.
- */
-@keyframes room-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/*
- * Slow ambient drift for the hero glow. 18s and low amplitude on purpose: it
- * should read as the page breathing, not as something moving. Anything faster
- * competes with the copy for attention, which is the opposite of the point.
- *
- * Safe to transform — it is an absolutely positioned decorative layer with no
- * `position: fixed` descendants.
- */
-@keyframes aura-drift {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-    opacity: 0.5;
-  }
-  50% {
-    transform: translate3d(4%, -3%, 0) scale(1.14);
-    opacity: 0.85;
-  }
-}
-
-/* Sheen that crosses the primary CTA every few seconds, so a button sitting in
-   an otherwise still hero still signals it is pressable. */
-@keyframes cta-sheen {
-  0% {
-    transform: translateX(-130%) skewX(-18deg);
-  }
-  100% {
-    transform: translateX(230%) skewX(-18deg);
   }
 }
 
@@ -480,29 +352,16 @@
   }
 }
 
-@utility animate-flare-in {
-  animation: flare-in 0.5s var(--ease-out-soft) both;
-}
-
+/*
+ * The one animation left outside the landing.
+ *
+ * It is not decoration: it is what distinguishes a lot that is taking bids
+ * right now from one that is not, at a glance and without reading a label.
+ * Everything that was ornament — the entrance rises, the drifting aura behind
+ * the hero, the sheen crossing the CTA, the room's fade-in — is gone.
+ */
 @utility animate-ring-out {
   animation: ring-out 1.1s var(--ease-out-soft) infinite;
-}
-
-@utility animate-rise-in {
-  animation: rise-in 0.8s var(--ease-out-soft) both;
-}
-
-@utility animate-aura {
-  animation: aura-drift 18s var(--ease-in-out-soft) infinite;
-}
-
-@utility animate-cta-sheen {
-  animation: cta-sheen 2.6s var(--ease-in-out-soft) infinite;
-  animation-delay: 1.2s;
-}
-
-@utility animate-room-in {
-  animation: room-in 0.9s var(--ease-out-soft) both;
 }
 
 /*
@@ -525,10 +384,13 @@
 }
 
 /* ── View transitions ──────────────────────────────────────────────────────
- * Two uses:
- *   .morph  — a lot's plate morphing from catalogue grid into the lot page.
- *   root    — the whole-page crossfade when the theme is switched, driven by
- *             document.startViewTransition() in ThemeToggle.
+ *
+ * One use left: a lot's plate morphing from the catalogue grid into the lot
+ * page. It survives the cull because it is not decoration — it is the thing
+ * that tells you the object you tapped is the object you are now looking at,
+ * and without it the two pages read as unrelated.
+ *
+ * The whole-page `root` crossfade went with the theme toggle that drove it.
  */
 ::view-transition-group(.morph) {
   animation-duration: 420ms;
@@ -537,12 +399,6 @@
 
 ::view-transition-image-pair(.morph) {
   animation-name: via-blur;
-}
-
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 380ms;
-  animation-timing-function: var(--ease-in-out-soft);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -16,6 +16,7 @@ import {
 } from "./repo/notifications";
 import { openSettlement } from "./repo/settlements";
 import { watchersOf } from "./repo/watchlist";
+import { t } from "./copy";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -41,7 +42,7 @@ import { watchersOf } from "./repo/watchlist";
  */
 
 /** Arbitrary but fixed. Any other advisory lock in this database must differ. */
-const LOCK_KEY = 0x4d41_4930; // "MAI0"
+const LOCK_KEY = 0x4d41_4930; // "URL0"
 
 /*
  * 250ms. Round 6's bid clock is five seconds, so the hammer must not be
@@ -69,7 +70,7 @@ interface TickerHandle {
 }
 
 declare global {
-  var __maisonTicker: TickerHandle | undefined;
+  var __urlugTicker: TickerHandle | undefined;
 }
 
 interface DueRow {
@@ -153,7 +154,7 @@ export async function settleDueAuctions(now = Date.now()): Promise<string[]> {
               userId,
               channel: "sms",
               kind: "lot.opening",
-              body: `MAISON: ${code} лотын дуудлага худалдаа эхэллээ.`,
+              body: `${t.brand.name}: ${code} лотын дуудлага худалдаа эхэллээ.`,
               href: `/auction/${r.lot_id}`,
               dedupeKey: `opening:${r.lot_id}`,
             });
@@ -239,7 +240,7 @@ async function sweepAll(): Promise<void> {
  * call from instrumentation on every boot, including `next dev`'s reloads.
  */
 export async function startTicker(): Promise<void> {
-  const handle: TickerHandle = (globalThis.__maisonTicker ??= {
+  const handle: TickerHandle = (globalThis.__urlugTicker ??= {
     timer: null,
     outboxTimer: null,
     sweepTimer: null,
@@ -310,9 +311,9 @@ export async function startTicker(): Promise<void> {
  * add another pair of listeners until Node warns about a leak.
  */
 export function bindShutdown(): void {
-  const g = globalThis as { __maisonShutdownBound?: boolean };
-  if (g.__maisonShutdownBound) return;
-  g.__maisonShutdownBound = true;
+  const g = globalThis as { __urlugShutdownBound?: boolean };
+  if (g.__urlugShutdownBound) return;
+  g.__urlugShutdownBound = true;
 
   const shutdown = async () => {
     const { shutdownRealtime } = await import("./realtime");
@@ -324,7 +325,7 @@ export function bindShutdown(): void {
 }
 
 export async function stopTicker(): Promise<void> {
-  const handle = globalThis.__maisonTicker;
+  const handle = globalThis.__urlugTicker;
   if (!handle) return;
   handle.stopped = true;
   if (handle.timer) clearTimeout(handle.timer);

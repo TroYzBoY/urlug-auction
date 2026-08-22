@@ -6,7 +6,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { LiveDot } from "@/components/lot/LotCard";
 import { t } from "@/lib/copy";
 import { pts } from "@/lib/format";
-import { ThemeToggle } from "./ThemeToggle";
 
 /**
  * `desktop: false` keeps a link out of the pill but still in the burger. The
@@ -142,8 +141,6 @@ export function Header({
           ))}
 
           <span aria-hidden className="hidden h-3 w-px bg-line/60 sm:block" />
-
-          <ThemeToggle />
 
           {account ? (
             /* Signed in: the paddle and the balance, linking to the profile.

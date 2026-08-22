@@ -64,29 +64,25 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#faf7f2" },
-    { media: "(prefers-color-scheme: dark)", color: "#17120e" },
-  ],
+  /* One colour, because there is one palette. It tints the browser chrome on
+     Android and the status bar on iOS, so it has to match the page ground. */
+  themeColor: "#17120e",
+  colorScheme: "dark",
   /* The bid panel sits against the bottom edge — it needs the safe area. */
   viewportFit: "cover",
 };
 
 /*
- * Runs synchronously while the browser parses <head>, so both effects land
- * before the first paint:
+ * Runs synchronously while the browser parses <head>.
  *
- *   1. `data-theme` — the server prerenders the light default (a cookie read
- *      here would opt the whole app out of static prerendering). Applying the
- *      saved choice before paint is what prevents the white flash.
- *   2. `.js` — gates the scroll-reveal hidden state. Reveals only hide
- *      themselves once this class proves scripting is alive, so a script
- *      failure degrades to plain visible content instead of a blank page.
+ * It used to do two things; now it does one. The theme half is gone with the
+ * light palette — there is nothing to restore, so nothing can flash.
  *
- * "system" is stored as the absence of data-theme, letting the
- * prefers-color-scheme block in globals.css decide.
+ * What remains gates the scroll-reveal hidden state on proof that scripting is
+ * alive. A script failure then degrades to plain visible content rather than a
+ * blank page, which is the only reason this is inline and before paint at all.
  */
-const BEFORE_PAINT = `(function(){try{var d=document.documentElement;d.classList.add("js");var t=localStorage.getItem("theme");if(t==="light"||t==="dark")d.setAttribute("data-theme",t)}catch(e){}})()`;
+const BEFORE_PAINT = `(function(){try{document.documentElement.classList.add("js")}catch(e){}})()`;
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   /*

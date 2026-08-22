@@ -45,15 +45,15 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: maison
-          POSTGRES_PASSWORD: maison
-          POSTGRES_DB: maison_test
+          POSTGRES_USER: urlug
+          POSTGRES_PASSWORD: urlug
+          POSTGRES_DB: urlug_test
         ports:
           - 5432:5432
         # Without this the steps start before Postgres accepts connections and
         # the first test fails with ECONNREFUSED on a cold runner.
         options: >-
-          --health-cmd "pg_isready -U maison"
+          --health-cmd "pg_isready -U urlug"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -71,7 +71,7 @@ jobs:
       - run: npm run test:db
         env:
           # Named `_test` because test/db.ts refuses to TRUNCATE anything else.
-          TEST_DATABASE_URL: postgres://maison:maison@localhost:5432/maison_test
+          TEST_DATABASE_URL: postgres://urlug:urlug@localhost:5432/urlug_test
 
   build:
     name: build

@@ -55,7 +55,7 @@ export default async function OverviewPage() {
         <section className="relative isolate flex min-h-[100svh] flex-col justify-between overflow-x-clip pt-24 pb-7 md:pt-28">
           <div
             aria-hidden
-            className="animate-aura pointer-events-none absolute -top-40 -left-24 -z-10 size-[24rem] rounded-full blur-3xl md:size-[42rem]"
+            className="pointer-events-none absolute -top-40 -left-24 -z-10 size-[24rem] rounded-full blur-3xl md:size-[42rem]"
             style={{
               background:
                 "radial-gradient(circle, color-mix(in oklab, var(--color-accent) 26%, transparent) 0%, transparent 68%)",
@@ -64,7 +64,7 @@ export default async function OverviewPage() {
 
           {/* ── Slate ──────────────────────────────────────────────────── */}
           <div className="gutter">
-            <div className="grid animate-rise-in grid-cols-2 gap-y-3 border-b border-line pb-4 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-y-3 border-b border-line pb-4 md:grid-cols-4">
               <SlateCell index="01" value={t.brand.name} />
               <SlateCell index="02" value={t.home.slatePlace} />
               <SlateCell index="03" value={t.home.slateEdition} />
@@ -88,16 +88,14 @@ export default async function OverviewPage() {
             <div className="mt-10 grid gap-8 md:grid-cols-12 md:gap-6">
               <div className="md:col-span-5 md:col-start-1">
                 <p
-                  className="animate-rise-in text-base leading-relaxed text-ink-soft"
-                  style={{ animationDelay: "520ms" }}
+                  className="text-base leading-relaxed text-ink-soft"
                 >
                   {t.home.lede}
                 </p>
               </div>
 
               <div
-                className="flex animate-rise-in flex-wrap items-center gap-3 md:col-span-6 md:col-start-7"
-                style={{ animationDelay: "620ms" }}
+                className="flex flex-wrap items-center gap-3 md:col-span-6 md:col-start-7"
               >
                 <EnterRoomButton
                   href="/lots"
@@ -118,8 +116,7 @@ export default async function OverviewPage() {
           {/* ── Frame footer ───────────────────────────────────────────── */}
           <div className="gutter">
             <div
-              className="animate-rise-in border-t border-line pt-4"
-              style={{ animationDelay: "720ms" }}
+              className="border-t border-line pt-4"
             >
               <LiveTicker
                 lots={liveLots.map((l) => ({

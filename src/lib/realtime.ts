@@ -41,10 +41,10 @@ interface Hub {
 }
 
 declare global {
-  var __maisonHub: Hub | undefined;
+  var __urlugHub: Hub | undefined;
 }
 
-const hub: Hub = (globalThis.__maisonHub ??= {
+const hub: Hub = (globalThis.__urlugHub ??= {
   client: null,
   connecting: null,
   listeners: new Map(),

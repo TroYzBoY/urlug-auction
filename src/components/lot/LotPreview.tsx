@@ -61,7 +61,7 @@ export function LotPreview({
             />
           </ViewTransition>
 
-          <div className="animate-rise-in">
+          <div>
             <p className="eyebrow">
               {lot.code}
               <span aria-hidden className="mx-2 text-line-strong">

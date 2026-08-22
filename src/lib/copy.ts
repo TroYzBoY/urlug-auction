@@ -28,19 +28,21 @@
  */
 export const t = {
   /*
-   * "MAISON" — French for house, in the sense an auction house or a fashion
-   * house is one. Left in Latin script on purpose: against a page of Cyrillic it
-   * reads as a mark rather than as a word, which is what a wordmark wants.
+   * URLUG — the house's own name.
    *
-   * It replaces the placeholder "ХУДАЛДАА", which was just the dictionary word
-   * for "trade" — fine as scaffolding, but not a name a house can be known by.
+   * Left in Latin caps against a page of Cyrillic on purpose: it reads as a
+   * mark rather than as a word, which is what a wordmark wants.
    *
-   * Renaming the house is these three lines and nothing else: every surface
-   * reads brand.name and brand.mark from here.
+   * Renaming the house is these three lines and nothing else. Everything that
+   * shows the name — page titles, the favicon, the share card, every SMS —
+   * reads `brand.name` from here. That was ALMOST true before this rename: a
+   * handful of SMS bodies and one legal sentence had "URLUG" typed into them,
+   * and they were the only things the rename did not reach. They interpolate
+   * now, so the next rename really is three lines.
    */
   brand: {
-    name: "MAISON",
-    mark: "M",
+    name: "URLUG",
+    mark: "U",
     tagline: "Дуудлага худалдааны танхим",
   },
 
@@ -56,13 +58,6 @@ export const t = {
     register: "Бүртгүүлэх",
     menu: "Цэс",
     close: "Хаах",
-  },
-
-  theme: {
-    label: "Өнгөний загвар",
-    system: "Системийн загвар",
-    light: "Цайвар",
-    dark: "Бараан",
   },
 
   home: {
@@ -353,7 +348,7 @@ export const t = {
     phoneLabel: "Утас",
     phone: "+976 7700 0019",
     emailLabel: "И-мэйл",
-    email: "info@maison.mn",
+    email: "info@urlug.mn",
     hoursLabel: "Ажиллах цаг",
     hours: "Даваа–Баасан · 10:00–19:00",
 
@@ -375,7 +370,7 @@ export const t = {
   about: {
     eyebrow: "Бидний тухай",
     headline: ["Цаг хугацаа", "шийднэ."],
-    lede: "MAISON бол Монголын эртний эдлэл, урлагийн бүтээлийг дуудлага худалдаагаар шинэ эзэнд нь хүргэдэг танхим. Бид уртаас урт хүлээлт бус, богино бөгөөд шийдэмгий худалдааг сонгосон.",
+    lede: "URLUG бол Монголын эртний эдлэл, урлагийн бүтээлийг дуудлага худалдаагаар шинэ эзэнд нь хүргэдэг танхим. Бид уртаас урт хүлээлт бус, богино бөгөөд шийдэмгий худалдааг сонгосон.",
 
     storyTitle: "Яагаад зургаан тойрог вэ",
     storyBody:
@@ -437,7 +432,7 @@ export const t = {
   terms: {
     eyebrow: "Эрх зүй",
     title: "Үйлчилгээний нөхцөл",
-    lede: "Энэхүү нөхцөл нь MAISON платформыг ашиглах, дуудлага худалдаанд оролцох, төлбөр тооцоо хийхтэй холбоотой талуудын эрх, үүргийг тодорхойлно.",
+    lede: "Энэхүү нөхцөл нь URLUG платформыг ашиглах, дуудлага худалдаанд оролцох, төлбөр тооцоо хийхтэй холбоотой талуудын эрх, үүргийг тодорхойлно.",
   },
 
   privacy: {

@@ -46,7 +46,7 @@ export function testDatabaseUrl(): string {
   loadEnvFile();
   const url =
     process.env.TEST_DATABASE_URL ??
-    "postgres://maison:maison@localhost:5432/maison_test";
+    "postgres://urlug:urlug@localhost:5432/urlug_test";
 
   const name = new URL(url).pathname.replace(/^\//, "");
   if (!name.endsWith("_test")) {
