@@ -100,7 +100,9 @@ export async function wonLots(userId: number): Promise<WonLot[]> {
     settled_at: Date | null;
   }>(
     `
-    SELECT a.lot_id, l.code, l.title, l.image, a.current_pts, a.hammer_round, a.settled_at
+    SELECT a.lot_id, l.code, l.title, a.current_pts, a.hammer_round, a.settled_at,
+           (SELECT url FROM lot_images i
+             WHERE i.lot_id = a.lot_id ORDER BY i.sort_order LIMIT 1) AS image
       FROM auctions a
       JOIN lots l ON l.id = a.lot_id
      WHERE a.outcome = 'sold' AND a.leader_user_id = $1

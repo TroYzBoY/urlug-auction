@@ -20,7 +20,25 @@ import type { Bid, Lot, LotCategory, LotStatus, RoomState } from "../types";
 const LOT_COLUMNS = `
   l.id, l.code, l.title, l.maker, l.year, l.category, l.note, l.provenance,
   l.condition, l.dimensions, l.estimate_low_pts, l.estimate_high_pts,
-  l.opening_pts, l.image, l.starts_at,
+  l.opening_pts, l.starts_at,
+  /*
+   * The gallery, aggregated in the same query rather than fetched per lot.
+   * A catalogue page renders a dozen lots; a second round trip each would be a
+   * dozen round trips to draw one grid.
+   *
+   * FILTER (WHERE i.id IS NOT NULL) because a LEFT JOIN on a lot with no
+   * photographs produces one all-NULL row, and array_agg would return an array
+   * of length one holding null — which every caller would then have to guard.
+   *
+   * No backticks in this comment: LOT_COLUMNS is a template literal and one
+   * would end the string.
+   */
+  COALESCE(
+    array_agg(
+      json_build_object('url', i.url, 'alt', i.alt) ORDER BY i.sort_order
+    ) FILTER (WHERE i.id IS NOT NULL),
+    '{}'
+  ) AS images,
   a.opens_at, a.round, a.current_pts, a.leader_paddle, a.leader_user_id,
   a.bid_clock_ends_at, a.outcome, a.hammer_round, a.bid_count
 `;
@@ -39,7 +57,7 @@ interface LotRow {
   estimate_low_pts: number;
   estimate_high_pts: number;
   opening_pts: number;
-  image: string | null;
+  images: { url: string; alt: string }[];
   starts_at: Date;
   opens_at: Date;
   round: number;
@@ -85,9 +103,7 @@ function toLot(row: LotRow, live: SettledState): Lot {
     estimateLowPts: row.estimate_low_pts,
     estimateHighPts: row.estimate_high_pts,
     openingPts: row.opening_pts,
-    // `?? undefined` rather than passing null: Lot.image is optional, and the
-    // plate falls back to the drawn silhouette on undefined.
-    image: row.image ?? undefined,
+    images: row.images ?? [],
     status: STATUS_OF[live.outcome],
     startsAt: row.starts_at.toISOString(),
     currentPts: live.currentPts,
@@ -101,9 +117,26 @@ function toLot(row: LotRow, live: SettledState): Lot {
   };
 }
 
+/**
+ * ⚠ Every lot read GROUPs, because the gallery is aggregated inline. The
+ * `where` a caller passes has to sit before the GROUP BY, and any ordering
+ * after it — which is why the helper takes the whole tail rather than just a
+ * predicate.
+ */
+const LOT_FROM = `
+  FROM lots l
+  JOIN auctions a ON a.lot_id = l.id
+  LEFT JOIN lot_images i ON i.lot_id = l.id
+`;
+const LOT_GROUP = "GROUP BY l.id, a.lot_id";
+
 async function selectLots(where: string, params: unknown[] = []): Promise<Lot[]> {
+  /* `where` may carry an ORDER BY, which must follow the GROUP BY. Splitting on
+     it keeps both call styles working without every caller repeating the join. */
+  const [predicate, order] = where.split(/\bORDER BY\b/);
   const rows = await query<LotRow>(
-    `SELECT ${LOT_COLUMNS} FROM lots l JOIN auctions a ON a.lot_id = l.id ${where}`,
+    `SELECT ${LOT_COLUMNS} ${LOT_FROM} ${predicate ?? ""} ${LOT_GROUP}` +
+      (order ? ` ORDER BY ${order}` : ""),
     params,
   );
   const now = Date.now();
@@ -223,7 +256,7 @@ export async function getRoomSnapshot(
   lotId: string,
 ): Promise<RoomSnapshot | null> {
   const row = await queryOne<LotRow>(
-    `SELECT ${LOT_COLUMNS} FROM lots l JOIN auctions a ON a.lot_id = l.id WHERE l.id = $1`,
+    `SELECT ${LOT_COLUMNS} ${LOT_FROM} WHERE l.id = $1 ${LOT_GROUP}`,
     [lotId],
   );
   if (!row) return null;
@@ -323,7 +356,7 @@ export async function getRoomState(
   viewerUserId: number | null,
 ): Promise<RoomState | null> {
   const row = await queryOne<LotRow>(
-    `SELECT ${LOT_COLUMNS} FROM lots l JOIN auctions a ON a.lot_id = l.id WHERE l.id = $1`,
+    `SELECT ${LOT_COLUMNS} ${LOT_FROM} WHERE l.id = $1 ${LOT_GROUP}`,
     [lotId],
   );
   if (!row) return null;

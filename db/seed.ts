@@ -78,8 +78,8 @@ try {
       `
       INSERT INTO lots (id, code, title, maker, year, category, note, provenance,
                         condition, dimensions, estimate_low_pts, estimate_high_pts,
-                        opening_pts, image, starts_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                        opening_pts, starts_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
       ON CONFLICT (id) DO UPDATE SET
         code = EXCLUDED.code, title = EXCLUDED.title, maker = EXCLUDED.maker,
         year = EXCLUDED.year, category = EXCLUDED.category, note = EXCLUDED.note,
@@ -87,7 +87,7 @@ try {
         dimensions = EXCLUDED.dimensions,
         estimate_low_pts = EXCLUDED.estimate_low_pts,
         estimate_high_pts = EXCLUDED.estimate_high_pts,
-        opening_pts = EXCLUDED.opening_pts, image = EXCLUDED.image,
+        opening_pts = EXCLUDED.opening_pts,
         starts_at = EXCLUDED.starts_at, updated_at = now()
       `,
       [
@@ -104,10 +104,24 @@ try {
         lot.estimateLowPts,
         lot.estimateHighPts,
         lot.openingPts,
-        lot.image ?? null,
         opensAtFor(lot.status, index),
       ],
     );
+
+    /*
+     * Replaced wholesale rather than upserted. Seeding is a reset — an operator
+     * running it twice after editing the fixtures expects the catalogue to
+     * match the fixtures, not to accumulate every photograph either version
+     * ever named.
+     */
+    await client.query("DELETE FROM lot_images WHERE lot_id = $1", [lot.id]);
+    for (const [order, image] of lot.images.entries()) {
+      await client.query(
+        `INSERT INTO lot_images (lot_id, url, alt, sort_order)
+         VALUES ($1, $2, $3, $4)`,
+        [lot.id, image.url, image.alt, order],
+      );
+    }
 
     const opensAt = opensAtFor(lot.status, index);
     await client.query(
@@ -144,7 +158,10 @@ try {
   const live = LOTS.filter((l) => l.status === "live").length;
   const upcoming = LOTS.filter((l) => l.status === "upcoming").length;
 
-  console.info(`Seeded ${LOTS.length} lots: ${live} live, ${upcoming} upcoming.`);
+  const images = LOTS.reduce((n, l) => n + l.images.length, 0);
+  console.info(
+    `Seeded ${LOTS.length} lots (${live} live, ${upcoming} upcoming) and ${images} images.`,
+  );
   console.info(
     "Every lot is written as 'scheduled'; the ticker promotes and settles them " +
       "on its first pass after the server starts. Give it a second, then check:",

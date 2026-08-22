@@ -107,6 +107,31 @@ were they shown on the day they placed that bid" has an answer.
 `session.ts` is the only gate, and it calls `notFound()` rather than returning a
 403 — a 403 confirms that `/admin` exists.
 
+**Roles.** `bidder` / `staff` / `admin`, changed from the users table on
+`/admin`. Three guards, each for a specific way it goes wrong: nobody may change
+their own role (an admin who demotes themselves cannot reach the panel to undo
+it, because the route stops existing); the last active admin cannot be demoted
+(the only way back would be hand-written SQL against production, and the count
+is taken inside the transaction after a row lock, so two admins demoting each
+other cannot both pass); and a demotion revokes that user's sessions, because a
+staff session that keeps working is the role not really having been taken away.
+
+**The first admin** is made on the machine that holds the database:
+
+```bash
+npm run db:make-admin -- --phone 99112233
+npm run db:make-admin -- --phone 99112233 --create --password "…" --email you@example.com
+```
+
+There is no "first user becomes admin" rule and no bootstrap route. Both are
+doors that stay open long after they were needed, and the second one is
+reachable from the internet. The promotion is audited with a null actor —
+nobody was signed in — because a promotion that leaves no trace is exactly the
+one somebody would want to leave no trace.
+
+⚠ Accounts are identified and authenticated by **phone number**. `users.email`
+is contact information; nothing in the auth path reads it.
+
 ### Payments
 
 Wired end to end except for the provider itself. `createTopup` opens a `pending`
@@ -537,10 +562,29 @@ room, upcoming lots get the catalogue preview, and finished lots get their
 result. A bidder can bookmark one URL per lot and it becomes the bidding screen
 when the session opens, then the result page afterwards.
 
-The seed catalogue is 12 lots across all six categories, covering every status
-the UI renders: 1 live, 8 upcoming, 2 sold, 1 unsold. It lives in
-`db/fixtures/lots.ts` — outside `src/`, so no code path can reach mock data at
-runtime.
+The seed catalogue is 12 consumer-electronics lots — iPhone, MacBook, AirPods,
+iPad, Watch, Vision Pro, a Mac mini, a PlayStation — covering every status the
+UI renders. It lives in `db/fixtures/lots.ts`, outside `src/`, so no code path
+can reach sample data at runtime.
+
+Each lot carries **four or five photographs** in `lot_images`, with a caption
+per angle. A table rather than a `TEXT[]` column for two reasons that only show
+up later: `alt` belongs to the image and not to the lot ("Урд тал", "Ар талын
+доод булан — 3мм маажилт" is what a screen reader needs, and one caption for a
+gallery describes nothing), and reordering is an UPDATE of one row rather than a
+rewrite of an array.
+
+Position 0 is the cover — `coverOf(lot)` — which is what a grid shows. The lot
+page gets `LotGallery`: one large view, a labelled thumbnail row, and the
+caption repeated under the main image. A used device is bought on its faults,
+and a photograph of a scratch that nobody tells you about is just a blurry
+corner.
+
+⚠ The image files are **generated placeholders** — labelled SVGs from
+`db/fixtures/make-placeholders.ts`, deliberately obvious about it. Real listings
+need photographs of the actual unit, from the angles named in each caption. A
+stock render of a different unit is closer to a misrepresentation than to a
+catalogue.
 
 ### Notes worth knowing before you edit
 

@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { LotPlate } from "./LotPlate";
 import { t } from "@/lib/copy";
 import { lotDate, pts } from "@/lib/format";
-import type { Lot } from "@/lib/types";
+import { coverOf, type Lot } from "@/lib/types";
 
 /**
  * The catalogue as an index rather than a wall of cards.
@@ -60,7 +60,7 @@ export function LotIndex({ lots }: { lots: Lot[] }) {
                   <span className="w-12 shrink-0 lg:hidden">
                     <LotPlate
                       category={lot.category}
-                      image={lot.image}
+                      image={coverOf(lot)?.url}
                       alt={lot.title}
                       ratio="aspect-square"
                     />
@@ -108,7 +108,7 @@ export function LotIndex({ lots }: { lots: Lot[] }) {
                 {active && (
                   <LotPlate
                     category={active.category}
-                    image={active.image}
+                    image={coverOf(active)?.url}
                     alt={active.title}
                     ratio="size-full"
                   />

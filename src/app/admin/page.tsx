@@ -254,7 +254,11 @@ export default async function AdminPage() {
                     )}
                   </td>
                   <td className="py-3 align-top">
-                    <UserControls userId={user.id} status={user.status} />
+                    <UserControls
+                      userId={user.id}
+                      status={user.status}
+                      role={user.role}
+                    />
                   </td>
                 </tr>
               ))}

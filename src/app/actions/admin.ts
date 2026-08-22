@@ -11,6 +11,7 @@ import {
   closeAuction,
   createLot,
   rescheduleAuction,
+  setUserRole,
   setUserStatus,
   updateLot,
   type Actor,
@@ -22,6 +23,7 @@ import {
   lotSchema,
   lotControlSchema,
   rescheduleSchema,
+  userRoleSchema,
   userStatusSchema,
 } from "@/lib/validation";
 
@@ -72,7 +74,7 @@ function fields(formData: FormData) {
     estimateLowPts: Number(get("estimateLowPts")),
     estimateHighPts: Number(get("estimateHighPts")),
     openingPts: Number(get("openingPts")),
-    image: get("image") || null,
+    images: get("images") ?? "",
     opensAt: get("opensAt"),
   };
 }
@@ -248,6 +250,48 @@ export async function setUserStatusAction(
 
   refresh();
   return { status: "ok", message: "Төлөв өөрчлөгдлөө." };
+}
+
+export async function setUserRoleAction(
+  _prev: AdminState,
+  formData: FormData,
+): Promise<AdminState> {
+  const who = await actor();
+  const parsed = userRoleSchema.safeParse({
+    userId: Number(formData.get("userId")),
+    role: formData.get("role"),
+    reason: formData.get("reason"),
+  });
+  if (!parsed.success) {
+    return { status: "error", message: firstError(parsed.error) };
+  }
+
+  const result = await setUserRole(
+    parsed.data.userId,
+    parsed.data.role,
+    parsed.data.reason,
+    who,
+  );
+  if (!result.ok) {
+    return {
+      status: "error",
+      message:
+        result.reason === "self"
+          ? "Өөрийн эрхээ өөрчлөх боломжгүй."
+          : result.reason === "last-admin"
+            ? "Сүүлчийн админыг бууруулах боломжгүй — өөр админ томилсны дараа хийнэ үү."
+            : "Хэрэглэгч олдсонгүй.",
+    };
+  }
+
+  log.info({
+    event: "admin.role_changed",
+    targetUserId: parsed.data.userId,
+    role: parsed.data.role,
+    actorId: who.id,
+  });
+  refresh();
+  return { status: "ok", message: "Эрх өөрчлөгдлөө." };
 }
 
 export async function adjustBalanceAction(

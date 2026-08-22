@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500" viewBox="0 0 1200 1500" role="img" aria-label="Ар тал — мэдрэгчүүд">
+  <rect width="1200" height="1500" fill="#241c16"/>
+  <rect x="60" y="60" width="1080" height="1380" fill="none" stroke="rgba(246,236,222,0.14)" stroke-width="2"/>
+  <line x1="60" y1="60" x2="1140" y2="1440" stroke="rgba(246,236,222,0.14)" stroke-width="1"/>
+  <line x1="1140" y1="60" x2="60" y2="1440" stroke="rgba(246,236,222,0.14)" stroke-width="1"/>
+  <g font-family="Inter, Helvetica, Arial, sans-serif" text-anchor="middle">
+    <text x="600" y="660" fill="#7a7167" font-size="34" letter-spacing="8">ЛОТ 106</text>
+    <text x="600" y="730" fill="#a89e90" font-size="52" font-weight="600">Apple Watch Ultra 3 49мм</text>
+    <text x="600" y="800" fill="#a89e90" font-size="40">Ар тал — мэдрэгчүүд</text>
+    <text x="600" y="880" fill="#7a7167" font-size="30" letter-spacing="4">2 / 4</text>
+    <text x="600" y="1390" fill="#7a7167" font-size="26" letter-spacing="6">ЗУРАГ ОРУУЛААГҮЙ</text>
+  </g>
+</svg>

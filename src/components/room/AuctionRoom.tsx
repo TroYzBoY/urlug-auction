@@ -9,7 +9,7 @@ import { placeBid as submitBid } from "@/app/actions/bid";
 import { LATE_JOIN_PENALTY_PTS, ROUND_TIME_SCALE } from "@/lib/auction";
 import { bidClockLabel, pts, ptsToMnt } from "@/lib/format";
 import { t } from "@/lib/copy";
-import type { Lot, RoomState } from "@/lib/types";
+import { coverOf, type Lot, type RoomState } from "@/lib/types";
 import { BidClock } from "./BidClock";
 import { BidFeed } from "./BidFeed";
 import { BidPanel } from "./BidPanel";
@@ -117,7 +117,7 @@ export function AuctionRoom({
         <div className="flex flex-col gap-5">
           <LotPlate
             category={lot.category}
-            image={lot.image}
+            image={coverOf(lot)?.url}
             alt={lot.title}
             priority
             ratio="aspect-square"
@@ -266,7 +266,7 @@ export function AuctionRoom({
             <LotPlate
               category={lot.category}
               code={lot.code}
-              image={lot.image}
+              image={coverOf(lot)?.url}
               alt={lot.title}
               className="hidden lg:block"
             />

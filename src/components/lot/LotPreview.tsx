@@ -3,7 +3,7 @@ import { ViewTransition } from "react";
 import { Footer } from "@/components/site/Footer";
 import { WatchButton } from "./WatchButton";
 import { SiteHeader } from "@/components/site/SiteHeader";
-import { LotPlate } from "./LotPlate";
+import { LotGallery } from "./LotGallery";
 import { bidClockLabel, lotDate, pts, ptsToMnt } from "@/lib/format";
 import { ROUNDS, TOTAL_ROUNDS } from "@/lib/auction";
 import { t } from "@/lib/copy";
@@ -50,14 +50,14 @@ export function LotPreview({
         </Link>
 
         <div className="mt-8 grid items-start gap-8 md:mt-12 md:grid-cols-2 md:gap-14">
-          {/* Receives the morph from the catalogue card's plate. */}
+          {/* Receives the morph from the catalogue card's plate. The gallery's
+              main view is the element that morphs; the thumbnails are new. */}
           <ViewTransition name={`lot-${lot.id}`} share="morph" default="none">
-            <LotPlate
+            <LotGallery
+              images={lot.images}
               category={lot.category}
               code={lot.code}
-              image={lot.image}
-              alt={lot.title}
-              priority
+              title={lot.title}
             />
           </ViewTransition>
 

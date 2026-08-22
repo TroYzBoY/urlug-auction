@@ -53,9 +53,33 @@ export interface LotInput {
   estimateLowPts: number;
   estimateHighPts: number;
   openingPts: number;
-  image: string | null;
+  images: { url: string; alt: string }[];
   /** ISO timestamp. The auction's clocks are all derived from it. */
   opensAt: string;
+}
+
+/**
+ * Replaces a lot's gallery.
+ *
+ * Delete-then-insert rather than a diff. The list is at most a dozen rows, the
+ * whole thing happens inside the caller's transaction, and a diff would have to
+ * reason about reordering — which is most of the complexity for none of the
+ * benefit at this size. `lot_images_order_idx` would reject a reorder done as
+ * individual updates anyway, since two rows would briefly share a position.
+ */
+async function writeImages(
+  client: PoolClient,
+  lotId: string,
+  images: { url: string; alt: string }[],
+): Promise<void> {
+  await client.query("DELETE FROM lot_images WHERE lot_id = $1", [lotId]);
+  for (const [order, image] of images.entries()) {
+    await client.query(
+      `INSERT INTO lot_images (lot_id, url, alt, sort_order)
+       VALUES ($1, $2, $3, $4)`,
+      [lotId, image.url, image.alt, order],
+    );
+  }
 }
 
 /**
@@ -112,8 +136,8 @@ export async function createLot(
     const inserted = await client.query(
       `INSERT INTO lots (id, code, title, maker, year, category, note, provenance,
                          condition, dimensions, estimate_low_pts, estimate_high_pts,
-                         opening_pts, image, starts_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                         opening_pts, starts_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        ON CONFLICT (id) DO NOTHING`,
       [
         input.id,
@@ -129,12 +153,12 @@ export async function createLot(
         input.estimateLowPts,
         input.estimateHighPts,
         input.openingPts,
-        input.image,
         opensAt,
       ],
     );
     if (inserted.rowCount === 0) return { ok: false, reason: "duplicate-id" };
 
+    await writeImages(client, input.id, input.images);
     await writeSchedule(client, input.id, opensAt, input.openingPts);
 
     await record(client, {
@@ -182,9 +206,8 @@ export async function updateLot(
       `UPDATE lots SET code = $2, title = $3, maker = $4, year = $5, category = $6,
                        note = $7, provenance = $8, condition = $9, dimensions = $10,
                        estimate_low_pts = $11, estimate_high_pts = $12,
-                       image = $13,
-                       opening_pts = CASE WHEN $15 THEN $14 ELSE opening_pts END,
-                       starts_at = CASE WHEN $15 THEN $16::timestamptz ELSE starts_at END,
+                       opening_pts = CASE WHEN $14 THEN $13 ELSE opening_pts END,
+                       starts_at = CASE WHEN $14 THEN $15::timestamptz ELSE starts_at END,
                        updated_at = now()
         WHERE id = $1`,
       [
@@ -200,12 +223,18 @@ export async function updateLot(
         input.dimensions,
         input.estimateLowPts,
         input.estimateHighPts,
-        input.image,
         input.openingPts,
         notYetOpen,
         input.opensAt,
       ],
     );
+
+    /*
+     * Photographs can be corrected on a RUNNING lot, unlike its price or its
+     * schedule. A better picture of a fault is information a bidder should have
+     * as soon as it exists; it does not change what an existing bid meant.
+     */
+    await writeImages(client, input.id, input.images);
 
     if (notYetOpen) {
       await writeSchedule(
@@ -472,6 +501,83 @@ export async function setUserStatus(
       targetType: "user",
       targetId: String(userId),
       detail: { paddle: user.paddle, from: user.status, to: status, reason },
+      ip: actor.ip,
+      userAgent: actor.userAgent,
+    });
+
+    return { ok: true };
+  });
+}
+
+export type RoleResult =
+  | { ok: true }
+  | { ok: false; reason: "not-found" | "self" | "last-admin" };
+
+/**
+ * Grants or revokes staff access.
+ *
+ * ⚠ Three guards, and each exists because of a specific way this goes wrong.
+ *
+ * **Not your own account.** An admin demoting themselves is locked out of the
+ * panel they need to undo it, and `requireAdmin` returns a 404 — so the route
+ * they would go back to stops existing.
+ *
+ * **Never the last admin.** Demoting the only remaining admin leaves nobody who
+ * can promote anyone, and the only way back is a hand-written SQL statement
+ * against production. The count is taken inside the transaction, after a lock
+ * on the row being changed, so two admins demoting each other at once cannot
+ * both pass the check.
+ *
+ * **Sessions are revoked on a DEMOTION.** A staff session that keeps working
+ * after the role is taken away is the role not really having been taken away.
+ * Promotions leave sessions alone — `currentUser` reads the role fresh on every
+ * request, so a promoted user gets their new access without signing in again.
+ */
+export async function setUserRole(
+  userId: number,
+  role: "bidder" | "staff" | "admin",
+  reason: string,
+  actor: Actor,
+): Promise<RoleResult> {
+  if (userId === actor.id) return { ok: false, reason: "self" };
+
+  return transaction(async (client) => {
+    const res = await client.query<{ role: string; paddle: string }>(
+      "SELECT role, paddle FROM users WHERE id = $1 FOR UPDATE",
+      [userId],
+    );
+    const user = res.rows[0];
+    if (!user) return { ok: false, reason: "not-found" };
+
+    if (user.role === "admin" && role !== "admin") {
+      const admins = await client.query<{ count: number }>(
+        "SELECT count(*)::int AS count FROM users WHERE role = 'admin' AND status = 'active'",
+      );
+      if ((admins.rows[0]?.count ?? 0) <= 1) {
+        return { ok: false, reason: "last-admin" };
+      }
+    }
+
+    await client.query(
+      "UPDATE users SET role = $2::user_role, updated_at = now() WHERE id = $1",
+      [userId, role],
+    );
+
+    const demoted =
+      (user.role === "admin" || user.role === "staff") && role === "bidder";
+    if (demoted) {
+      await client.query(
+        "UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL",
+        [userId],
+      );
+    }
+
+    await record(client, {
+      actorUserId: actor.id,
+      action: "admin.role_changed",
+      targetType: "user",
+      targetId: String(userId),
+      detail: { paddle: user.paddle, from: user.role, to: role, reason },
       ip: actor.ip,
       userAgent: actor.userAgent,
     });

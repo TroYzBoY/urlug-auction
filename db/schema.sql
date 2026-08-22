@@ -434,3 +434,44 @@ CREATE TABLE IF NOT EXISTS settlements (
 
 CREATE INDEX IF NOT EXISTS settlements_user_idx ON settlements (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS settlements_due_idx  ON settlements (due_by) WHERE status = 'due';
+
+-- ── Lot photographs ──────────────────────────────────────────────────────────
+--
+-- A catalogue entry needs several views of the same object — front, back, the
+-- port side, the scuff on the corner — and a bidder committing real money is
+-- entitled to all of them. `lots.image` held exactly one, which was enough for
+-- an antique shot on a plinth and is not enough for a phone somebody is bidding
+-- on sight unseen.
+--
+-- A table rather than a TEXT[] column, for two reasons that only show up later:
+--
+--   • `alt` belongs to the image, not to the lot. "Урд тал", "Ар тал",
+--     "Хажуу тал" is what a screen reader needs, and one alt for a whole
+--     gallery describes nothing.
+--   • Reordering is an UPDATE of one row rather than a rewrite of an array,
+--     which matters when an operator is dragging thumbnails around.
+--
+-- `sort_order` decides the gallery order, and position 0 is the cover — the one
+-- a card in the catalogue grid shows.
+
+CREATE TABLE IF NOT EXISTS lot_images (
+  id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  lot_id     TEXT        NOT NULL REFERENCES lots (id) ON DELETE CASCADE,
+  url        TEXT        NOT NULL,
+  -- What the photograph shows, for a screen reader and for a broken image.
+  alt        TEXT        NOT NULL DEFAULT '',
+  sort_order INT         NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- One row per position per lot: an operator cannot end up with two covers.
+CREATE UNIQUE INDEX IF NOT EXISTS lot_images_order_idx
+  ON lot_images (lot_id, sort_order);
+CREATE INDEX IF NOT EXISTS lot_images_lot_idx ON lot_images (lot_id, sort_order);
+
+-- Contact email. NOT a login credential — accounts are identified and
+-- authenticated by phone number, and nothing in the auth path reads this. It
+-- exists so staff accounts can be reached by mail and so an operator can
+-- recognise an account they created.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+CREATE INDEX IF NOT EXISTS users_email_idx ON users (email) WHERE email IS NOT NULL;

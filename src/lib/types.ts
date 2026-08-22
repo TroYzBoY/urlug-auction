@@ -9,6 +9,24 @@ export type LotCategory =
   | "arms"
   | "manuscript";
 
+export interface LotImage {
+  url: string;
+  /** What this particular view shows: "Урд тал", "Ар тал", "Дэлгэц". */
+  alt: string;
+}
+
+/**
+ * The image a grid shows for a lot, or null when the catalogue has no
+ * photographs yet and the drawn silhouette should stand in.
+ *
+ * A function rather than a `cover` field, so there is one gallery and one
+ * definition of which end of it is the front. Two fields for one concept is how
+ * a cover ends up disagreeing with the first thumbnail.
+ */
+export function coverOf(lot: Pick<Lot, "images">): LotImage | null {
+  return lot.images[0] ?? null;
+}
+
 export interface Lot {
   id: string;
   /** Catalogue code shown to bidders, e.g. "ЛОТ 014". */
@@ -27,13 +45,18 @@ export interface Lot {
   estimateHighPts: number;
   openingPts: number;
   /**
-   * Catalogue photograph, served from /public/media/lots.
+   * Catalogue photographs, in gallery order. Position 0 is the cover — the one
+   * a card in the grid shows.
    *
-   * Optional on purpose: a lot with no photo yet falls back to the drawn
-   * silhouette rather than a broken image or a grey box, which is the normal
-   * state of a catalogue while it is still being assembled.
+   * Possibly empty, on purpose: a lot with no photograph yet falls back to the
+   * drawn silhouette rather than a broken image or a grey box, which is the
+   * normal state of a catalogue while it is being assembled.
+   *
+   * `alt` belongs to each image rather than to the lot, because "Урд тал" and
+   * "Ар тал" is what a screen reader needs — one description for a whole
+   * gallery describes nothing.
    */
-  image?: string;
+  images: LotImage[];
 
   status: LotStatus;
   /** ISO timestamp — when this lot's 2h45m session opens. */

@@ -20,6 +20,7 @@
     "db:reset": "docker compose down -v && docker compose up -d db",
     "db:migrate": "node --env-file-if-exists=.env.local --experimental-strip-types db/migrate.ts",
     "db:seed": "node --env-file-if-exists=.env.local --experimental-strip-types db/seed.ts",
+    "db:make-admin": "node --env-file-if-exists=.env.local --experimental-strip-types db/make-admin.ts",
     "db:psql": "docker compose exec db psql -U urlug -d urlug",
     "db:logs": "docker compose logs -f db"
   },

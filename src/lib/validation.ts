@@ -174,7 +174,35 @@ export const lotSchema = z
     estimateLowPts: ptsField("Доод үнэлгээ"),
     estimateHighPts: ptsField("Дээд үнэлгээ"),
     openingPts: ptsField("Нээлтийн үнэ"),
-    image: z.string().trim().max(500).nullable().default(null),
+    /*
+     * The gallery, as newline-separated `url | alt` lines — the shape a
+     * textarea produces. Parsed here so the repository receives a real list and
+     * the admin form stays one field rather than five paired inputs that have
+     * to be added and removed.
+     *
+     * An empty `alt` is allowed and normalised to "": a lot photographed
+     * before its captions are written should still save.
+     */
+    images: z
+      .string()
+      .max(4000)
+      .default("")
+      .transform((raw) =>
+        raw
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const [url, ...rest] = line.split("|");
+            return { url: url!.trim(), alt: rest.join("|").trim() };
+          })
+          .filter((image) => image.url.length > 0),
+      )
+      .pipe(
+        z
+          .array(z.object({ url: z.string().max(500), alt: z.string().max(200) }))
+          .max(12, "Нэг лотод 12-оос олон зураг оруулах боломжгүй."),
+      ),
     opensAt: z
       .string()
       .trim()
@@ -210,6 +238,16 @@ export const rescheduleSchema = z.object({
 export const userStatusSchema = z.object({
   userId: z.number().int().positive(),
   status: z.enum(["active", "suspended", "closed"]),
+  reason: z
+    .string()
+    .trim()
+    .min(4, "Шалтгааныг бичнэ үү — аудитын бүртгэлд үлдэнэ.")
+    .max(500),
+});
+
+export const userRoleSchema = z.object({
+  userId: z.number().int().positive(),
+  role: z.enum(["bidder", "staff", "admin"]),
   reason: z
     .string()
     .trim()

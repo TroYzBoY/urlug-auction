@@ -8,6 +8,7 @@ import {
   closeAuctionAction,
   createLotAction,
   rescheduleAction,
+  setUserRoleAction,
   setUserStatusAction,
   type AdminState,
 } from "@/app/actions/admin";
@@ -148,9 +149,6 @@ export function CreateLotForm() {
         <Labelled label={t.lot.provenance}>
           <input name="provenance" className={field} />
         </Labelled>
-        <Labelled label={t.admin.image}>
-          <input name="image" className={field} placeholder="/media/lots/014.jpg" />
-        </Labelled>
         <Labelled label={t.lot.startsAt}>
           {/*
             `datetime-local` submits without a zone, so the server parses it in
@@ -162,8 +160,26 @@ export function CreateLotForm() {
       </div>
 
       <Labelled label={t.lot.note} className="mt-4">
-        <textarea name="note" rows={3} className={`${field} h-auto py-2`} />
+        <textarea name="note" rows={5} className={`${field} h-auto py-2`} />
       </Labelled>
+
+      {/*
+        The gallery as one textarea rather than five paired inputs that have to
+        be added and removed. One line per photograph, `url | caption` — the
+        order of the lines IS the order of the gallery, and the first is the
+        cover, which is easier to see and reorder as text than as a column of
+        form rows.
+      */}
+      <Labelled label={t.admin.images} className="mt-4">
+        <textarea
+          name="images"
+          rows={5}
+          spellCheck={false}
+          placeholder={t.admin.imagesHint}
+          className={`${field} h-auto py-2 font-mono text-xs`}
+        />
+      </Labelled>
+      <p className="mt-1.5 text-xs text-muted">{t.admin.imagesNote}</p>
 
       <div className="mt-5 flex items-center gap-3">
         <Submit label={t.admin.create} />
@@ -324,12 +340,18 @@ export function AuctionControls({
 export function UserControls({
   userId,
   status,
+  role,
 }: {
   userId: number;
   status: string;
+  role: string;
 }) {
   const [statusState, statusAction] = useActionState<AdminState, FormData>(
     setUserStatusAction,
+    IDLE,
+  );
+  const [roleState, roleAction] = useActionState<AdminState, FormData>(
+    setUserRoleAction,
     IDLE,
   );
   const [adjustState, adjustAction] = useActionState<AdminState, FormData>(
@@ -372,6 +394,37 @@ export function UserControls({
         />
         <Submit label={t.admin.applyStatus} danger />
         <Result state={statusState} />
+      </form>
+
+      {/*
+        Role. Separate from status because they answer different questions —
+        status is "may this person bid", role is "may this person run the
+        house" — and a single control conflating them is how somebody gets
+        admin by being un-suspended.
+      */}
+      <form action={roleAction} className="flex flex-col gap-2 border-t border-line pt-3">
+        <input type="hidden" name="userId" value={userId} />
+        <p className="text-[0.625rem] leading-relaxed text-muted">
+          {t.admin.roleNote}
+        </p>
+        <select
+          name="role"
+          defaultValue={role}
+          className={`${field} h-8 text-xs`}
+        >
+          <option value="bidder">bidder</option>
+          <option value="staff">staff</option>
+          <option value="admin">admin</option>
+        </select>
+        <input
+          name="reason"
+          required
+          minLength={4}
+          placeholder={t.admin.reasonPlaceholder}
+          className={`${field} h-8 text-xs`}
+        />
+        <Submit label={t.admin.applyRole} danger />
+        <Result state={roleState} />
       </form>
 
       <form action={adjustAction} className="flex flex-col gap-2 border-t border-line pt-3">

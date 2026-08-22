@@ -3,7 +3,7 @@ import { ViewTransition } from "react";
 import { LotPlate } from "./LotPlate";
 import { t } from "@/lib/copy";
 import { lotDate, pts, ptsToMnt } from "@/lib/format";
-import type { Lot, LotStatus } from "@/lib/types";
+import { coverOf, type Lot, type LotStatus } from "@/lib/types";
 
 export function LiveDot() {
   return (
@@ -51,8 +51,8 @@ export function LotCard({ lot }: { lot: Lot }) {
             <LotPlate
               category={lot.category}
               code={lot.code}
-              image={lot.image}
-              alt={lot.title}
+              image={coverOf(lot)?.url}
+              alt={coverOf(lot)?.alt ?? lot.title}
             />
           </ViewTransition>
 

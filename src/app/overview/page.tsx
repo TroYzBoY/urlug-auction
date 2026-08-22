@@ -17,6 +17,7 @@ import {
 import { POINT_MNT, ROUNDS, TOTAL_ROUNDS } from "@/lib/auction";
 import { bidClockLabel, groupNumber, pts, ptsToMnt } from "@/lib/format";
 import { t } from "@/lib/copy";
+import { coverOf } from "@/lib/types";
 
 /**
  * The catalogue overview — what used to be the home page.
@@ -165,7 +166,7 @@ export default async function OverviewPage() {
             <div className="overflow-hidden">
               <LotPlate
                 category={live.category}
-                image={live.image}
+                image={coverOf(live)?.url}
                 alt={live.title}
                 ratio="aspect-[4/5] sm:aspect-[16/9] lg:aspect-[21/9]"
                 className="transition-transform duration-[1200ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.03]"
