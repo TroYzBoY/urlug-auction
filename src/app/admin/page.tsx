@@ -79,20 +79,45 @@ export default async function AdminPage() {
         appearing or vanishing, and it should not be something an admin has to
         go looking for.
       */}
+      {/*
+        A plain <a>, not a Link and not a form.
+        The route sets Content-Disposition: attachment, so the browser must be
+        allowed to hand the response to its download machinery rather than to
+        the router. next/link would try to treat a spreadsheet as a navigation.
+      */}
       <section className="mt-14">
-        <h2 className="text-lg font-medium tracking-[-0.02em] text-ink">
+        <h2 className="text-ink text-lg font-medium tracking-[-0.02em]">
+          {t.admin.exportTitle}
+        </h2>
+        <p className="text-muted mt-2 max-w-prose text-sm leading-relaxed">
+          {t.admin.exportHint}
+        </p>
+        <a
+          href="/admin/export"
+          download
+          className="eyebrow border-line text-ink hover:border-accent hover:text-accent mt-4 inline-flex h-10 items-center border px-4 transition-colors"
+        >
+          {t.admin.exportButton}
+        </a>
+      </section>
+
+      <section className="mt-14">
+        <h2 className="text-ink text-lg font-medium tracking-[-0.02em]">
           {t.admin.ledgerDrift}
         </h2>
         {drift.length === 0 ? (
-          <p className="mt-4 border-l-2 border-olive bg-olive/5 py-3 pl-4 text-sm text-ink-soft">
+          <p className="border-olive bg-olive/5 text-ink-soft mt-4 border-l-2 py-3 pl-4 text-sm">
             {t.admin.ledgerDriftNone}
           </p>
         ) : (
-          <div className="mt-4 border-l-2 border-rust bg-rust/5 py-3 pl-4">
-            <p className="text-sm font-medium text-rust">
+          <div className="border-rust bg-rust/5 mt-4 border-l-2 py-3 pl-4">
+            <p className="text-rust text-sm font-medium">
               {t.admin.ledgerDriftWarning}
             </p>
-            <ul data-numerals className="mt-3 flex flex-col gap-1 text-sm text-ink-soft">
+            <ul
+              data-numerals
+              className="text-ink-soft mt-3 flex flex-col gap-1 text-sm"
+            >
               {drift.map((row) => (
                 <li key={row.user_id}>
                   #{row.user_id}: {pts(row.cached)} ≠ {pts(row.actual)}
@@ -103,11 +128,7 @@ export default async function AdminPage() {
         )}
       </section>
 
-      <Panel
-        heading={t.admin.lots}
-        empty="—"
-        isEmpty={false}
-      >
+      <Panel heading={t.admin.lots} empty="—" isEmpty={false}>
         <div className="mb-5">
           <CreateLotForm />
         </div>
@@ -119,27 +140,33 @@ export default async function AdminPage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[44rem] border-collapse text-sm">
             <thead>
-              <tr className="border-y border-line text-left">
+              <tr className="border-line border-y text-left">
                 <th className="eyebrow py-3 pr-4 font-normal">{t.lot.lot}</th>
-                <th className="eyebrow py-3 pr-4 font-normal">{t.home.colStatus}</th>
-                <th className="eyebrow py-3 pr-4 font-normal">{t.room.round}</th>
+                <th className="eyebrow py-3 pr-4 font-normal">
+                  {t.home.colStatus}
+                </th>
+                <th className="eyebrow py-3 pr-4 font-normal">
+                  {t.room.round}
+                </th>
                 <th className="eyebrow py-3 pr-4 font-normal">
                   {t.room.currentPrice}
                 </th>
                 <th className="eyebrow py-3 pr-4 font-normal">
                   {t.lot.bidCount}
                 </th>
-                <th className="eyebrow py-3 pr-4 font-normal">{t.lot.startsAt}</th>
+                <th className="eyebrow py-3 pr-4 font-normal">
+                  {t.lot.startsAt}
+                </th>
                 <th className="eyebrow py-3 font-normal">{t.admin.manage}</th>
               </tr>
             </thead>
             <tbody>
               {lotRows.map((lot) => (
-                <tr key={lot.lotId} className="border-b border-line">
+                <tr key={lot.lotId} className="border-line border-b">
                   <td className="py-3 pr-4">
                     <Link
                       href={`/auction/${lot.lotId}`}
-                      className="transition-colors hover:text-accent"
+                      className="hover:text-accent transition-colors"
                     >
                       <span data-numerals className="text-muted">
                         {lot.code}
@@ -156,21 +183,21 @@ export default async function AdminPage() {
                       {OUTCOME_LABEL[lot.outcome] ?? lot.outcome}
                     </span>
                   </td>
-                  <td data-numerals className="py-3 pr-4 text-muted">
+                  <td data-numerals className="text-muted py-3 pr-4">
                     {lot.round}
                   </td>
-                  <td data-numerals className="py-3 pr-4 text-ink">
+                  <td data-numerals className="text-ink py-3 pr-4">
                     {pts(lot.currentPts)}
                     {lot.leaderPaddle && (
-                      <span className="ml-2 text-xs text-muted">
+                      <span className="text-muted ml-2 text-xs">
                         {lot.leaderPaddle}
                       </span>
                     )}
                   </td>
-                  <td data-numerals className="py-3 pr-4 text-muted">
+                  <td data-numerals className="text-muted py-3 pr-4">
                     {lot.bidCount}
                   </td>
-                  <td data-numerals className="py-3 pr-4 text-muted">
+                  <td data-numerals className="text-muted py-3 pr-4">
                     {lotDate(lot.opensAt)}
                   </td>
                   <td className="py-3 align-top">
@@ -187,15 +214,11 @@ export default async function AdminPage() {
         </div>
       </Panel>
 
-      <Panel
-        heading={t.admin.users}
-        empty="—"
-        isEmpty={userRows.length === 0}
-      >
+      <Panel heading={t.admin.users} empty="—" isEmpty={userRows.length === 0}>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[40rem] border-collapse text-sm">
             <thead>
-              <tr className="border-y border-line text-left">
+              <tr className="border-line border-y text-left">
                 <th className="eyebrow py-3 pr-4 font-normal">
                   {t.account.paddle}
                 </th>
@@ -206,17 +229,19 @@ export default async function AdminPage() {
                 <th className="eyebrow py-3 pr-4 font-normal">
                   {t.account.bidsPlaced}
                 </th>
-                <th className="eyebrow py-3 pr-4 font-normal">{t.home.colStatus}</th>
+                <th className="eyebrow py-3 pr-4 font-normal">
+                  {t.home.colStatus}
+                </th>
                 <th className="eyebrow py-3 font-normal">{t.admin.manage}</th>
               </tr>
             </thead>
             <tbody>
               {userRows.map((user) => (
-                <tr key={user.id} className="border-b border-line">
-                  <td data-numerals className="py-3 pr-4 text-ink">
+                <tr key={user.id} className="border-line border-b">
+                  <td data-numerals className="text-ink py-3 pr-4">
                     {user.paddle}
                   </td>
-                  <td className="py-3 pr-4 text-ink-soft">
+                  <td className="text-ink-soft py-3 pr-4">
                     {user.name}
                     {/*
                       The phone is deliberately not shown. Staff who need it can
@@ -225,10 +250,10 @@ export default async function AdminPage() {
                       database.
                     */}
                   </td>
-                  <td data-numerals className="py-3 pr-4 text-ink">
+                  <td data-numerals className="text-ink py-3 pr-4">
                     {pts(user.balancePts)}
                   </td>
-                  <td data-numerals className="py-3 pr-4 text-muted">
+                  <td data-numerals className="text-muted py-3 pr-4">
                     {user.bidCount}
                   </td>
                   <td className="py-3 pr-4">
@@ -248,7 +273,7 @@ export default async function AdminPage() {
                           : "—"}
                     </span>
                     {user.role !== "bidder" && (
-                      <span className="ml-2 text-xs text-accent">
+                      <span className="text-accent ml-2 text-xs">
                         {user.role}
                       </span>
                     )}
@@ -272,21 +297,21 @@ export default async function AdminPage() {
         empty="—"
         isEmpty={audit.length === 0}
       >
-        <ul className="border-t border-line">
+        <ul className="border-line border-t">
           {audit.map((row) => (
             <li
               key={row.id}
-              className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-line py-2.5 text-sm"
+              className="border-line flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b py-2.5 text-sm"
             >
               <span className="min-w-0">
                 <span className="text-ink">{row.action}</span>
                 {row.targetId && (
-                  <span data-numerals className="ml-2 text-xs text-muted">
+                  <span data-numerals className="text-muted ml-2 text-xs">
                     {row.targetType}/{row.targetId}
                   </span>
                 )}
               </span>
-              <span data-numerals className="text-xs text-faint">
+              <span data-numerals className="text-faint text-xs">
                 {row.actorPaddle ?? "—"} · {lotDate(row.createdAt)}
               </span>
             </li>

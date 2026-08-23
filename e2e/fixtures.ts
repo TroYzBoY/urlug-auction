@@ -84,14 +84,15 @@ export async function makeBidder(
   phone: string,
   paddle: string,
   balancePts = 500,
+  role: "bidder" | "staff" | "admin" = "bidder",
 ): Promise<TestBidder> {
   await withClient(async (c) => {
     const res = await c.query<{ id: number }>(
       `INSERT INTO users (name, phone, password_hash, paddle, phone_verified_at,
-                          date_of_birth)
-       VALUES ('Тест биддер', $1, $2, $3, now(), '1995-06-15')
+                          date_of_birth, role)
+       VALUES ('Тест биддер', $1, $2, $3, now(), '1995-06-15', $4::user_role)
        RETURNING id`,
-      [phone, await testPasswordHash(), paddle],
+      [phone, await testPasswordHash(), paddle, role],
     );
     await c.query("INSERT INTO balances (user_id, pts) VALUES ($1, $2)", [
       res.rows[0]!.id,
@@ -100,6 +101,20 @@ export async function makeBidder(
   });
 
   return { phone, password: TEST_PASSWORD, paddle };
+}
+
+/**
+ * An admin.
+ *
+ * Made here rather than by promoting through the UI, because promoting needs an
+ * admin and the first one has nobody to promote them — the same reason
+ * db/make-admin.ts exists.
+ */
+export async function makeAdmin(
+  phone: string,
+  paddle: string,
+): Promise<TestBidder> {
+  return makeBidder(phone, paddle, 0, "admin");
 }
 
 /** A lot that is open and taking bids right now. */

@@ -97,7 +97,7 @@ export function CreateLotForm() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="eyebrow h-10 border border-line px-4 text-ink transition-colors hover:border-accent hover:text-accent"
+        className="eyebrow border-line text-ink hover:border-accent hover:text-accent h-10 border px-4 transition-colors"
       >
         {t.admin.newLot}
       </button>
@@ -105,15 +105,27 @@ export function CreateLotForm() {
   }
 
   return (
-    <form action={action} className="w-full border border-line p-5">
+    <form action={action} className="border-line w-full border p-5">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Labelled label={t.admin.lotId}>
-          <input name="id" required maxLength={32} className={field} placeholder="014" />
+          <input
+            name="id"
+            required
+            maxLength={32}
+            className={field}
+            placeholder="014"
+          />
         </Labelled>
         <Labelled label={t.admin.lotCode}>
           <input name="code" required className={field} placeholder="ЛОТ 014" />
         </Labelled>
-        <Labelled label={t.lot.viewLot}>
+        {/*
+          `t.admin.lotTitle`, not `t.lot.viewLot`. The item's name is the most
+          consequential field on this form and it was labelled with the string
+          the catalogue uses for its "view the lot" link — so the box an
+          operator types the title into read "Лотыг үзэх".
+        */}
+        <Labelled label={t.admin.lotTitle}>
           <input name="title" required className={field} />
         </Labelled>
         <Labelled label={t.lot.maker}>
@@ -123,7 +135,12 @@ export function CreateLotForm() {
           <input name="year" className={field} />
         </Labelled>
         <Labelled label={t.admin.category}>
-          <select name="category" required defaultValue="antique" className={field}>
+          <select
+            name="category"
+            required
+            defaultValue="antique"
+            className={field}
+          >
             {CATEGORIES.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -132,13 +149,31 @@ export function CreateLotForm() {
           </select>
         </Labelled>
         <Labelled label={`${t.lot.estimate} — ${t.admin.low}`}>
-          <input name="estimateLowPts" type="number" min={0} required className={field} />
+          <input
+            name="estimateLowPts"
+            type="number"
+            min={0}
+            required
+            className={field}
+          />
         </Labelled>
         <Labelled label={`${t.lot.estimate} — ${t.admin.high}`}>
-          <input name="estimateHighPts" type="number" min={0} required className={field} />
+          <input
+            name="estimateHighPts"
+            type="number"
+            min={0}
+            required
+            className={field}
+          />
         </Labelled>
         <Labelled label={t.lot.opening}>
-          <input name="openingPts" type="number" min={0} required className={field} />
+          <input
+            name="openingPts"
+            type="number"
+            min={0}
+            required
+            className={field}
+          />
         </Labelled>
         <Labelled label={t.lot.dimensions}>
           <input name="dimensions" className={field} />
@@ -155,7 +190,12 @@ export function CreateLotForm() {
             ITS zone. Fine for a single-timezone house; if the auction ever runs
             for bidders abroad this has to carry an explicit offset.
           */}
-          <input name="opensAt" type="datetime-local" required className={field} />
+          <input
+            name="opensAt"
+            type="datetime-local"
+            required
+            className={field}
+          />
         </Labelled>
       </div>
 
@@ -179,14 +219,14 @@ export function CreateLotForm() {
           className={`${field} h-auto py-2 font-mono text-xs`}
         />
       </Labelled>
-      <p className="mt-1.5 text-xs text-muted">{t.admin.imagesNote}</p>
+      <p className="text-muted mt-1.5 text-xs">{t.admin.imagesNote}</p>
 
       <div className="mt-5 flex items-center gap-3">
         <Submit label={t.admin.create} />
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="eyebrow h-10 px-3 text-muted transition-colors hover:text-ink"
+          className="eyebrow text-muted hover:text-ink h-10 px-3 transition-colors"
         >
           {t.nav.close}
         </button>
@@ -258,7 +298,7 @@ export function AuctionControls({
   const settled = outcome === "sold" || outcome === "unsold";
 
   if (settled) {
-    return <span className="text-xs text-muted">—</span>;
+    return <span className="text-muted text-xs">—</span>;
   }
 
   return (
@@ -267,16 +307,20 @@ export function AuctionControls({
         {outcome === "running" && (
           <button
             type="button"
-            onClick={() => setConfirming(confirming === "close" ? null : "close")}
-            className="eyebrow border border-line px-2 py-1 text-[0.625rem] text-ink-soft transition-colors hover:border-flare hover:text-flare"
+            onClick={() =>
+              setConfirming(confirming === "close" ? null : "close")
+            }
+            className="eyebrow border-line text-ink-soft hover:border-flare hover:text-flare border px-2 py-1 text-[0.625rem] transition-colors"
           >
             {t.admin.close}
           </button>
         )}
         <button
           type="button"
-          onClick={() => setConfirming(confirming === "cancel" ? null : "cancel")}
-          className="eyebrow border border-line px-2 py-1 text-[0.625rem] text-ink-soft transition-colors hover:border-rust hover:text-rust"
+          onClick={() =>
+            setConfirming(confirming === "cancel" ? null : "cancel")
+          }
+          className="eyebrow border-line text-ink-soft hover:border-rust hover:text-rust border px-2 py-1 text-[0.625rem] transition-colors"
         >
           {t.admin.cancel}
         </button>
@@ -285,7 +329,7 @@ export function AuctionControls({
       {confirming === "close" && (
         <form action={closeFormAction} className="flex flex-col gap-2">
           <input type="hidden" name="lotId" value={lotId} />
-          <p className="text-xs leading-relaxed text-flare">
+          <p className="text-flare text-xs leading-relaxed">
             {t.admin.closeWarning}
           </p>
           <input
@@ -303,7 +347,7 @@ export function AuctionControls({
       {confirming === "cancel" && (
         <form action={cancelFormAction} className="flex flex-col gap-2">
           <input type="hidden" name="lotId" value={lotId} />
-          <p className="text-xs leading-relaxed text-rust">
+          <p className="text-rust text-xs leading-relaxed">
             {t.admin.cancelWarning}
           </p>
           <input
@@ -365,7 +409,7 @@ export function UserControls({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="eyebrow border border-line px-2 py-1 text-[0.625rem] text-muted transition-colors hover:border-accent hover:text-accent"
+        className="eyebrow border-line text-muted hover:border-accent hover:text-accent border px-2 py-1 text-[0.625rem] transition-colors"
       >
         {t.admin.manage}
       </button>
@@ -373,7 +417,7 @@ export function UserControls({
   }
 
   return (
-    <div className="flex flex-col gap-3 border border-line p-3">
+    <div className="border-line flex flex-col gap-3 border p-3">
       <form action={statusAction} className="flex flex-col gap-2">
         <input type="hidden" name="userId" value={userId} />
         <select
@@ -402,9 +446,12 @@ export function UserControls({
         house" — and a single control conflating them is how somebody gets
         admin by being un-suspended.
       */}
-      <form action={roleAction} className="flex flex-col gap-2 border-t border-line pt-3">
+      <form
+        action={roleAction}
+        className="border-line flex flex-col gap-2 border-t pt-3"
+      >
         <input type="hidden" name="userId" value={userId} />
-        <p className="text-[0.625rem] leading-relaxed text-muted">
+        <p className="text-muted text-[0.625rem] leading-relaxed">
           {t.admin.roleNote}
         </p>
         <select
@@ -427,9 +474,12 @@ export function UserControls({
         <Result state={roleState} />
       </form>
 
-      <form action={adjustAction} className="flex flex-col gap-2 border-t border-line pt-3">
+      <form
+        action={adjustAction}
+        className="border-line flex flex-col gap-2 border-t pt-3"
+      >
         <input type="hidden" name="userId" value={userId} />
-        <p className="text-[0.625rem] leading-relaxed text-muted">
+        <p className="text-muted text-[0.625rem] leading-relaxed">
           {t.admin.adjustNote}
         </p>
         <input
@@ -453,7 +503,7 @@ export function UserControls({
       <button
         type="button"
         onClick={() => setOpen(false)}
-        className="eyebrow self-start text-[0.625rem] text-muted transition-colors hover:text-ink"
+        className="eyebrow text-muted hover:text-ink self-start text-[0.625rem] transition-colors"
       >
         {t.nav.close}
       </button>
