@@ -587,11 +587,28 @@ caption repeated under the main image. A used device is bought on its faults,
 and a photograph of a scratch that nobody tells you about is just a blurry
 corner.
 
-⚠ The image files are **generated placeholders** — labelled SVGs from
-`db/fixtures/make-placeholders.ts`, deliberately obvious about it. Real listings
-need photographs of the actual unit, from the angles named in each caption. A
-stock render of a different unit is closer to a misrepresentation than to a
-catalogue.
+⚠ The image files are **real photographs from Wikimedia Commons**, under CC BY,
+CC BY-SA or CC0. `db/fixtures/media.ts` lists which photograph stands for which
+lot and what its caption says; `npm run db:media` downloads them and writes
+[`public/media/lots/CREDITS.md`](public/media/lots/CREDITS.md) recording the
+author, licence and source page of every file.
+
+Two things have to be settled before any of this is published:
+
+- **They are photographs of the MODEL, not of the unit being sold.** For a
+  fixture that is the point — the layout can be judged against real photographs.
+  For a real listing it is not acceptable. A bidder committing to a used device
+  sight unseen is buying its faults: the note on lot 101 claims a 3mm scratch on
+  the back bottom corner, and no stock photograph can show it. Selling against
+  an image of a different, unblemished unit is a misrepresentation whatever the
+  text says.
+- **CC BY and CC BY-SA require attribution wherever the image appears.** Nothing
+  in the UI surfaces it yet. A published page must either display the credit or
+  use photographs the house owns.
+
+Replacing them is a file copy — drop photographs into
+`public/media/lots/<id>/` under the same names. Nothing reads the fetcher at run
+time, and `media.ts` names the paths.
 
 ### Notes worth knowing before you edit
 

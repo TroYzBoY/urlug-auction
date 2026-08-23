@@ -88,7 +88,7 @@ export function Header({
             <Link
               href="/lots"
               aria-label={t.nav.back}
-              className="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-line-strong/30 pr-2.5 pl-2 text-ink-soft transition-colors hover:border-accent hover:text-accent"
+              className="border-line-strong/30 text-ink-soft hover:border-accent hover:text-accent flex h-8 shrink-0 items-center gap-1.5 rounded-full border pr-2.5 pl-2 transition-colors"
             >
               <ChevronLeft />
               <span className="eyebrow hidden text-[0.625rem] sm:inline">
@@ -98,13 +98,13 @@ export function Header({
 
             <Link
               href="/"
-              className="min-w-0 truncate font-sans text-xs font-bold tracking-[0.2em] text-ink uppercase"
+              className="text-ink min-w-0 truncate font-sans text-xs font-bold tracking-[0.2em] uppercase"
             >
               {t.brand.name}
             </Link>
           </div>
 
-          <span className="eyebrow flex shrink-0 items-center gap-1.5 text-[0.625rem] font-semibold text-rust sm:text-[0.6875rem]">
+          <span className="eyebrow text-rust flex shrink-0 items-center gap-1.5 text-[0.625rem] font-semibold sm:text-[0.6875rem]">
             <LiveDot />
             {t.room.liveRoom}
           </span>
@@ -119,11 +119,11 @@ export function Header({
         initial={{ y: -16, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 300, damping: 25 }}
-        className="flex h-11 items-center justify-between rounded-full border border-line-strong/20 bg-surface/85 px-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-colors duration-300 sm:px-5"
+        className="border-line-strong/20 bg-surface/85 flex h-11 items-center justify-between rounded-full border px-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-colors duration-300 sm:px-5"
       >
         <Link
           href="/"
-          className="shrink-0 font-sans text-[0.8125rem] font-bold tracking-[0.18em] text-ink uppercase"
+          className="text-ink shrink-0 font-sans text-[0.8125rem] font-bold tracking-[0.18em] uppercase"
         >
           {t.brand.name}
         </Link>
@@ -134,13 +134,33 @@ export function Header({
             <Link
               key={l.href}
               href={l.href}
-              className="eyebrow hidden text-[0.6875rem] font-medium text-ink-soft transition-colors duration-200 hover:text-ink sm:block"
+              className="eyebrow text-ink-soft hover:text-ink hidden text-[0.6875rem] font-medium transition-colors duration-200 sm:block"
             >
               {l.label}
             </Link>
           ))}
 
-          <span aria-hidden className="hidden h-3 w-px bg-line/60 sm:block" />
+          <span aria-hidden className="bg-line/60 hidden h-3 w-px sm:block" />
+
+          {/*
+            Staff only, and the desktop counterpart of the entry already in the
+            burger menu. An operator moves between the floor and the catalogue
+            constantly — watching a lot behave, then going to close or reprice
+            it — and until now the only way across on a desktop was to type the
+            URL. Outlined rather than filled: it is a door, not the thing the
+            page is for.
+          */}
+          {account?.isStaff && (
+            <Link href="/admin" className="hidden sm:block">
+              <motion.span
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.96 }}
+                className="eyebrow border-accent/45 text-accent hover:bg-accent hover:text-accent-ink inline-flex h-7.5 items-center rounded-full border px-3 text-[0.625rem] font-bold tracking-[0.14em] uppercase transition-colors"
+              >
+                {t.admin.title}
+              </motion.span>
+            </Link>
+          )}
 
           {account ? (
             /* Signed in: the paddle and the balance, linking to the profile.
@@ -152,11 +172,11 @@ export function Header({
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.96 }}
                 data-numerals
-                className="inline-flex h-7.5 items-center gap-2 rounded-full border border-line-strong/30 px-3 text-[0.6875rem] font-medium text-ink-soft transition-colors hover:border-accent hover:text-accent"
+                className="border-line-strong/30 text-ink-soft hover:border-accent hover:text-accent inline-flex h-7.5 items-center gap-2 rounded-full border px-3 text-[0.6875rem] font-medium transition-colors"
               >
                 <span>{account.paddle}</span>
-                <span aria-hidden className="h-3 w-px bg-line/60" />
-                <span className="font-semibold text-flare">
+                <span aria-hidden className="bg-line/60 h-3 w-px" />
+                <span className="text-flare font-semibold">
                   {pts(account.balancePts)}
                 </span>
               </motion.span>
@@ -166,7 +186,7 @@ export function Header({
               <motion.span
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.96 }}
-                className="eyebrow inline-flex h-7.5 items-center rounded-full bg-ink px-3.5 text-[0.625rem] font-bold tracking-[0.14em] text-ground uppercase shadow-sm transition-colors hover:bg-accent hover:text-accent-ink"
+                className="eyebrow bg-ink text-ground hover:bg-accent hover:text-accent-ink inline-flex h-7.5 items-center rounded-full px-3.5 text-[0.625rem] font-bold tracking-[0.14em] uppercase shadow-sm transition-colors"
               >
                 {t.nav.enter}
               </motion.span>
@@ -180,7 +200,7 @@ export function Header({
             aria-expanded={open}
             aria-controls={menuId}
             aria-label={open ? t.nav.close : t.nav.menu}
-            className="grid size-7.5 shrink-0 touch-manipulation place-items-center rounded-full text-ink transition-colors hover:bg-raise sm:hidden"
+            className="text-ink hover:bg-raise grid size-7.5 shrink-0 touch-manipulation place-items-center rounded-full transition-colors sm:hidden"
           >
             <Burger open={open} />
           </button>
@@ -195,7 +215,7 @@ export function Header({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.18 }}
-            className="mt-2 overflow-hidden rounded-3xl border border-line-strong/20 bg-surface/95 p-2 shadow-[0_8px_30px_rgb(0,0,0,0.08)] backdrop-blur-xl sm:hidden"
+            className="border-line-strong/20 bg-surface/95 mt-2 overflow-hidden rounded-3xl border p-2 shadow-[0_8px_30px_rgb(0,0,0,0.08)] backdrop-blur-xl sm:hidden"
           >
             {LINKS.map((l) => (
               <Link
@@ -204,7 +224,7 @@ export function Header({
                 /* Closing on tap rather than watching the pathname in an effect:
                    the tap IS the intent, and it avoids a cascading render. */
                 onClick={() => setOpen(false)}
-                className="block rounded-2xl px-4 py-3 text-sm font-medium text-ink-soft transition-colors hover:bg-raise hover:text-ink"
+                className="text-ink-soft hover:bg-raise hover:text-ink block rounded-2xl px-4 py-3 text-sm font-medium transition-colors"
               >
                 {l.label}
               </Link>
@@ -221,7 +241,7 @@ export function Header({
                   <Link
                     href="/admin"
                     onClick={() => setOpen(false)}
-                    className="mt-1 block rounded-2xl border-t border-line/40 px-4 py-3 text-sm font-medium text-ink-soft transition-colors hover:bg-raise hover:text-ink"
+                    className="border-line/40 text-ink-soft hover:bg-raise hover:text-ink mt-1 block rounded-2xl border-t px-4 py-3 text-sm font-medium transition-colors"
                   >
                     {t.admin.title}
                   </Link>
@@ -229,14 +249,14 @@ export function Header({
                 <Link
                   href="/wallet"
                   onClick={() => setOpen(false)}
-                  className="block rounded-2xl px-4 py-3 text-sm font-medium text-ink-soft transition-colors hover:bg-raise hover:text-ink"
+                  className="text-ink-soft hover:bg-raise hover:text-ink block rounded-2xl px-4 py-3 text-sm font-medium transition-colors"
                 >
                   {t.account.walletTitle}
                 </Link>
                 <Link
                   href="/profile"
                   onClick={() => setOpen(false)}
-                  className="mt-1 flex items-center justify-between rounded-2xl border-t border-line/40 px-4 py-3 text-sm font-medium text-accent transition-colors hover:bg-raise"
+                  className="border-line/40 text-accent hover:bg-raise mt-1 flex items-center justify-between rounded-2xl border-t px-4 py-3 text-sm font-medium transition-colors"
                 >
                   <span data-numerals>{account.paddle}</span>
                   <span data-numerals className="text-flare">
@@ -248,7 +268,7 @@ export function Header({
               <Link
                 href="/login"
                 onClick={() => setOpen(false)}
-                className="mt-1 block rounded-2xl border-t border-line/40 px-4 py-3 text-sm font-medium text-accent transition-colors hover:bg-raise"
+                className="border-line/40 text-accent hover:bg-raise mt-1 block rounded-2xl border-t px-4 py-3 text-sm font-medium transition-colors"
               >
                 {t.nav.enter}
               </Link>
