@@ -151,6 +151,60 @@ export async function signIn(page: Page, bidder: TestBidder): Promise<void> {
   await page.waitForURL(/\/lots/);
 }
 
+/**
+ * Unread in-app notifications for a bidder.
+ *
+ * Written straight in rather than produced by outbidding somebody: the bell is
+ * being tested, not the thing that rings it, and `enqueue` has its own coverage
+ * at the repository level.
+ */
+export async function makeNotifications(
+  phone: string,
+  bodies: string[],
+): Promise<void> {
+  await withClient(async (c) => {
+    const user = await c.query<{ id: number }>(
+      "SELECT id FROM users WHERE phone = $1",
+      [phone],
+    );
+    const id = user.rows[0]?.id;
+    if (!id) throw new Error(`No such test bidder: ${phone}`);
+
+    for (const [i, body] of bodies.entries()) {
+      await c.query(
+        `INSERT INTO notifications (user_id, channel, kind, body, href,
+                                    status, dedupe_key)
+         VALUES ($1, 'inapp', 'test', $2, '/lots', 'sent', $3)`,
+        [id, body, `test-${phone}-${i}`],
+      );
+    }
+  });
+}
+
+/** How many of a bidder's notifications are still unread. */
+export async function unreadFor(phone: string): Promise<number> {
+  return withClient(async (c) => {
+    const res = await c.query<{ count: string }>(
+      `SELECT count(*) FROM notifications n
+         JOIN users u ON u.id = n.user_id
+        WHERE u.phone = $1 AND n.read_at IS NULL`,
+      [phone],
+    );
+    return Number(res.rows[0]?.count ?? 0);
+  });
+}
+
+/** The password hash on record, for proving a change actually landed. */
+export async function passwordHashFor(phone: string): Promise<string> {
+  return withClient(async (c) => {
+    const res = await c.query<{ password_hash: string }>(
+      "SELECT password_hash FROM users WHERE phone = $1",
+      [phone],
+    );
+    return res.rows[0]?.password_hash ?? "";
+  });
+}
+
 /** The current price on a lot, read from the database rather than the DOM. */
 export async function currentPts(lotId: string): Promise<number> {
   return withClient(async (c) => {

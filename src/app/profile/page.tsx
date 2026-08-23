@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AccountShell, Panel, Stat } from "@/components/account/AccountShell";
+import { ProfileSettings } from "@/components/account/ProfileSettings";
 import { SignOutButton } from "@/components/account/SignOutButton";
 import { accountSummary, bidHistory, wonLots } from "@/lib/repo/account";
 import { inbox } from "@/lib/repo/notifications";
 import { forUser as settlementsForUser } from "@/lib/repo/settlements";
 import { watched } from "@/lib/repo/watchlist";
-import { MarkReadButton } from "@/components/account/MarkReadButton";
 import { currentUser } from "@/lib/session";
 import { lotDate, pts, ptsToMnt } from "@/lib/format";
 import { t } from "@/lib/copy";
@@ -52,7 +52,7 @@ export default async function ProfilePage() {
         <>
           <Link
             href="/wallet"
-            className="eyebrow flex h-10 items-center border border-line px-4 text-ink transition-colors hover:border-accent hover:text-accent"
+            className="eyebrow border-line text-ink hover:border-accent hover:text-accent flex h-10 items-center border px-4 transition-colors"
           >
             {t.account.walletTitle}
           </Link>
@@ -72,26 +72,35 @@ export default async function ProfilePage() {
         <Stat label={t.account.lotsWon} value={summary.lotsWon} />
       </div>
 
-      <dl className="mt-10 grid grid-cols-2 gap-6 border-t border-line pt-6 md:grid-cols-3">
+      <dl className="border-line mt-10 grid grid-cols-2 gap-6 border-t pt-6 md:grid-cols-3">
         <div>
           <dt className="eyebrow">{t.account.paddle}</dt>
-          <dd data-numerals className="mt-1.5 text-sm text-ink">
+          <dd data-numerals className="text-ink mt-1.5 text-sm">
             {user.paddle}
           </dd>
         </div>
         <div>
           <dt className="eyebrow">{t.account.phone}</dt>
-          <dd data-numerals className="mt-1.5 text-sm text-ink">
+          <dd data-numerals className="text-ink mt-1.5 text-sm">
             {user.phone}
           </dd>
         </div>
         <div>
           <dt className="eyebrow">{t.account.spent}</dt>
-          <dd data-numerals className="mt-1.5 text-sm text-ink">
+          <dd data-numerals className="text-ink mt-1.5 text-sm">
             {pts(summary.spentPts)} {t.common.point}
           </dd>
         </div>
       </dl>
+
+      <Panel
+        heading={t.account.settings}
+        empty="—"
+        isEmpty={false}
+        note={t.account.settingsLede}
+      >
+        <ProfileSettings name={user.name} />
+      </Panel>
 
       {/*
         What the bidder owes leads everything else. A won lot carries a
@@ -100,25 +109,25 @@ export default async function ProfilePage() {
       */}
       {due.length > 0 && (
         <section className="mt-12">
-          <h2 className="text-lg font-medium tracking-[-0.02em] text-ink">
+          <h2 className="text-ink text-lg font-medium tracking-[-0.02em]">
             {t.account.settlements}
           </h2>
-          <ul className="mt-4 border-t border-line">
+          <ul className="border-line mt-4 border-t">
             {due.map((row) => (
               <li
                 key={row.lotId}
-                className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-line py-4"
+                className="border-line flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b py-4"
               >
                 <span className="min-w-0">
                   <span data-numerals className="eyebrow text-muted">
                     {row.code}
                   </span>
-                  <span className="mt-1 block text-base font-medium text-ink">
+                  <span className="text-ink mt-1 block text-base font-medium">
                     {row.title}
                   </span>
                 </span>
                 <span data-numerals className="text-right">
-                  <span className="block text-base font-medium text-flare">
+                  <span className="text-flare block text-base font-medium">
                     {pts(row.hammerPts)} {t.common.point}
                   </span>
                   <span
@@ -131,7 +140,7 @@ export default async function ProfilePage() {
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-sm text-muted">{t.account.winnerAction}</p>
+          <p className="text-muted mt-3 text-sm">{t.account.winnerAction}</p>
         </section>
       )}
 
@@ -139,24 +148,26 @@ export default async function ProfilePage() {
         heading={t.account.notifications}
         empty={t.account.notificationsEmpty}
         isEmpty={notifications.length === 0}
-        note={<MarkReadButton />}
       >
-        <ul className="border-t border-line">
+        <ul className="border-line border-t">
           {notifications.map((n) => (
             <li
               key={n.id}
-              className={`border-b border-line py-3 text-sm ${
+              className={`border-line border-b py-3 text-sm ${
                 n.readAt ? "text-muted" : "text-ink"
               }`}
             >
               {n.href ? (
-                <Link href={n.href} className="transition-colors hover:text-accent">
+                <Link
+                  href={n.href}
+                  className="hover:text-accent transition-colors"
+                >
                   {n.body}
                 </Link>
               ) : (
                 n.body
               )}
-              <span data-numerals className="mt-0.5 block text-xs text-faint">
+              <span data-numerals className="text-faint mt-0.5 block text-xs">
                 {lotDate(n.createdAt)}
               </span>
             </li>
@@ -169,12 +180,12 @@ export default async function ProfilePage() {
         empty={t.lot.watchlistEmpty}
         isEmpty={watchlist.length === 0}
       >
-        <ul className="border-t border-line">
+        <ul className="border-line border-t">
           {watchlist.map((lot) => (
-            <li key={lot.lotId} className="border-b border-line py-3.5">
+            <li key={lot.lotId} className="border-line border-b py-3.5">
               <Link
                 href={`/auction/${lot.lotId}`}
-                className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 transition-colors hover:text-accent"
+                className="hover:text-accent flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 transition-colors"
               >
                 <span>
                   <span data-numerals className="text-muted">
@@ -182,7 +193,7 @@ export default async function ProfilePage() {
                   </span>{" "}
                   {lot.title}
                 </span>
-                <span data-numerals className="text-xs text-muted">
+                <span data-numerals className="text-muted text-xs">
                   {lotDate(lot.opensAt)}
                 </span>
               </Link>
@@ -197,26 +208,26 @@ export default async function ProfilePage() {
         isEmpty={won.length === 0}
         note={won.length > 0 ? t.account.winnerAction : undefined}
       >
-        <ul className="border-t border-line">
+        <ul className="border-line border-t">
           {won.map((lot) => (
-            <li key={lot.lotId} className="border-b border-line py-4">
+            <li key={lot.lotId} className="border-line border-b py-4">
               <Link
                 href={`/auction/${lot.lotId}`}
-                className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1.5 transition-colors hover:text-accent"
+                className="hover:text-accent flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1.5 transition-colors"
               >
                 <span className="min-w-0">
                   <span data-numerals className="eyebrow text-muted">
                     {lot.code}
                   </span>
-                  <span className="mt-1 block text-base font-medium text-ink">
+                  <span className="text-ink mt-1 block text-base font-medium">
                     {lot.title}
                   </span>
                 </span>
                 <span data-numerals className="text-right">
-                  <span className="block text-base font-medium text-flare">
+                  <span className="text-flare block text-base font-medium">
                     {pts(lot.hammerPts)} {t.common.point}
                   </span>
-                  <span className="block text-xs text-muted">
+                  <span className="text-muted block text-xs">
                     {ptsToMnt(lot.hammerPts)}
                   </span>
                 </span>
@@ -241,7 +252,7 @@ export default async function ProfilePage() {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-y border-line text-left">
+              <tr className="border-line border-y text-left">
                 <th className="eyebrow py-3 pr-4 font-normal">{t.lot.lot}</th>
                 <th className="eyebrow py-3 pr-4 font-normal">
                   {t.room.currentPrice}
@@ -254,11 +265,11 @@ export default async function ProfilePage() {
             </thead>
             <tbody>
               {bids.map((bid) => (
-                <tr key={bid.bidId} className="border-b border-line">
+                <tr key={bid.bidId} className="border-line border-b">
                   <td className="py-3 pr-4">
                     <Link
                       href={`/auction/${bid.lotId}`}
-                      className="transition-colors hover:text-accent"
+                      className="hover:text-accent transition-colors"
                     >
                       <span data-numerals className="text-muted">
                         {bid.lotCode}
@@ -267,23 +278,23 @@ export default async function ProfilePage() {
                     </Link>
                     <span
                       data-numerals
-                      className="mt-0.5 block text-xs text-faint"
+                      className="text-faint mt-0.5 block text-xs"
                     >
                       {lotDate(bid.placedAt)}
                     </span>
                   </td>
-                  <td data-numerals className="py-3 pr-4 text-ink">
+                  <td data-numerals className="text-ink py-3 pr-4">
                     {pts(bid.points)}
                   </td>
                   <td
                     data-numerals
-                    className="hidden py-3 pr-4 text-muted sm:table-cell"
+                    className="text-muted hidden py-3 pr-4 sm:table-cell"
                   >
                     {bid.round}
                   </td>
                   <td className="py-3">
                     {bid.won ? (
-                      <span className="font-medium text-flare">
+                      <span className="text-flare font-medium">
                         {t.room.sold}
                       </span>
                     ) : bid.outcome === "running" ? (

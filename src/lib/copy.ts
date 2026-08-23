@@ -490,7 +490,24 @@ export const t = {
 
     notifications: "Мэдэгдэл",
     notificationsEmpty: "Мэдэгдэл алга.",
-    markRead: "Бүгдийг уншсан болгох",
+    /* Дээд тал нь ийм тоо харуулна; түүнээс дээш бол "9+". */
+    unreadCap: 9,
+    notificationsAll: "Бүгдийг харах",
+    notificationsNew: "шинэ",
+
+    settings: "Тохиргоо",
+    settingsLede: "Нэр, нууц үгээ өөрчлөх.",
+    displayName: "Харагдах нэр",
+    displayNameHint:
+      "Дуудлага худалдааны танхимд таныг паддлын дугаараар харуулна — нэр тань бусад оролцогчид харагдахгүй.",
+    nameSave: "Нэр хадгалах",
+    passwordChange: "Нууц үг солих",
+    passwordChangeHint:
+      "Солиход бүх төхөөрөмжөөс гарна. Та энэ цонхондоо нэвтэрсэн хэвээр үлдэнэ.",
+    currentPassword: "Одоогийн нууц үг",
+    newPassword: "Шинэ нууц үг",
+    newPasswordConfirm: "Шинэ нууц үгээ давтах",
+    saving: "Хадгалж байна…",
 
     settlements: "Төлбөр хүлээгдэж буй",
     settlementsEmpty: "Төлөх зүйл алга.",

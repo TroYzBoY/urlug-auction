@@ -110,10 +110,12 @@ export async function createUser(
         break;
       }
 
-      const phoneTaken = await client.query("SELECT 1 FROM users WHERE phone = $1", [
-        args.phone,
-      ]);
-      if (phoneTaken.rowCount === 1) return { ok: false, reason: "phone-taken" };
+      const phoneTaken = await client.query(
+        "SELECT 1 FROM users WHERE phone = $1",
+        [args.phone],
+      );
+      if (phoneTaken.rowCount === 1)
+        return { ok: false, reason: "phone-taken" };
     }
 
     if (userId === null) {
@@ -168,6 +170,14 @@ export async function markPhoneVerified(phone: string): Promise<void> {
     "UPDATE users SET phone_verified_at = COALESCE(phone_verified_at, now()), updated_at = now() WHERE phone = $1",
     [phone],
   );
+}
+
+/** The bidder's display name. Everything else about them is fixed. */
+export async function setName(userId: number, name: string): Promise<void> {
+  await query("UPDATE users SET name = $2, updated_at = now() WHERE id = $1", [
+    userId,
+    name,
+  ]);
 }
 
 export async function setPassword(
@@ -263,7 +273,11 @@ export async function credit(args: CreditArgs): Promise<{ applied: boolean }> {
       action: `ledger.${args.kind}`,
       targetType: "user",
       targetId: String(args.userId),
-      detail: { deltaPts: args.deltaPts, refType: args.refType, refId: args.refId },
+      detail: {
+        deltaPts: args.deltaPts,
+        refType: args.refType,
+        refId: args.refId,
+      },
     });
 
     return { applied: true };

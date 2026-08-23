@@ -135,6 +135,36 @@ export const bidSchema = z.object({
   idempotencyKey: z.string().min(8).max(64),
 });
 
+/* ── The bidder's own account ────────────────────────────────────────────── */
+
+export const nameChangeSchema = z.object({
+  name: nameSchema,
+});
+
+/**
+ * Changing a password.
+ *
+ * The current one is required even though the session already proves who is
+ * asking. A session is a cookie on a machine, and the machine may have been
+ * left unlocked; the password is the thing only its owner knows. Without this
+ * field, walking past somebody's laptop is enough to lock them out of their own
+ * account.
+ */
+export const passwordChangeSchema = z
+  .object({
+    current: z.string().min(1, "Одоогийн нууц үгээ оруулна уу.").max(200),
+    password: passwordSchema,
+    passwordConfirm: z.string(),
+  })
+  .refine((v) => v.password === v.passwordConfirm, {
+    message: "Шинэ нууц үг хоёулаа таарахгүй байна.",
+    path: ["passwordConfirm"],
+  })
+  .refine((v) => v.password !== v.current, {
+    message: "Шинэ нууц үг хуучинтайгаа ижил байна.",
+    path: ["password"],
+  });
+
 export const contactSchema = z.object({
   name: nameSchema,
   contact: z.string().trim().min(3, "Холбогдох мэдээллээ бичнэ үү.").max(120),

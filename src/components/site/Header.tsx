@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { LiveDot } from "@/components/lot/LotCard";
+import { NotificationBell, type BellItem } from "./NotificationBell";
 import { t } from "@/lib/copy";
 import { pts } from "@/lib/format";
 
@@ -38,12 +39,20 @@ export interface HeaderAccount {
   isStaff: boolean;
 }
 
+/** What the bell needs: the recent list, and how many of them are unread. */
+export interface HeaderNotifications {
+  items: BellItem[];
+  unread: number;
+}
+
 export function Header({
   minimal = false,
   account = null,
+  notifications = null,
 }: {
   minimal?: boolean;
   account?: HeaderAccount | null;
+  notifications?: HeaderNotifications | null;
 }) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -141,6 +150,13 @@ export function Header({
           ))}
 
           <span aria-hidden className="bg-line/60 hidden h-3 w-px sm:block" />
+
+          {notifications && (
+            <NotificationBell
+              items={notifications.items}
+              unread={notifications.unread}
+            />
+          )}
 
           {/*
             Staff only, and the desktop counterpart of the entry already in the
