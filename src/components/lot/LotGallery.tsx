@@ -59,11 +59,24 @@ export function LotGallery({
         image={current?.url}
         alt={current?.alt ?? title}
         priority
+        /* Full width on a phone; a little under half the page beside the
+           detail column from lg. */
+        sizes="(max-width: 1024px) 100vw, 45vw"
       />
 
       {current && (
-        <p className="mt-3 text-xs leading-relaxed text-muted">
-          {current.alt}
+        <p className="text-muted mt-3 text-xs leading-relaxed">{current.alt}</p>
+      )}
+
+      {/*
+        Attribution, beside the image rather than in a file next to it. CC BY
+        and CC BY-SA are licences granted on the condition that the credit
+        travels with the picture, so a credit only a maintainer can read is a
+        condition not met. Absent for a house photograph, which owes nobody one.
+      */}
+      {current?.credit && (
+        <p className="text-faint mt-1 text-xs leading-relaxed">
+          {current.credit}
         </p>
       )}
 
@@ -99,12 +112,16 @@ export function LotGallery({
                   image={image.url}
                   alt=""
                   ratio="aspect-square"
+                  /* Five across the gallery column — about 110px on a desktop.
+                     Left on the catalogue default these asked for a third of
+                     the viewport each, five times over, to fill a thumbnail. */
+                  sizes="(max-width: 1024px) 18vw, 110px"
                 />
               </button>
             ))}
           </div>
 
-          <p data-numerals className="mt-2 text-xs text-faint">
+          <p data-numerals className="text-faint mt-2 text-xs">
             {active + 1} / {images.length}
           </p>
         </>

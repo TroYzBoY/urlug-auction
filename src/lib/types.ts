@@ -2,17 +2,21 @@ export type LotStatus = "upcoming" | "live" | "sold" | "unsold";
 
 /** Drives the generated placeholder artwork + the silhouette shown on a lot. */
 export type LotCategory =
-  | "antique"
-  | "painting"
-  | "timepiece"
-  | "jewellery"
-  | "arms"
-  | "manuscript";
+  "antique" | "painting" | "timepiece" | "jewellery" | "arms" | "manuscript";
 
 export interface LotImage {
   url: string;
   /** What this particular view shows: "Урд тал", "Ар тал", "Дэлгэц". */
   alt: string;
+  /**
+   * Photographer and licence, shown under the gallery when present.
+   *
+   * Null for a house photograph, which owes nobody a credit. Set for anything
+   * licensed on condition of attribution — CC BY and CC BY-SA both require it
+   * wherever the image appears, which means beside the image and not in a file
+   * next to it.
+   */
+  credit?: string | null;
 }
 
 /**

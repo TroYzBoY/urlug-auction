@@ -115,12 +115,38 @@ export async function requireAdmin(): Promise<SessionUser> {
   return user;
 }
 
-/** Issues a session and sets the cookie. Returns the raw token for tests. */
-export async function createSession(userId: number): Promise<string> {
+/**
+ * How long a session lasts when the bidder did not ask to be remembered.
+ *
+ * Long enough to cover a sale and the settlement that follows it, short enough
+ * that a session left open on a borrowed machine expires on its own.
+ */
+const UNREMEMBERED_TTL_DAYS = 1;
+
+/**
+ * Issues a session and sets the cookie. Returns the raw token for tests.
+ *
+ * `remember` is the login form's checkbox. Until now the box was submitted and
+ * never read, so every session ran for the full SESSION_TTL_DAYS whichever way
+ * it was left — a control that quietly did nothing, on the screen where a
+ * bidder decides how much to trust the machine they are sitting at.
+ *
+ * Unremembered sessions get two limits rather than one: a short row expiry in
+ * the database, and a cookie with no `expires` at all, which browsers discard
+ * when the browser closes. The cookie is the one a bidder can see the effect
+ * of; the row expiry is the one that holds when they cannot.
+ *
+ * Defaults to true so that every other caller — registration, phone
+ * verification, password reset — keeps the long session it had. Those are not
+ * places where the question has been asked.
+ */
+export async function createSession(
+  userId: number,
+  remember = true,
+): Promise<string> {
   const token = newToken();
-  const expiresAt = new Date(
-    Date.now() + env.sessionTtlDays * 24 * 60 * 60 * 1000,
-  );
+  const days = remember ? env.sessionTtlDays : UNREMEMBERED_TTL_DAYS;
+  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
   const h = await headers();
   await query(
@@ -149,7 +175,9 @@ export async function createSession(userId: number): Promise<string> {
      */
     sameSite: "lax",
     path: "/",
-    expires: expiresAt,
+    /* Omitted when not remembered: a cookie with no expiry is a session cookie,
+       and dies with the browser. */
+    ...(remember ? { expires: expiresAt } : {}),
   });
 
   return token;
@@ -195,5 +223,7 @@ export async function clientIp(): Promise<string | null> {
 
 /** Deletes sessions long past expiry. Called by the ticker's hourly sweep. */
 export async function sweepSessions(): Promise<void> {
-  await query("DELETE FROM sessions WHERE expires_at < now() - interval '30 days'");
+  await query(
+    "DELETE FROM sessions WHERE expires_at < now() - interval '30 days'",
+  );
 }

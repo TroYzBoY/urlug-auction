@@ -469,6 +469,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS lot_images_order_idx
   ON lot_images (lot_id, sort_order);
 CREATE INDEX IF NOT EXISTS lot_images_lot_idx ON lot_images (lot_id, sort_order);
 
+-- Who took the photograph, and under what licence.
+--
+-- Nullable, because a house photographing its own stock owes nobody a credit.
+-- It exists for the case where it does: a CC BY or CC BY-SA image must carry
+-- its attribution wherever it is shown, and an image whose provenance lives
+-- only in a text file beside it is one nobody can lawfully publish later.
+ALTER TABLE lot_images ADD COLUMN IF NOT EXISTS credit TEXT;
+
 -- Contact email. NOT a login credential — accounts are identified and
 -- authenticated by phone number, and nothing in the auth path reads this. It
 -- exists so staff accounts can be reached by mail and so an operator can

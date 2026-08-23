@@ -30,6 +30,8 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+import { CREDITS } from "./credits.ts";
+
 export interface Shot {
   /** Exact File: title on Wikimedia Commons, without the "File:" prefix. */
   commons: string;
@@ -180,8 +182,8 @@ export const MEDIA: Record<string, Shot[]> = {
 export function imagesFor(id: string) {
   const shots = MEDIA[id];
   if (!shots) throw new Error(`No photographs listed for lot ${id}`);
-  return shots.map((shot, i) => ({
-    url: `/media/lots/${id}/${String(i + 1).padStart(2, "0")}.jpg`,
-    alt: shot.alt,
-  }));
+  return shots.map((shot, i) => {
+    const url = `/media/lots/${id}/${String(i + 1).padStart(2, "0")}.jpg`;
+    return { url, alt: shot.alt, credit: CREDITS[url] ?? null };
+  });
 }

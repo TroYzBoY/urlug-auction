@@ -108,7 +108,10 @@ export const otpSchema = z.object({
 
 export const resetSchema = z.object({
   phone: phoneSchema,
-  code: z.string().trim().regex(/^\d{6}$/, "Баталгаажуулах код 6 оронтой."),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "Баталгаажуулах код 6 оронтой."),
   password: passwordSchema,
 });
 
@@ -177,7 +180,10 @@ export const lotSchema = z
       .trim()
       .min(1, "Лотын дугаар шаардлагатай.")
       .max(32)
-      .regex(/^[A-Za-z0-9_-]+$/, "Лотын дугаар зөвхөн үсэг, тоо, зураас байна."),
+      .regex(
+        /^[A-Za-z0-9_-]+$/,
+        "Лотын дугаар зөвхөн үсэг, тоо, зураас байна.",
+      ),
     code: z.string().trim().min(1, "Кодыг бичнэ үү.").max(40),
     title: z.string().trim().min(1, "Нэрийг бичнэ үү.").max(160),
     maker: z.string().trim().max(120).default(""),
@@ -191,13 +197,17 @@ export const lotSchema = z
     estimateHighPts: ptsField("Дээд үнэлгээ"),
     openingPts: ptsField("Нээлтийн үнэ"),
     /*
-     * The gallery, as newline-separated `url | alt` lines — the shape a
-     * textarea produces. Parsed here so the repository receives a real list and
-     * the admin form stays one field rather than five paired inputs that have
-     * to be added and removed.
+     * The gallery, as newline-separated `url | alt | credit` lines — the shape
+     * a textarea produces. Parsed here so the repository receives a real list
+     * and the admin form stays one field rather than five paired inputs that
+     * have to be added and removed.
      *
      * An empty `alt` is allowed and normalised to "": a lot photographed
      * before its captions are written should still save.
+     *
+     * `credit` is optional and usually empty — a house photograph owes nobody
+     * one. It is there for a licensed image, where the attribution has to
+     * travel with the file rather than live in a note somewhere.
      */
     images: z
       .string()
@@ -209,20 +219,35 @@ export const lotSchema = z
           .map((line) => line.trim())
           .filter(Boolean)
           .map((line) => {
-            const [url, ...rest] = line.split("|");
-            return { url: url!.trim(), alt: rest.join("|").trim() };
+            const [url, alt, ...rest] = line.split("|");
+            return {
+              url: url!.trim(),
+              alt: (alt ?? "").trim(),
+              /* Anything after the third pipe belongs to the credit — a
+                 licence line can legitimately contain one. */
+              credit: rest.join("|").trim(),
+            };
           })
           .filter((image) => image.url.length > 0),
       )
       .pipe(
         z
-          .array(z.object({ url: z.string().max(500), alt: z.string().max(200) }))
+          .array(
+            z.object({
+              url: z.string().max(500),
+              alt: z.string().max(200),
+              credit: z.string().max(200),
+            }),
+          )
           .max(12, "Нэг лотод 12-оос олон зураг оруулах боломжгүй."),
       ),
     opensAt: z
       .string()
       .trim()
-      .refine((v) => !Number.isNaN(Date.parse(v)), "Эхлэх хугацаа буруу байна."),
+      .refine(
+        (v) => !Number.isNaN(Date.parse(v)),
+        "Эхлэх хугацаа буруу байна.",
+      ),
   })
   .refine((v) => v.estimateHighPts >= v.estimateLowPts, {
     message: "Дээд үнэлгээ доод үнэлгээнээс бага байж болохгүй.",

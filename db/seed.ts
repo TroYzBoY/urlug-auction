@@ -117,9 +117,9 @@ try {
     await client.query("DELETE FROM lot_images WHERE lot_id = $1", [lot.id]);
     for (const [order, image] of lot.images.entries()) {
       await client.query(
-        `INSERT INTO lot_images (lot_id, url, alt, sort_order)
-         VALUES ($1, $2, $3, $4)`,
-        [lot.id, image.url, image.alt, order],
+        `INSERT INTO lot_images (lot_id, url, alt, sort_order, credit)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [lot.id, image.url, image.alt, order, image.credit ?? null],
       );
     }
 

@@ -71,6 +71,14 @@ const SILHOUETTES: Record<LotCategory, React.ReactNode> = {
 };
 
 /** Each category gets its own warm ground so a grid does not look uniform. */
+/**
+ * The catalogue grid: two-up on phones, three-up from lg. A card image is never
+ * wider than half the viewport until the desktop grid narrows it to a third.
+ * Stating 100vw here would make every phone download an image at twice the
+ * resolution it can display.
+ */
+const CATALOGUE_SIZES = "(max-width: 1024px) 50vw, 33vw";
+
 const GROUNDS: Record<LotCategory, string> = {
   antique:
     "radial-gradient(120% 90% at 30% 8%, #e6d4bd 0%, #d8c0a2 45%, #b99873 100%)",
@@ -93,6 +101,7 @@ export function LotPlate({
   priority = false,
   className = "",
   ratio = "aspect-[4/5]",
+  sizes = CATALOGUE_SIZES,
 }: {
   category: LotCategory;
   code?: string;
@@ -104,6 +113,13 @@ export function LotPlate({
   priority?: boolean;
   className?: string;
   ratio?: string;
+  /**
+   * How wide this plate actually renders. Defaults to the catalogue grid,
+   * because that is where most of them are — but a caller that is not the
+   * catalogue must say so, or it downloads a catalogue-sized image to draw a
+   * thumbnail.
+   */
+  sizes?: string;
 }) {
   return (
     <div
@@ -115,16 +131,11 @@ export function LotPlate({
           src={image}
           alt={alt ?? ""}
           fill
-          /* The catalogue is two-up on phones and three-up from lg, so a card
-             image is never wider than half the viewport until the desktop grid
-             narrows it to a third. Stating 100vw here would make every phone
-             download an image at twice the resolution it can display. */
-          sizes="(max-width: 1024px) 50vw, 33vw"
+          sizes={sizes}
           priority={priority}
           className="object-cover"
         />
       ) : null}
-
 
       {!image && (
         <>
@@ -152,7 +163,6 @@ export function LotPlate({
           </svg>
         </>
       )}
-
 
       {/* Inner hairline, inset so it reads as a mount rather than a border.
           Kept over photographs too — it is what makes the grid read as a

@@ -70,14 +70,14 @@ export interface LotInput {
 async function writeImages(
   client: PoolClient,
   lotId: string,
-  images: { url: string; alt: string }[],
+  images: { url: string; alt: string; credit?: string | null }[],
 ): Promise<void> {
   await client.query("DELETE FROM lot_images WHERE lot_id = $1", [lotId]);
   for (const [order, image] of images.entries()) {
     await client.query(
-      `INSERT INTO lot_images (lot_id, url, alt, sort_order)
-       VALUES ($1, $2, $3, $4)`,
-      [lotId, image.url, image.alt, order],
+      `INSERT INTO lot_images (lot_id, url, alt, sort_order, credit)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [lotId, image.url, image.alt, order, image.credit || null],
     );
   }
 }
@@ -123,8 +123,7 @@ async function writeSchedule(
 }
 
 export type CreateLotResult =
-  | { ok: true }
-  | { ok: false; reason: "duplicate-id" };
+  { ok: true } | { ok: false; reason: "duplicate-id" };
 
 export async function createLot(
   input: LotInput,
@@ -166,7 +165,11 @@ export async function createLot(
       action: "admin.lot_created",
       targetType: "lot",
       targetId: input.id,
-      detail: { title: input.title, opensAt: input.opensAt, openingPts: input.openingPts },
+      detail: {
+        title: input.title,
+        opensAt: input.opensAt,
+        openingPts: input.openingPts,
+      },
       ip: actor.ip,
       userAgent: actor.userAgent,
     });
@@ -176,8 +179,7 @@ export async function createLot(
 }
 
 export type UpdateLotResult =
-  | { ok: true }
-  | { ok: false; reason: "not-found" | "already-open" };
+  { ok: true } | { ok: false; reason: "not-found" | "already-open" };
 
 /**
  * Edits catalogue text, and reschedules the lot if it has not opened.
@@ -294,7 +296,8 @@ export async function closeAuction(
     if (auction.outcome === "sold" || auction.outcome === "unsold") {
       return { ok: false, reason: "already-settled" };
     }
-    if (auction.outcome !== "running") return { ok: false, reason: "not-running" };
+    if (auction.outcome !== "running")
+      return { ok: false, reason: "not-running" };
 
     const outcome = auction.leader_paddle ? "sold" : "unsold";
 
@@ -399,8 +402,7 @@ export async function cancelAuction(
 }
 
 export type RescheduleResult =
-  | { ok: true }
-  | { ok: false; reason: "not-found" | "has-bids" };
+  { ok: true } | { ok: false; reason: "not-found" | "has-bids" };
 
 /**
  * Moves a lot's opening time.
@@ -416,7 +418,11 @@ export async function rescheduleAuction(
   actor: Actor,
 ): Promise<RescheduleResult> {
   return transaction(async (client) => {
-    const res = await client.query<{ bid_count: number; opens_at: Date; current_pts: number }>(
+    const res = await client.query<{
+      bid_count: number;
+      opens_at: Date;
+      current_pts: number;
+    }>(
       "SELECT bid_count, opens_at, current_pts FROM auctions WHERE lot_id = $1 FOR UPDATE",
       [lotId],
     );
@@ -430,11 +436,16 @@ export async function rescheduleAuction(
       [lotId],
     );
 
-    await writeSchedule(client, lotId, when, lot.rows[0]?.opening_pts ?? auction.current_pts);
-    await client.query("UPDATE lots SET starts_at = $2, updated_at = now() WHERE id = $1", [
+    await writeSchedule(
+      client,
       lotId,
       when,
-    ]);
+      lot.rows[0]?.opening_pts ?? auction.current_pts,
+    );
+    await client.query(
+      "UPDATE lots SET starts_at = $2, updated_at = now() WHERE id = $1",
+      [lotId, when],
+    );
 
     await record(client, {
       actorUserId: actor.id,
@@ -453,8 +464,7 @@ export async function rescheduleAuction(
 /* ── Users ───────────────────────────────────────────────────────────────── */
 
 export type UserActionResult =
-  | { ok: true }
-  | { ok: false; reason: "not-found" | "self" };
+  { ok: true } | { ok: false; reason: "not-found" | "self" };
 
 /**
  * Suspends or restores an account.
@@ -510,8 +520,7 @@ export async function setUserStatus(
 }
 
 export type RoleResult =
-  | { ok: true }
-  | { ok: false; reason: "not-found" | "self" | "last-admin" };
+  { ok: true } | { ok: false; reason: "not-found" | "self" | "last-admin" };
 
 /**
  * Grants or revokes staff access.
@@ -605,7 +614,9 @@ export async function adjustBalance(
   actor: Actor,
 ): Promise<AdjustResult> {
   return transaction(async (client) => {
-    const exists = await client.query("SELECT 1 FROM users WHERE id = $1", [userId]);
+    const exists = await client.query("SELECT 1 FROM users WHERE id = $1", [
+      userId,
+    ]);
     if (exists.rowCount === 0) return { ok: false, reason: "not-found" };
 
     await client.query(

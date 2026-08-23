@@ -56,7 +56,11 @@
   --cream-ink: #f6f1e8;
   --cream-soft: #ded6c8;
   --cream-muted: #a89e90;
-  --cream-faint: #7a7167;
+  /* Raised from #7a7167, which measured 3.84 on the page and 3.50 on a card —
+     both short of the 4.5 WCAG AA asks for. It carries 33 usages and every one
+     of them is text-xs: the smallest type on the site was also the hardest to
+     read. Now 5.28 and 4.81. */
+  --cream-faint: #91887e;
 
   /* Hairlines — tinted cream rather than pure white, so rules sit in the same
      warm family as the grounds instead of reading as grey scratches on them. */
@@ -66,13 +70,15 @@
   /* Quiet Signal Accents */
   --amber-gold: #c48b48;
   --amber-flare: #c48b48;
-  --rust-bright: #d95538;
+  /* +6 on each channel, which is imperceptible as a colour and takes the
+     34 text-rust usages from 4.24 on a card to 4.55. The live-room red is
+     the same red. */
+  --rust-bright: #df5b3e;
   --olive-bright: #4e8c5b;
 
   /* Easing */
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
-
 }
 
 /* ── 2. Semantic tokens ──────────────────────────────────────────────────── */
@@ -193,7 +199,6 @@
     background-color: var(--color-flare);
     color: var(--color-ground);
   }
-
 }
 
 @layer components {
@@ -300,8 +305,6 @@
 @utility animate-ring-out {
   animation: ring-out 1.1s var(--ease-out-soft) infinite;
 }
-
-
 
 /* Hide scrollbar on the bid feed / round rail without losing scrollability. */
 @utility scroll-quiet {

@@ -35,7 +35,8 @@ const LOT_COLUMNS = `
    */
   COALESCE(
     array_agg(
-      json_build_object('url', i.url, 'alt', i.alt) ORDER BY i.sort_order
+      json_build_object('url', i.url, 'alt', i.alt, 'credit', i.credit)
+        ORDER BY i.sort_order
     ) FILTER (WHERE i.id IS NOT NULL),
     '{}'
   ) AS images,
@@ -130,7 +131,10 @@ const LOT_FROM = `
 `;
 const LOT_GROUP = "GROUP BY l.id, a.lot_id";
 
-async function selectLots(where: string, params: unknown[] = []): Promise<Lot[]> {
+async function selectLots(
+  where: string,
+  params: unknown[] = [],
+): Promise<Lot[]> {
   /* `where` may carry an ORDER BY, which must follow the GROUP BY. Splitting on
      it keeps both call styles working without every caller repeating the join. */
   const [predicate, order] = where.split(/\bORDER BY\b/);

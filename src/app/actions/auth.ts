@@ -291,7 +291,7 @@ export async function login(
    */
   if (!user.phone_verified_at) await markPhoneVerified(user.phone);
 
-  await createSession(user.id);
+  await createSession(user.id, formData.get("remember") === "on");
   recordDetached({
     actorUserId: user.id,
     action: "user.login",
