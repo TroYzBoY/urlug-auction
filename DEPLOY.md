@@ -28,7 +28,15 @@ SMS_API_URL                  required in production — boot fails without it
 NEXT_PUBLIC_ROUND_TIME_SCALE must be 1 — the build throws otherwise
 QPAY_*                       required to take money
 ENABLE_HSTS=1                only once the domain and every subdomain are HTTPS
+DEV_SKIP_OTP                 must NOT be set — the server refuses to boot with it
 ```
+
+`DEV_SKIP_OTP=1` turns phone verification off and belongs only on a developer's
+machine. `assertRuntimeEnv()` refuses to start a production server that has it
+set, rather than ignoring it: the bypass is already inert in production, so the
+server would run correctly either way — which is exactly the failure worth
+catching. A flag that is silently ignored stays in the environment file, travels
+to the next box, and is believed to be doing something.
 
 The build itself needs **no credentials** — `env.ts` reads through getters and
 the pg pool is created lazily, so CI compiles without a production password.
