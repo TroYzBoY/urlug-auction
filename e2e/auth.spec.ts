@@ -41,6 +41,14 @@ test("registering asks for a code and signs the bidder in", async ({ page }) => 
   await expect(page.getByText(/99117777/)).toBeVisible();
 });
 
+/*
+ * `p[role="alert"]`, not getByRole("alert").
+ *
+ * Next injects its own <div role="alert" id="__next-route-announcer__"> into
+ * every page, so the bare role matches two elements and Playwright's strict
+ * mode refuses to guess. Every alert this app renders is a paragraph; the
+ * announcer is a div, and is always empty.
+ */
 test("registering under 18 is refused", async ({ page }) => {
   await page.goto("/register");
   await page.getByLabel(/Овог нэр/).fill("Залуу");
@@ -55,7 +63,7 @@ test("registering under 18 is refused", async ({ page }) => {
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: /Бүртгүүлэх/ }).click();
 
-  await expect(page.getByRole("alert")).toContainText(/18/);
+  await expect(page.locator('p[role="alert"]')).toContainText(/18/);
 });
 
 test("a wrong password does not say which half was wrong", async ({ page }) => {
@@ -66,7 +74,7 @@ test("a wrong password does not say which half was wrong", async ({ page }) => {
   await page.getByLabel(/^Нууц үг$/).fill("definitely-not-it");
   await page.getByRole("button", { name: /Нэвтрэх/ }).click();
 
-  const message = page.getByRole("alert");
+  const message = page.locator('p[role="alert"]');
   await expect(message).toBeVisible();
   // The same sentence an unknown number produces. Distinguishing them would
   // turn the form into a directory of who banks here.

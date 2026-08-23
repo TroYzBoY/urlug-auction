@@ -41,3 +41,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Playwright run artefacts — traces and screenshots from failed tests.
+test-results/
+playwright-report/

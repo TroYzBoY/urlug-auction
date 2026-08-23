@@ -16,6 +16,47 @@ import {
  * reaches the database, and that an SSE push arrives in a tab nobody touched.
  */
 
+/*
+ * The app groups digits with U+2009 THIN SPACE, not a plain space. See
+ * groupNumber in src/lib/format.ts, which is hand-rolled precisely because
+ * Intl's mn-MN separator differs between Node and browser ICU builds. A test
+ * typing a normal space matches nothing at all, which is how these assertions
+ * failed for as long as nobody ran them.
+ */
+const THIN = " ";
+
+/*
+ * The headline price.
+ *
+ * `getByText` on the number alone matches five things — the estimate range, the
+ * tugrik conversion, and the copies of both in the aside. Nor can the figure be
+ * read as text: RollingNumber is an odometer, so every digit is a column of
+ * 0-9 and the paragraph reads "0123456789 0123456789..." with CSS deciding
+ * which line shows.
+ *
+ * The value a screen reader gets is on the wrapper's aria-label, and that is
+ * the honest thing to assert: it is what the number IS, rather than what the
+ * animation happens to have in the DOM.
+ */
+const PRICE = 'p[aria-live="polite"][aria-atomic="true"] span[aria-label]';
+
+/*
+ * The app's digit grouping, thin space and all — the same loop as groupNumber
+ * in src/lib/format.ts. Copied rather than imported: format.ts pulls in
+ * auction.ts, which reads NEXT_PUBLIC_ROUND_TIME_SCALE and has opinions about
+ * the environment it is loaded in. Six lines is cheaper than giving the test
+ * process a reason to care.
+ */
+function grouped(n: number): string {
+  const digits = String(n);
+  let out = "";
+  for (let i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 === 0) out += THIN;
+    out += digits[i];
+  }
+  return out;
+}
+
 test.beforeEach(async () => {
   await reset();
 });
@@ -71,7 +112,10 @@ test("a second tab sees the bid without reloading", async ({ browser }) => {
   const watcher = await browser.newContext();
   const watcherPage = await watcher.newPage();
   await watcherPage.goto("/auction/E03");
-  await expect(watcherPage.getByText("1 200")).toBeVisible();
+  await expect(watcherPage.locator(PRICE)).toHaveAttribute(
+    "aria-label",
+    `1${THIN}200`,
+  );
 
   const bidderContext = await browser.newContext();
   const bidderPage = await bidderContext.newPage();
@@ -84,7 +128,22 @@ test("a second tab sees the bid without reloading", async ({ browser }) => {
    * delivering — which is the single most load-bearing piece of the room and
    * the one a bidder would experience as a frozen price.
    */
-  await expect(watcherPage.getByText("1 201")).toBeVisible({ timeout: 15_000 });
+  /*
+   * What the increment is is not this test's business — bids.ts owns that, and
+   * hard-coding it here made an unrelated rule look like a broken stream: the
+   * tab was updating correctly to 1 220 while the assertion waited for 1 201.
+   * Read what the bid actually did, then require the untouched tab to show it.
+   */
+  await expect
+    .poll(() => currentPts("E03"), { timeout: 10_000 })
+    .toBeGreaterThan(1200);
+  const moved = await currentPts("E03");
+
+  await expect(watcherPage.locator(PRICE)).toHaveAttribute(
+    "aria-label",
+    grouped(moved),
+    { timeout: 15_000 },
+  );
 
   await watcher.close();
   await bidderContext.close();
@@ -99,11 +158,13 @@ test("a custom amount below the minimum is refused and nothing moves", async ({
   await page.goto("/auction/E04");
 
   await page.getByRole("button", { name: /Өөр дүн/ }).click();
+  // Found by its (screen-reader-only) label rather than by the placeholder,
+  // which is a formatted number and moves whenever the price does.
   // The standing price itself. Illegal in every round — a bid must exceed it.
-  await page.getByPlaceholder("1 201").fill("1200");
+  await page.getByLabel("Өөр дүн").fill("1200");
   await page.getByRole("button", { name: /^Хаях$/ }).click();
 
-  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.locator('p[role="alert"]')).toBeVisible();
   expect(await currentPts("E04")).toBe(1200);
 
   /*
@@ -120,7 +181,17 @@ test("an unverified account is refused at the panel and at the server", async ({
   await makeLiveLot("E05", 1200);
   const bidder = await makeBidder("99110005", "Т-205");
 
-  // Strip the verification the fixture granted.
+  /*
+   * Sign in FIRST, then strip the verification.
+   *
+   * The other way round does not work and should not: login diverts an
+   * unverified number to the code step rather than to /lots, which is the
+   * behaviour a separate test covers. Doing it in this order gives the panel
+   * exactly what it is being asked about — a live session whose account is not
+   * verified — instead of never getting past the login form.
+   */
+  await signIn(page, bidder);
+
   const { Client } = await import("pg");
   const client = new Client({
     connectionString:
@@ -134,7 +205,6 @@ test("an unverified account is refused at the panel and at the server", async ({
   );
   await client.end();
 
-  await signIn(page, bidder);
   await page.goto("/auction/E05");
 
   await expect(page.getByRole("button", { name: /Үнэ хаях/ })).toBeDisabled();

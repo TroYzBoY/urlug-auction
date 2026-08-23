@@ -1,4 +1,5 @@
 import { Client } from "pg";
+import { hash } from "@node-rs/argon2";
 import type { Page } from "@playwright/test";
 
 /**
@@ -53,15 +54,31 @@ export interface TestBidder {
   paddle: string;
 }
 
+const TEST_PASSWORD = "test-password-123";
+
+/* Must match src/lib/password.ts, or nothing hashed here verifies at sign-in. */
+const ARGON = { memoryCost: 19_456, timeCost: 2, parallelism: 1 } as const;
+
 /**
- * A verified bidder who can sign in and bid.
+ * The password hash every test bidder shares, computed once per run.
  *
- * The password hash is a real argon2id hash of "test-password-123", computed
- * once and pasted here rather than derived at runtime: hashing is deliberately
- * slow, and twenty fixtures at 50ms each is a second added to every run.
+ * This used to be a literal, with a comment explaining that hashing is slow and
+ * the value had been computed once and pasted in. It had not been: the string
+ * verified against nothing, so every signIn in this suite was guaranteed to
+ * fail. Nobody noticed, because the suite had never been run.
+ *
+ * Computing it removes both failure modes at once — a value that is derived
+ * cannot be mistyped, and it cannot drift out of step with ARGON above. The
+ * cost the comment was worried about is real but it is paid once for the whole
+ * run, not once per fixture, because the promise is memoised.
  */
-const KNOWN_HASH =
-  "$argon2id$v=19$m=19456,t=2,p=1$c29tZXNhbHRzb21lc2FsdA$0Fj3B2CqfCHVqhTMPRSVJ0FEJq2W7dLQZmiVBIvHFRE";
+let hashOnce: Promise<string> | null = null;
+function testPasswordHash(): Promise<string> {
+  hashOnce ??= hash(TEST_PASSWORD, ARGON);
+  return hashOnce;
+}
+
+/** A verified bidder who can sign in and bid. */
 
 export async function makeBidder(
   phone: string,
@@ -74,7 +91,7 @@ export async function makeBidder(
                           date_of_birth)
        VALUES ('Тест биддер', $1, $2, $3, now(), '1995-06-15')
        RETURNING id`,
-      [phone, KNOWN_HASH, paddle],
+      [phone, await testPasswordHash(), paddle],
     );
     await c.query("INSERT INTO balances (user_id, pts) VALUES ($1, $2)", [
       res.rows[0]!.id,
@@ -82,7 +99,7 @@ export async function makeBidder(
     ]);
   });
 
-  return { phone, password: "test-password-123", paddle };
+  return { phone, password: TEST_PASSWORD, paddle };
 }
 
 /** A lot that is open and taking bids right now. */

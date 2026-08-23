@@ -67,6 +67,14 @@ export default defineConfig({
        */
       NEXT_PUBLIC_ROUND_TIME_SCALE: "60",
       SMS_API_URL: "",
+      /*
+       * Off, whatever .env.local says. These tests exist to exercise the real
+       * sign-up path, and the first thing that path does is ask for a code —
+       * with the bypass on, registering redirects straight to /lots and the
+       * step under test never renders. Next.js leaves an existing process.env
+       * value alone, so an empty string here wins over the file.
+       */
+      DEV_SKIP_OTP: "",
     },
   },
 });
