@@ -33,7 +33,20 @@ import {
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-export type Outcome = "scheduled" | "running" | "sold" | "unsold";
+/**
+ * `review` sits between the clock running out and the lot having a winner.
+ *
+ * The clocks decide when BIDDING stops. They do not decide who takes the lot —
+ * a person does, from the admin dashboard, and until they have the lot is
+ * neither running nor sold. Bidders see it as "being checked"; the engine sees
+ * it as terminal, because there is nothing left for a clock to do to it.
+ */
+export type Outcome = "scheduled" | "running" | "review" | "sold" | "unsold";
+
+/** States no clock can move out of. Only a person (or an admin action) can. */
+export function isTerminal(outcome: Outcome): boolean {
+  return outcome === "review" || outcome === "sold" || outcome === "unsold";
+}
 
 /** The subset of the `auctions` row the engine reasons about. */
 export interface EngineState {
@@ -73,10 +86,11 @@ export function saleEndsAt(opensAt: number): number {
  * Where this auction actually is at `now`.
  *
  * Terminal states are returned untouched: a sold lot does not un-sell because
- * time passed.
+ * time passed, and a lot awaiting review does not award itself if nobody looks
+ * at it for a week.
  */
 export function settle(state: EngineState, now: number): SettledState {
-  if (state.outcome === "sold" || state.outcome === "unsold") {
+  if (isTerminal(state.outcome)) {
     return {
       ...state,
       roundEndsAt: roundEndsAt(state.opensAt, state.round),
@@ -116,47 +130,67 @@ export function settle(state: EngineState, now: number): SettledState {
   }
 
   /*
-   * Replay boundaries. Bounded by TOTAL_ROUNDS + 1 iterations, so a bad row
-   * cannot spin here — a while(true) over timestamps read from the database is
-   * exactly the kind of loop that takes a process down at 3am.
+   * Replay boundaries.
+   *
+   * Bounded by TOTAL_ROUNDS + 1 iterations, and it stays bounded because every
+   * iteration either advances the round by exactly one or terminates — a
+   * while(true) over timestamps read from the database is exactly the kind of
+   * loop that takes a process down at 3am.
+   *
+   * A silent lot therefore CASCADES rather than stopping: round 1's five
+   * minutes of quiet moves it to round 2's three, then to round 3's one, and
+   * so on down to round 6's five seconds. Roughly ten minutes of total silence
+   * closes a lot that would otherwise have run for 2h45m, and every one of
+   * those steps is a real chance for somebody to bid and reset the clock.
    */
   for (let guard = 0; guard <= TOTAL_ROUNDS + 1; guard++) {
     if (outcome !== "running") break;
 
     const roundEnds = roundEndsAt(state.opensAt, round);
+    /*
+     * Whichever clock reaches zero first. Both do the SAME thing — move the
+     * sale up a round — so which of the two it was does not change the
+     * outcome, only the instant the next round is measured from. That is the
+     * whole of the soft/hard distinction:
+     *
+     *   SOFT — the bid clock. Every bid pushes it back, so it only reaches
+     *          zero when the room has gone quiet. Silence costs a gear, not
+     *          the lot.
+     *   HARD — the round clock. Fixed from the open and unmovable, so the sale
+     *          still ends when it was always going to end however the bidding
+     *          goes.
+     */
     const nextEvent = Math.min(bidClockEnds, roundEnds);
     if (now < nextEvent) break;
 
-    if (bidClockEnds <= roundEnds) {
-      /*
-       * The bid clock reached zero. The lot is hammered — to the standing
-       * leader, or unsold if the lot never drew a bid.
-       *
-       * The `<=` matters: when both clocks expire on the same millisecond the
-       * hammer wins. A bidder watching a clock hit zero has been told the lot
-       * is gone, and rolling into another round at that instant would take it
-       * back from whoever just won it.
-       */
-      outcome = state.leaderPaddle ? "sold" : "unsold";
-      settledAt = bidClockEnds;
-      hammerRound = round;
-      changed = true;
-      break;
-    }
-
     if (round >= TOTAL_ROUNDS) {
-      // Round 6's round clock running out ends the sale.
-      outcome = state.leaderPaddle ? "sold" : "unsold";
-      settledAt = roundEnds;
+      /*
+       * There is no round 7 to move up to, so whichever clock ran out, the
+       * sale is over.
+       *
+       * `review`, not `sold`. The clock decides that bidding is finished; it
+       * does not decide who takes the lot — see the note on Outcome. A lot
+       * nobody bid on has nothing to review and goes straight to unsold rather
+       * than sitting in a queue with no candidates to choose between.
+       */
+      outcome = state.leaderPaddle ? "review" : "unsold";
+      settledAt = nextEvent;
       hammerRound = round;
       changed = true;
       break;
     }
 
     round += 1;
-    // The new, shorter clock starts at the boundary — not at `now`, which may
-    // be later — so the round's full clock is exactly what bidders were told.
-    bidClockEnds = roundEnds + bidClockMs(round);
+    /*
+     * The new, shorter clock starts at the boundary that ended the last round —
+     * not at `now`, which may be later — so the round's full clock is exactly
+     * what bidders were told.
+     *
+     * `nextEvent`, not `roundEnds`: when it was the SOFT clock that expired,
+     * the next round begins at that moment rather than at the round boundary
+     * the sale never reached.
+     */
+    bidClockEnds = nextEvent + bidClockMs(round);
     changed = true;
   }
 
@@ -173,12 +207,13 @@ export function settle(state: EngineState, now: number): SettledState {
 }
 
 /**
- * The next moment this auction needs attention, or null if it is finished.
+ * The next moment this auction needs attention, or null if no clock will move
+ * it again — which includes `review`, where what it is waiting for is a person.
  * The ticker sleeps until the earliest of these across all live lots rather
  * than polling on a fixed interval it has to guess at.
  */
 export function nextEventAt(state: SettledState): number | null {
-  if (state.outcome === "sold" || state.outcome === "unsold") return null;
+  if (isTerminal(state.outcome)) return null;
   if (state.outcome === "scheduled") return state.opensAt;
   return Math.min(state.bidClockEndsAt, state.roundEndsAt);
 }

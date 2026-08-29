@@ -143,6 +143,14 @@ function StatusMark({ lot }: { lot: Lot }) {
     );
   }
 
+  /*
+   * No number: there isn't one yet. Printing the standing bid in the column
+   * that everywhere else holds a hammer price would read as a result.
+   */
+  if (lot.status === "review") {
+    return <span className="eyebrow text-flare">{t.lot.statusReview}</span>;
+  }
+
   if (lot.status === "sold") {
     return (
       <span data-numerals className="eyebrow text-olive">

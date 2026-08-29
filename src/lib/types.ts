@@ -1,4 +1,10 @@
-export type LotStatus = "upcoming" | "live" | "sold" | "unsold";
+/**
+ * `review` is the gap between the clock stopping and the house naming a winner.
+ * The lot is closed to bids and has no result yet — bidders are shown that it
+ * is being checked rather than a hammer price that does not exist.
+ */
+export type LotStatus =
+  "upcoming" | "live" | "review" | "sold" | "unsold";
 
 /** Drives the generated placeholder artwork + the silhouette shown on a lot. */
 export type LotCategory =
@@ -86,8 +92,16 @@ export interface Lot {
 
 export interface Bid {
   id: string;
-  /** Anonymised paddle label shown in the feed, e.g. "Т-207". */
+  /**
+   * The paddle, e.g. "Т-207". Unique per user and stable, so it is the
+   * IDENTITY the room compares on (`isYourLead`). No longer shown to bidders —
+   * the feed and the leader now render the bidder's real `name` — but kept
+   * because a name is not unique and two bidders called "Бат" must not collapse
+   * into one lead.
+   */
   paddle: string;
+  /** The bidder's real name — what the feed and the leader display. */
+  name: string;
   points: number;
   /** Which of the six rounds this bid landed in. */
   round: number;
@@ -122,5 +136,10 @@ export interface RoomState {
   bids: Bid[];
   /** False until the signed-in bidder has placed their first bid on this lot. */
   hasBid: boolean;
-  outcome: "running" | "sold" | "unsold";
+  /**
+   * `review` means bidding is over and an admin is deciding the winner. The
+   * room keeps its stream open through it — the award arrives as another push,
+   * so a bidder watching sees the result without reloading.
+   */
+  outcome: "running" | "review" | "sold" | "unsold";
 }

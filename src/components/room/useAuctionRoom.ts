@@ -111,9 +111,17 @@ function reducer(state: State, action: Action): State {
  * @param initial      Server-rendered RoomState, so the first paint is correct.
  * @param viewerPaddle This bidder's paddle, read from the session on the
  *                     server. null when signed out — the room is then
- *                     read-only, which the panel enforces.
+ *                     read-only, which the panel enforces. Still the identity
+ *                     the lead is decided on (paddles are unique; names are
+ *                     not), even though what shows is the name.
+ * @param viewerName   This bidder's real name — what an optimistic bid of
+ *                     theirs shows in the feed before the server echoes it back.
  */
-export function useAuctionRoom(initial: RoomState, viewerPaddle: string | null) {
+export function useAuctionRoom(
+  initial: RoomState,
+  viewerPaddle: string | null,
+  viewerName: string | null,
+) {
   const [internal, dispatch] = useReducer(reducer, {
     server: initial,
     pending: [],
@@ -183,6 +191,7 @@ export function useAuctionRoom(initial: RoomState, viewerPaddle: string | null) 
   const applyOptimistic = useCallback(
     (points: number): string => {
       const paddle = viewerPaddle ?? "—";
+      const name = viewerName ?? paddle;
       const now = serverNow();
       const id = `local-${now}-${points}`;
       const clockMs = roundSpec(internal.server.round).bidClockSec * 1000;
@@ -195,7 +204,7 @@ export function useAuctionRoom(initial: RoomState, viewerPaddle: string | null) 
        */
       dispatch({
         type: "optimistic",
-        bid: { id, paddle, points, round: internal.server.round, at: now, isYou: true },
+        bid: { id, paddle, name, points, round: internal.server.round, at: now, isYou: true },
         bidClockEndsAt: now + clockMs,
       });
 
@@ -215,7 +224,7 @@ export function useAuctionRoom(initial: RoomState, viewerPaddle: string | null) 
 
       return id;
     },
-    [internal.server.round, viewerPaddle],
+    [internal.server.round, viewerPaddle, viewerName],
   );
 
   const rollback = useCallback((bidId: string) => {
@@ -241,8 +250,19 @@ export function useAuctionRoom(initial: RoomState, viewerPaddle: string | null) 
       spec: roundSpec(state.round),
       roundsTotal: ROUNDS.length,
       isYourLead: viewerPaddle !== null && state.leader === viewerPaddle,
+      /*
+       * The leader's name for display. The lead is the author of the current
+       * top bid, and every accepted bid is higher than the last, so the leader
+       * is always the newest bid — always inside the 40-item feed. Matched on
+       * paddle (the identity) and shown as the name; falls back to the paddle
+       * only if the feed somehow does not carry the leader's bid.
+       */
+      leaderName: state.leader
+        ? (state.bids.find((b) => b.paddle === state.leader)?.name ??
+          state.leader)
+        : null,
     }),
-    [state.round, state.leader, viewerPaddle],
+    [state.round, state.leader, state.bids, viewerPaddle],
   );
 
   return { state, ...derived, applyOptimistic, rollback, refetch };

@@ -9,6 +9,7 @@ import {
   minNextBidPts,
   quickStepsPts,
 } from "@/lib/auction";
+import { Spinner } from "@/components/site/Spinner";
 import { t } from "@/lib/copy";
 import { pts, ptsToMnt } from "@/lib/format";
 import type { RoomState } from "@/lib/types";
@@ -16,14 +17,15 @@ import type { RoomState } from "@/lib/types";
 export function BidPanel({
   state,
   isYourLead,
-  pending,
+  leaderName,
   canBid,
   rejection,
   onBid,
 }: {
   state: RoomState;
   isYourLead: boolean;
-  pending: boolean;
+  /** The leader's real name — shown for the winner when the lot is sold. */
+  leaderName: string | null;
   /**
    * Signed in, phone verified, not suspended.
    *
@@ -54,6 +56,59 @@ export function BidPanel({
 
   const total = currentPts + step;
 
+  /*
+   * Bidding is closed and nobody has been named yet.
+   *
+   * Handled before the sold/unsold panel below, because that panel's whole job
+   * is to announce a result — and announcing one here would mean printing a
+   * hammer price and a winner the house has not agreed to. What this shows
+   * instead is the highest bid RECEIVED, labelled as exactly that, and the fact
+   * that a decision is coming.
+   */
+  if (outcome === "review") {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] backdrop-blur-md lg:static lg:border lg:p-6 lg:pb-6"
+      >
+        <div className="flex items-center gap-2.5">
+          <Spinner className="size-4" />
+          <p className="eyebrow text-flare">{t.room.reviewNote}</p>
+        </div>
+        <p className="mt-2 text-lg leading-snug font-medium text-ink">
+          {t.room.reviewBody}
+        </p>
+        <dl className="mt-4 flex items-end justify-between gap-4 border-t border-line pt-3">
+          <div>
+            <dt className="eyebrow">{t.room.reviewStanding}</dt>
+            <dd data-numerals className="mt-1 text-xl font-medium text-ink">
+              {pts(currentPts)}{" "}
+              <span className="text-sm text-muted">{t.common.point}</span>
+            </dd>
+            <dd data-numerals className="text-sm text-muted">
+              {ptsToMnt(currentPts)}
+            </dd>
+          </div>
+          <div className="text-right">
+            <dt className="eyebrow">{t.room.leader}</dt>
+            <dd
+              data-numerals
+              className={`mt-1 text-xl font-medium ${
+                isYourLead ? "text-flare" : "text-ink"
+              }`}
+            >
+              {isYourLead ? t.room.you : (leaderName ?? leader ?? "—")}
+            </dd>
+          </div>
+        </dl>
+        <p className="mt-3 text-xs leading-relaxed text-muted">
+          {t.room.reviewWait}
+        </p>
+      </div>
+    );
+  }
+
   if (outcome !== "running") {
     return (
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] backdrop-blur-md lg:static lg:border lg:p-6 lg:pb-6">
@@ -83,7 +138,7 @@ export function BidPanel({
                   isYourLead ? "text-flare" : "text-ink"
                 }`}
               >
-                {isYourLead ? t.room.you : leader}
+                {isYourLead ? t.room.you : (leaderName ?? leader)}
               </dd>
             </div>
           </dl>
@@ -226,11 +281,18 @@ export function BidPanel({
         whileHover={{ scale: 1.01 }}
         whileTap={{ scale: 0.97 }}
         onClick={() => commit(total)}
-        disabled={pending || !canBid}
+        disabled={!canBid}
         className="mt-2.5 flex h-14 w-full touch-manipulation items-center justify-between gap-3 bg-accent px-4 text-accent-ink transition-colors duration-150 disabled:opacity-60 font-sans shadow-lg"
       >
+        {/*
+          Always the plain label — never a "bidding…" pending state. The bid is
+          applied optimistically on the click frame (the price, the clock and
+          the feed all move at once), so a spinner here would be a loading
+          indicator for something that has already visibly happened. The whileTap
+          press is the only acknowledgement the tap needs.
+        */}
         <span className="text-[0.8125rem] font-bold tracking-[0.14em] uppercase">
-          {pending ? t.room.bidding : t.room.placeBid}
+          {t.room.placeBid}
         </span>
         <span data-numerals className="text-right">
           <span className="block text-base leading-tight font-bold">

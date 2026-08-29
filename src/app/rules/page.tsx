@@ -123,6 +123,12 @@ export default function RulesPage() {
             title={t.rules.clocksRoundTitle}
             body={t.rules.clocksRoundBody}
           />
+          {/*
+            When the sale actually ends is the question both clock rules leave
+            open now that neither of them ends it on its own, so it gets a rule
+            of its own rather than a clause buried in one of the other two.
+          */}
+          <Rule title={t.rules.clocksEndTitle} body={t.rules.clocksEndBody} />
           <Rule title={t.rules.incrementTitle} body={t.rules.incrementBody} />
           <Rule title={t.rules.lateTitle} body={t.rules.lateBody} highlight />
         </Reveal>

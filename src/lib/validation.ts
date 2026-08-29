@@ -298,6 +298,26 @@ export const lotControlSchema = z.object({
     .max(500),
 });
 
+/*
+ * Naming a winner.
+ *
+ * `note` is required and is not decoration: this is the one admin action that
+ * can take a lot from the person who bid highest, and the audit row has to
+ * carry the reason it was made at the moment it was made.
+ */
+export const awardSchema = z.object({
+  lotId: z.string().trim().min(1).max(32),
+  winnerUserId: z
+    .number({ message: "Ялагчийг сонгоно уу." })
+    .int()
+    .positive("Ялагчийг сонгоно уу."),
+  note: z
+    .string()
+    .trim()
+    .min(4, "Тайлбар бичнэ үү — аудитын бүртгэлд үлдэнэ.")
+    .max(500),
+});
+
 export const rescheduleSchema = z.object({
   lotId: z.string().trim().min(1).max(32),
   opensAt: z
@@ -324,6 +344,45 @@ export const userRoleSchema = z.object({
     .trim()
     .min(4, "Шалтгааныг бичнэ үү — аудитын бүртгэлд үлдэнэ.")
     .max(500),
+});
+
+/**
+ * The most free points that can be handed out in one action.
+ *
+ * Defined here because this is the one module both the form (client) and the
+ * repository (server-only) can import — `src/lib/repo/admin-write.ts` re-checks
+ * against it, so the bound holds for a caller that never sees the form.
+ *
+ * The largest thing a bidder can BUY is 400 points, so this is twenty-five of
+ * those. It is not a policy — it is the blast radius of a typo. An admin who
+ * means 100 and types 100000 hands out a hundred million tugriks of bidding
+ * power against real lots, and there is no undo that can un-bid what the
+ * recipient then spends it on.
+ */
+export const MAX_BONUS_PTS = 10_000;
+
+/*
+ * Free points.
+ *
+ * Positive only, and capped. `adjustSchema` below allows either sign because a
+ * correction can go either way; a gift cannot, and the schema is the first of
+ * three places that says so — the repository and the SQL are the other two.
+ */
+export const bonusSchema = z.object({
+  userId: z.number().int().positive(),
+  deltaPts: z
+    .number({ message: "Дүн тоо байна." })
+    .int("Дүн бүхэл тоо байна.")
+    .positive("Бэлэглэх оноо эерэг тоо байна.")
+    .max(
+      MAX_BONUS_PTS,
+      `Нэг удаад дээд тал нь ${MAX_BONUS_PTS} оноо бэлэглэнэ.`,
+    ),
+  memo: z
+    .string()
+    .trim()
+    .min(4, "Тайлбар бичнэ үү — хэрэглэгч мэдэгдэл дээрээ харна.")
+    .max(200),
 });
 
 export const adjustSchema = z.object({

@@ -3,13 +3,17 @@
 import { headers } from "next/headers";
 import { refresh } from "next/cache";
 import { recordDetached } from "@/lib/audit";
+import { t } from "@/lib/copy";
 import { log } from "@/lib/observability";
 import { publish } from "@/lib/realtime";
 import {
   adjustBalance,
+  awardLot,
   cancelAuction,
   closeAuction,
   createLot,
+  declareUnsold,
+  grantBonus,
   rescheduleAuction,
   setUserRole,
   setUserStatus,
@@ -19,12 +23,15 @@ import {
 import { clientIpFrom, requireAdmin } from "@/lib/session";
 import {
   adjustSchema,
+  awardSchema,
+  bonusSchema,
   firstError,
   lotSchema,
   lotControlSchema,
   rescheduleSchema,
   userRoleSchema,
   userStatusSchema,
+  MAX_BONUS_PTS,
 } from "@/lib/validation";
 
 /**
@@ -148,10 +155,11 @@ export async function closeAuctionAction(
     };
   }
 
-  // Bidders are watching a live clock. They must be told at once.
+  // Bidders are watching a live clock. They must be told at once — the room
+  // switches from bidding to "being checked" on this push.
   await publish(parsed.data.lotId);
   refresh();
-  return { status: "ok", message: "Лот хаагдлаа." };
+  return { status: "ok", message: t.admin.closedToReview };
 }
 
 export async function cancelAuctionAction(
@@ -184,6 +192,99 @@ export async function cancelAuctionAction(
     status: "ok",
     message: "Лот цуцлагдаж, нэгдэх төлбөрүүд буцаагдлаа.",
   };
+}
+
+/**
+ * The reasons a decision can be refused, in the bidder-facing language the
+ * dashboard shows. Shared by both decisions because both take the same route
+ * into `review` and can fail the same four ways.
+ */
+const DECISION_ERROR: Record<string, string> = {
+  "not-found": "Лот олдсонгүй.",
+  "not-in-review": "Энэ лот хараахан шалгах шатанд ороогүй байна.",
+  "not-a-bidder": "Сонгосон хэрэглэгч энэ лотод хаялт хийгээгүй байна.",
+  "already-decided": "Энэ лотын шийдвэр аль хэдийн гарсан байна.",
+};
+
+/**
+ * Names the winner of a lot in review.
+ *
+ * `publish` matters as much as the write. Everyone who was in the room is
+ * looking at a "being checked" screen with an open stream; this is what turns
+ * it into the result without them reloading.
+ */
+export async function awardWinnerAction(
+  _prev: AdminState,
+  formData: FormData,
+): Promise<AdminState> {
+  const who = await actor();
+  const parsed = awardSchema.safeParse({
+    lotId: formData.get("lotId"),
+    winnerUserId: Number(formData.get("winnerUserId")),
+    note: formData.get("note"),
+  });
+  if (!parsed.success) {
+    return { status: "error", message: firstError(parsed.error) };
+  }
+
+  const result = await awardLot(
+    parsed.data.lotId,
+    parsed.data.winnerUserId,
+    parsed.data.note,
+    who,
+  );
+  if (!result.ok) {
+    return {
+      status: "error",
+      message: DECISION_ERROR[result.reason] ?? "Шийдвэр бүртгэгдсэнгүй.",
+    };
+  }
+
+  log.info({
+    event: "admin.winner_declared",
+    lotId: parsed.data.lotId,
+    winnerUserId: parsed.data.winnerUserId,
+    hammerPts: result.hammerPts,
+    actorId: who.id,
+  });
+
+  await publish(parsed.data.lotId);
+  refresh();
+  return {
+    status: "ok",
+    message: t.admin.winnerDeclared(result.name, result.hammerPts),
+  };
+}
+
+/** Ends a lot in review with no winner. */
+export async function declareUnsoldAction(
+  _prev: AdminState,
+  formData: FormData,
+): Promise<AdminState> {
+  const who = await actor();
+  const parsed = lotControlSchema.safeParse({
+    lotId: formData.get("lotId"),
+    reason: formData.get("reason"),
+  });
+  if (!parsed.success) {
+    return { status: "error", message: firstError(parsed.error) };
+  }
+
+  const result = await declareUnsold(
+    parsed.data.lotId,
+    parsed.data.reason,
+    who,
+  );
+  if (!result.ok) {
+    return {
+      status: "error",
+      message: DECISION_ERROR[result.reason] ?? "Шийдвэр бүртгэгдсэнгүй.",
+    };
+  }
+
+  await publish(parsed.data.lotId);
+  refresh();
+  return { status: "ok", message: t.admin.declaredUnsold };
 }
 
 export async function rescheduleAction(
@@ -292,6 +393,60 @@ export async function setUserRoleAction(
   });
   refresh();
   return { status: "ok", message: "Эрх өөрчлөгдлөө." };
+}
+
+/**
+ * Hands a bidder points they did not pay for.
+ *
+ * Separate from `adjustBalanceAction` on purpose — see the note on `grantBonus`
+ * in src/lib/repo/admin-write.ts. The short version: a gift and a correction
+ * are different facts, and filing one as the other makes the accounts unable to
+ * say how many points in circulation were ever paid for.
+ */
+export async function grantBonusAction(
+  _prev: AdminState,
+  formData: FormData,
+): Promise<AdminState> {
+  const who = await actor();
+  const parsed = bonusSchema.safeParse({
+    userId: Number(formData.get("userId")),
+    deltaPts: Number(formData.get("deltaPts")),
+    memo: formData.get("memo"),
+  });
+  if (!parsed.success) {
+    return { status: "error", message: firstError(parsed.error) };
+  }
+
+  const result = await grantBonus(
+    parsed.data.userId,
+    parsed.data.deltaPts,
+    parsed.data.memo,
+    who,
+  );
+  if (!result.ok) {
+    return {
+      status: "error",
+      message:
+        result.reason === "not-positive"
+          ? "Бэлэглэх оноо эерэг тоо байна."
+          : result.reason === "too-large"
+            ? `Нэг удаад дээд тал нь ${MAX_BONUS_PTS} оноо бэлэглэнэ.`
+            : "Хэрэглэгч олдсонгүй.",
+    };
+  }
+
+  log.info({
+    event: "admin.bonus_granted",
+    targetUserId: parsed.data.userId,
+    deltaPts: parsed.data.deltaPts,
+    actorId: who.id,
+  });
+
+  refresh();
+  return {
+    status: "ok",
+    message: t.admin.bonusGranted(parsed.data.deltaPts, result.balancePts),
+  };
 }
 
 export async function adjustBalanceAction(

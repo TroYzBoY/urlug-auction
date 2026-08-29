@@ -18,8 +18,8 @@ const LINKS = [
   { href: "/lots", label: t.nav.lots, desktop: true },
   { href: "/rules", label: t.nav.rules, desktop: true },
   { href: "/about", label: t.nav.about, desktop: true },
-  /* `/` is the cinematic landing now, so the live lot, round ladder, index and
-     results moved to /overview. It sits in the burger for the same reason
+  /* The home is the catalogue now, and the live lot, round ladder, index and
+     results live at /overview. It sits in the burger for the same reason
      contact does — the pill is already full at three labels. */
   { href: "/overview", label: t.nav.overview, desktop: false },
   { href: "/contact", label: t.nav.contact, desktop: false },
@@ -90,9 +90,10 @@ export function Header({
         <div className="gutter flex h-14 items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             {/*
-              Explicit way out of the room. The wordmark links home too, but a
-              bidder deep in a live sale does not read a logo as "exit" — and on
-              a phone there is no visible browser back button to fall back on.
+              Explicit way out of the room. The wordmark leads to the catalogue
+              too, but a bidder deep in a live sale does not read a logo as
+              "exit" — and on a phone there is no visible browser back button to
+              fall back on.
             */}
             <Link
               href="/lots"
@@ -106,7 +107,7 @@ export function Header({
             </Link>
 
             <Link
-              href="/"
+              href="/lots"
               className="text-ink min-w-0 truncate font-sans text-xs font-bold tracking-[0.2em] uppercase"
             >
               {t.brand.name}
@@ -131,7 +132,7 @@ export function Header({
         className="border-line-strong/20 bg-surface/85 flex h-11 items-center justify-between rounded-full border px-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-colors duration-300 sm:px-5"
       >
         <Link
-          href="/"
+          href="/lots"
           className="text-ink shrink-0 font-sans text-[0.8125rem] font-bold tracking-[0.18em] uppercase"
         >
           {t.brand.name}

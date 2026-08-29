@@ -45,3 +45,13 @@ next-env.d.ts
 # Playwright run artefacts — traces and screenshots from failed tests.
 test-results/
 playwright-report/
+
+# Local-only artefacts. `cookie.txt` in particular has held a live bearer token
+# — it is already excluded from the Docker build context in .dockerignore, and
+# this is the other half: `git add -A` must not be able to publish it.
+cookie.txt
+score.png
+/test-results/
+/playwright-report/
+/blob-report/
+/.playwright/

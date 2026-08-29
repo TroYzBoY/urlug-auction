@@ -1,21 +1,56 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
 import { groupNumber } from "@/lib/format";
 
 /**
- * Odometer. Each digit is a column of 0–9 sliding behind a one-line mask, so a
- * price change rolls into place instead of swapping.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * A PRICE THAT COUNTS
  *
- * This is the one animation on the site that is worth calling addictive, and it
- * earns it by being literal: the number physically climbs, which is what the
- * number is doing. Only the digits that actually changed move — 1 205 → 1 208
- * rolls the last digit alone, so a busy lot reads as a flicker at the end of the
- * figure rather than as the whole price redrawing.
+ * 1 205 → 1 208 ticks 1 206, 1 207, 1 208. One number, counting, which is what
+ * the price is actually doing.
  *
- * Requires tabular figures to hold its width. `1ch` per digit is exact under
- * `font-variant-numeric: tabular-nums`, which `[data-numerals]` sets globally.
+ * ── What this replaced, and why ──────────────────────────────────────────────
+ *
+ * An odometer: every digit was a column of 0–9 sliding behind a mask. It read
+ * beautifully in isolation and was wrong in the room, for a reason that was
+ * built into it rather than tunable. Each digit was keyed on its own character
+ * (`key={`${i}-${ch}`}`), so a digit that CHANGED was a different React element
+ * — unmounted, remounted, and animated from its initial position, which is
+ * zero. Every single-point raise therefore spun a column through the whole
+ * 0–9 alphabet to land one place further on. The comment above it claimed only
+ * changed digits moved; the key made that false, and the effect on a busy lot
+ * was the headline figure churning continuously while the number it was
+ * reporting had barely moved.
+ *
+ * Counting has none of that: the only values shown are values the price
+ * genuinely passed through, and a raise of one shows exactly one change.
+ *
+ * ── The two cases that are deliberately NOT animated ─────────────────────────
+ *
+ *   • A step of one. There is no intermediate value to show, so there is
+ *     nothing to animate — and a +1 raise is the commonest bid in round 1.
+ *   • The first paint. The price arrives server-rendered and already correct;
+ *     counting up to it from nowhere would animate a change that never
+ *     happened.
+ *
+ * Requires tabular figures to hold its width, which `[data-numerals]` sets.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
+
+/**
+ * How long one step of 1 is held on screen.
+ *
+ * The two constants together are the whole feel of it. 55ms is slow enough to
+ * register as a tick and fast enough that a +2 raise is done in a tenth of a
+ * second; the 500ms ceiling is what stops a +60 late entry — or a resync after
+ * a tunnel — from counting through a minute of the auction. Past that ceiling
+ * the count covers more than one unit per frame, which is the honest trade:
+ * a bidder in round 6 needs the current price, not a performance.
+ */
+const MS_PER_STEP = 55;
+const MAX_MS = 500;
+
 export function RollingNumber({
   value,
   className = "",
@@ -23,53 +58,81 @@ export function RollingNumber({
   value: number;
   className?: string;
 }) {
-  const text = groupNumber(value);
-  const chars = text.split("");
+  const [display, setDisplay] = useState(value);
+
+  /*
+   * What is currently on screen, as a ref.
+   *
+   * Two readers need it and neither can use the state: the frame loop, which
+   * would otherwise close over a stale `display`, and the NEXT run of the
+   * effect — a bid landing mid-count must carry on from the figure the bidder
+   * can see rather than restarting from the one before it. In a duel that is
+   * the difference between a smooth climb and a stutter backwards.
+   */
+  const painted = useRef(value);
+  const frame = useRef<number | null>(null);
+
+  useEffect(() => {
+    const from = painted.current;
+    const delta = value - from;
+    if (delta === 0) return;
+
+    /*
+     * Nothing in between, or nothing wanted. Both land on the figure directly
+     * — no frame is scheduled at all, which is what keeps the commonest bid in
+     * the sale from costing an animation.
+     */
+    const steps = Math.abs(delta);
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (steps === 1 || reduced) {
+      painted.current = value;
+      setDisplay(value);
+      return;
+    }
+
+    const duration = Math.min(MAX_MS, steps * MS_PER_STEP);
+    const start = performance.now();
+
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      /*
+       * Linear, not eased. An eased counter slows as it approaches the answer,
+       * which reads as the number being unsure of itself — a count is uniform
+       * or it is not a count.
+       */
+      const next = from + Math.round(delta * t);
+
+      if (next !== painted.current) {
+        painted.current = next;
+        setDisplay(next);
+      }
+
+      frame.current = t < 1 ? requestAnimationFrame(tick) : null;
+    };
+
+    frame.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (frame.current !== null) {
+        cancelAnimationFrame(frame.current);
+        frame.current = null;
+      }
+    };
+  }, [value]);
 
   return (
-    <span
-      data-numerals
-      className={`inline-flex items-baseline ${className}`}
-      /* The animated columns are decorative duplication; screen readers and
-         copy-paste should get the plain figure. */
-      aria-label={text}
-      role="text"
-    >
-      {chars.map((ch, i) =>
-        /[0-9]/.test(ch) ? (
-          <Digit key={`${i}-${ch}`} digit={Number(ch)} />
-        ) : (
-          <span key={`${i}-sep`} aria-hidden className="inline-block">
-            {ch === " " ? " " : ch}
-          </span>
-        ),
-      )}
-    </span>
-  );
-}
-
-const COLUMN = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-
-function Digit({ digit }: { digit: number }) {
-  return (
-    <span
-      aria-hidden
-      className="relative inline-block overflow-hidden align-baseline"
-      /* 1em tall window over a 10em column — translating by -digit×10% of the
-         column lands exactly one line per digit. */
-      style={{ width: "1ch", height: "1em" }}
-    >
-      <motion.span
-        className="absolute inset-x-0 top-0 flex flex-col"
-        animate={{ y: `${-digit * 10}%` }}
-        transition={{ type: "spring", stiffness: 240, damping: 28, mass: 0.7 }}
-      >
-        {COLUMN.map((n) => (
-          <span key={n} className="block text-center leading-none">
-            {n}
-          </span>
-        ))}
-      </motion.span>
+    <span data-numerals className={className}>
+      {/*
+        The price sits inside an aria-live region, so the count has to be kept
+        away from it: announcing every value it passes through would narrate the
+        animation digit by digit. Assistive tech gets the destination once; the
+        counting figure is decorative and hidden.
+      */}
+      <span className="sr-only">{groupNumber(value)}</span>
+      <span aria-hidden>{groupNumber(display)}</span>
     </span>
   );
 }

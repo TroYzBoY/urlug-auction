@@ -17,3 +17,9 @@ things-to-do.md
 .claude
 coverage
 *.log
+
+# Local-only artefacts that must never enter the build context or image.
+cookie.txt
+score.png
+test-results
+playwright-report

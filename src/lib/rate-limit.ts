@@ -28,14 +28,12 @@ export interface Limit {
 
 export const LIMITS = {
   /*
-   * Bids. Round 6's clock is five seconds, so a bidder in a real duel may
-   * legitimately fire several times in quick succession — but not twelve times
-   * in ten seconds, which is a script.
+   * ⚠ There are no bid buckets here any more. `bid` and `bidPerLot` were
+   * removed with the check in src/app/actions/bid.ts — a bidder in round 6's
+   * five-second clock can legitimately outrun a per-user limit, and being
+   * refused at that moment is worse than the flood. The reasoning, and what to
+   * reinstate first if it is ever needed, is in that file.
    */
-  bid: { max: 12, windowSec: 10 },
-  /* Per lot, across everyone. A backstop against one room being flooded. */
-  bidPerLot: { max: 240, windowSec: 10 },
-
   login: { max: 8, windowSec: 300 },
   register: { max: 5, windowSec: 3600 },
   /* SMS costs money to send; this limit is a bill as much as a defence. */

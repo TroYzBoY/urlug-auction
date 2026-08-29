@@ -30,7 +30,13 @@ export function LotPreview({
 }) {
   const isSold = lot.status === "sold";
   const isUnsold = lot.status === "unsold";
-  const isDone = isSold || isUnsold;
+  /*
+   * Bidding closed, winner not yet named. The auction page routes these to the
+   * room, so this is the fallback path — but without it the status line falls
+   * through to "upcoming", which is the one thing the lot certainly is not.
+   */
+  const isReview = lot.status === "review";
+  const isDone = isSold || isUnsold || isReview;
 
   /* Did it beat the estimate? The single most interesting fact about a result. */
   const overEstimate =
@@ -69,14 +75,22 @@ export function LotPreview({
               </span>
               <span
                 className={
-                  isSold ? "text-olive" : isUnsold ? "text-faint" : undefined
+                  isSold
+                    ? "text-olive"
+                    : isReview
+                      ? "text-flare"
+                      : isUnsold
+                        ? "text-faint"
+                        : undefined
                 }
               >
                 {isSold
                   ? t.lot.statusSold
-                  : isUnsold
-                    ? t.lot.statusUnsold
-                    : t.home.upcoming}
+                  : isReview
+                    ? t.lot.statusReview
+                    : isUnsold
+                      ? t.lot.statusUnsold
+                      : t.home.upcoming}
               </span>
             </p>
 
@@ -107,6 +121,14 @@ export function LotPreview({
                       <span className="ml-2 text-flare">· {overEstimate}</span>
                     )}
                   </p>
+                </>
+              ) : isReview ? (
+                <>
+                  <p className="eyebrow text-flare">{t.room.reviewNote}</p>
+                  <p className="mt-2 text-2xl text-ink">
+                    {t.lot.statusReview}
+                  </p>
+                  <p className="mt-2 text-xs text-muted">{t.room.reviewBody}</p>
                 </>
               ) : isUnsold ? (
                 <>

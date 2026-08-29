@@ -17,6 +17,8 @@ export function LiveDot() {
 const STATUS: Record<LotStatus, { label: string; tone: string }> = {
   live: { label: t.room.live, tone: "text-rust font-semibold" },
   upcoming: { label: t.home.upcoming, tone: "text-ink-soft" },
+  /* Closed, but with no result yet — the house has still to name a winner. */
+  review: { label: t.lot.statusReview, tone: "text-flare font-medium" },
   sold: { label: t.lot.statusSold, tone: "text-olive font-medium" },
   unsold: { label: t.lot.statusUnsold, tone: "text-faint" },
 };

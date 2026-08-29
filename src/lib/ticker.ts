@@ -14,7 +14,6 @@ import {
   enqueue,
   sweepNotifications,
 } from "./repo/notifications";
-import { openSettlement } from "./repo/settlements";
 import { watchersOf } from "./repo/watchlist";
 import { t } from "./copy";
 
@@ -161,51 +160,55 @@ export async function settleDueAuctions(now = Date.now()): Promise<string[]> {
           }
         }
 
-        if (live.outcome === "sold" || live.outcome === "unsold") {
-          /*
-           * Settlement is recorded, not charged. Taking the hammer price out of
-           * the winner's balance automatically would either overdraw them or
-           * fail silently at the exact moment a legal obligation begins — the
-           * whole format is designed to sell below estimate, so the hammer is
-           * almost always more than the points anyone holds.
-           *
-           * Opened in THIS transaction, so a sold lot and the obligation it
-           * creates come into existence together. A hammer with no invoice is a
-           * lot nobody is chasing.
-           */
-          if (live.outcome === "sold") {
-            const winner = await client.query<{
-              leader_user_id: number | null;
-              code: string;
-            }>(
-              `SELECT a.leader_user_id, l.code
-                 FROM auctions a JOIN lots l ON l.id = a.lot_id
-                WHERE a.lot_id = $1`,
-              [r.lot_id],
-            );
-            const leaderId = winner.rows[0]?.leader_user_id ?? null;
-            if (leaderId !== null) {
-              await openSettlement(
-                client,
-                r.lot_id,
-                leaderId,
-                live.currentPts,
-                winner.rows[0]!.code,
-              );
-            }
-          }
-
+        /*
+         * Bidding is over.
+         *
+         * ⚠ No settlement is opened here any more, and no lot is marked sold.
+         * The clock's authority ends at "no more bids"; who takes the lot is a
+         * decision the house makes from the dashboard, and it is
+         * `awardLot` in src/lib/repo/admin-write.ts that opens the obligation.
+         * A lot with no bids at all skips review — there is nothing to choose
+         * between — and goes straight to unsold.
+         */
+        if (live.outcome === "review" || live.outcome === "unsold") {
           recordDetached({
             action: `auction.${live.outcome}`,
             targetType: "lot",
             targetId: r.lot_id,
             detail: {
-              hammerPts: live.currentPts,
-              hammerRound: live.hammerRound,
-              winner: live.leaderPaddle,
+              standingPts: live.currentPts,
+              closedInRound: live.hammerRound,
+              standingLeader: live.leaderPaddle,
               settledAt: live.settledAt,
             },
           });
+        }
+
+        /*
+         * Everyone who bid is told the bidding has closed and a decision is
+         * coming. Without it the room simply stops, and a bidder who watched a
+         * clock reach zero is left to guess whether they won.
+         */
+        if (live.outcome === "review") {
+          const meta = await client.query<{ code: string }>(
+            "SELECT code FROM lots WHERE id = $1",
+            [r.lot_id],
+          );
+          const code = meta.rows[0]?.code ?? r.lot_id;
+          const bidders = await client.query<{ user_id: number }>(
+            "SELECT DISTINCT user_id FROM bids WHERE lot_id = $1",
+            [r.lot_id],
+          );
+          for (const bidder of bidders.rows) {
+            await enqueue(client, {
+              userId: bidder.user_id,
+              channel: "inapp",
+              kind: "lot.review",
+              body: `${t.brand.name}: ${code} лотын хаялт хаагдлаа. Ялагчийг шалгаж байна.`,
+              href: `/auction/${r.lot_id}`,
+              dedupeKey: `review:${r.lot_id}`,
+            });
+          }
         }
         return true;
       });

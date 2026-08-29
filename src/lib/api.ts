@@ -83,6 +83,5 @@ export type BidResult =
         | "not-verified"
         | "insufficient-funds"
         | "suspended"
-        | "rate-limited"
         | "error";
     };

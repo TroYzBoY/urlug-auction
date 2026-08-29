@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { firstError, loginSchema, registerSchema } from "./validation";
+import { MINIMUM_AGE } from "./legal";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -82,14 +83,56 @@ describe("registerSchema", () => {
   });
 
   it("refuses someone under the minimum age", () => {
-    const yesterday = new Date();
-    yesterday.setFullYear(yesterday.getFullYear() - 18);
-    yesterday.setDate(yesterday.getDate() + 1);
+    /*
+     * A date of birth one day short of eighteen: this person turns 18
+     * tomorrow, so today they must be refused.
+     *
+     * ⚠ Formatted from LOCAL parts, not `toISOString()`.
+     *
+     * `isOldEnough` compares local calendar fields, so the fixture has to be
+     * built in the same calendar. `toISOString()` converts to UTC first, and
+     * anywhere east of Greenwich that shifts the date back a day for part of
+     * every morning — in UTC+8 it did so before 08:00 local. The fixture then
+     * described somebody who is exactly eighteen, the schema correctly accepted
+     * them, and the test failed. It passed all afternoon and failed at dawn,
+     * which is the worst way for a test to be wrong.
+     */
+    const almost = new Date();
+    almost.setFullYear(almost.getFullYear() - MINIMUM_AGE);
+    almost.setDate(almost.getDate() + 1);
+
+    const localDate = [
+      almost.getFullYear(),
+      String(almost.getMonth() + 1).padStart(2, "0"),
+      String(almost.getDate()).padStart(2, "0"),
+    ].join("-");
+
     const parsed = registerSchema.safeParse({
       ...VALID,
-      dateOfBirth: yesterday.toISOString().slice(0, 10),
+      dateOfBirth: localDate,
     });
     expect(parsed.success).toBe(false);
+  });
+
+  it("accepts someone on their eighteenth birthday", () => {
+    /*
+     * The other side of the same boundary, and the one a bug here would be
+     * heard about: a bidder turned away on the day they become eligible.
+     */
+    const today = new Date();
+    today.setFullYear(today.getFullYear() - MINIMUM_AGE);
+
+    const localDate = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, "0"),
+      String(today.getDate()).padStart(2, "0"),
+    ].join("-");
+
+    const parsed = registerSchema.safeParse({
+      ...VALID,
+      dateOfBirth: localDate,
+    });
+    expect(parsed.success).toBe(true);
   });
 });
 

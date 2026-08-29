@@ -5,7 +5,6 @@ import { refresh } from "next/cache";
 import { placeBid as placeBidInRepo } from "@/lib/repo/bids";
 import { publish } from "@/lib/realtime";
 import { currentUser, clientIpFrom } from "@/lib/session";
-import { LIMITS, consume } from "@/lib/rate-limit";
 import { recordDetached } from "@/lib/audit";
 import { log, reportError, timed } from "@/lib/observability";
 import { bidSchema } from "@/lib/validation";
@@ -24,6 +23,8 @@ import type { BidResult } from "@/lib/api";
  *   whether you have bid on this lot before → lot_participants
  *   which round it is  → the auction row, settled against the server clock
  *   whether the bid is legal → auction.ts, re-run under the row lock
+ *
+ * What it does NOT do is rate limit. See the note where the limiter used to be.
  *
  * The client's `isLegalBid` check in BidPanel remains, and remains a UX
  * affordance: it saves a round trip on an obviously low bid. It is not what
@@ -47,31 +48,28 @@ export async function placeBid(
   const userAgent = h.get("user-agent")?.slice(0, 500) ?? null;
 
   /*
-   * Two buckets. The per-user one is the real defence against a script; the
-   * per-lot one is a backstop for the case where the script has many accounts,
-   * which the per-user limit cannot see.
+   * ⚠ NO RATE LIMIT ON BIDDING — removed deliberately.
    *
-   * Checked before the transaction so a flood never reaches the row lock — a
-   * rate limiter that only rejects after queueing behind `FOR UPDATE` has
-   * already let the attack achieve its effect.
+   * There were two buckets here: twelve bids per bidder per ten seconds, and
+   * 240 per lot across everyone. Both were removed on request, because in a
+   * real duel in round 6 — a five-second clock, a bidder tapping the step
+   * button — the per-user limit is reachable by a person who is simply bidding
+   * fast, and being told "хэт олон хаялт" at the moment the lot is decided is
+   * worse than the flood it was guarding against.
+   *
+   * What still stands between this and a script:
+   *
+   *   • the row lock in `placeBid` serialises every bid on a lot, so a flood
+   *     queues rather than racing
+   *   • the price must strictly increase, so N bids cost N × the increment —
+   *     a script cannot bid a thousand times without spending a thousand times
+   *   • `bids_price_idx` refuses two bids at one price on one lot
+   *   • the join fee and the balance are charged from the server's numbers
+   *
+   * If a flood ever does become a problem, put the per-LOT bucket back first —
+   * it is the one that protects the database without ever rejecting a bidder
+   * for bidding quickly.
    */
-  const [perUser, perLot] = await Promise.all([
-    consume(`bid:user:${user.id}`, LIMITS.bid),
-    consume(`bid:lot:${parsed.data.lotId}`, LIMITS.bidPerLot),
-  ]);
-
-  if (!perUser.ok || !perLot.ok) {
-    recordDetached({
-      actorUserId: user.id,
-      action: "bid.rate_limited",
-      targetType: "lot",
-      targetId: parsed.data.lotId,
-      detail: { perUser: perUser.ok, perLot: perLot.ok },
-      ip,
-      userAgent,
-    });
-    return { ok: false, reason: "rate-limited" };
-  }
 
   try {
     /*
@@ -87,6 +85,7 @@ export async function placeBid(
           lotId: parsed.data.lotId,
           userId: user.id,
           paddle: user.paddle,
+          name: user.name,
           points: parsed.data.points,
           idempotencyKey: parsed.data.idempotencyKey,
           ip,

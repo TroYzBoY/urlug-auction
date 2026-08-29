@@ -16,15 +16,35 @@
  *   5 round — 15sec bid clock (25 min)
  *   6 round — 5sec bid clock  (40 min)
  *
- * Two independent clocks run at once, which is the heart of the format:
+ * Two independent clocks run at once, which is the heart of the format. One is
+ * SOFT — the bidders move it — and one is HARD:
  *
- *   • BID CLOCK  — resets to the round's length on every accepted bid.
- *                  If it reaches zero, the lot is hammered (sold).
- *   • ROUND CLOCK — fixed wall-clock length per round. When it expires the
- *                  auction advances a round and the bid clock gets shorter.
+ *   • BID CLOCK (soft) — resets to the round's length on every accepted bid,
+ *                  so it only reaches zero when the room has gone quiet. When
+ *                  it does, the sale MOVES UP A ROUND. Silence costs a gear,
+ *                  not the lot.
+ *   • ROUND CLOCK (hard) — fixed wall-clock length per round, measured from
+ *                  the open and unmovable. When it expires the sale advances a
+ *                  round too.
  *
- * So the auction cannot end early from inactivity in round 1 without a sale,
- * and the pressure ratchets: five minutes to respond becomes five seconds.
+ * Both clocks therefore do the same thing, and only round 6 is terminal: with
+ * no round 7 to move up to, whichever clock runs out there ends the sale.
+ *
+ * ── What that buys ───────────────────────────────────────────────────────────
+ *
+ * A lull no longer kills a lot. Under the earlier rule the bid clock ending a
+ * round was the hammer, so one bid in round 1 followed by five quiet minutes
+ * sold the lot twenty-five minutes into a 2h45m sale — abrupt, and decided by
+ * whoever happened to be watching at the time.
+ *
+ * Now the pressure ratchets instead: quiet in round 1 drops the answer time to
+ * three minutes, then one, then thirty seconds, fifteen, five. About ten
+ * minutes of unbroken silence closes a lot, and any bid at any point in that
+ * descent resets the clock — so the sale ends when the room is genuinely
+ * finished with it rather than at the first gap in the bidding.
+ *
+ * The hard clock is what keeps that bounded: however the bidding goes, the sale
+ * is over by 2h45m.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 

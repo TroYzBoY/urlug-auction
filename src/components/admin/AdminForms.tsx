@@ -4,15 +4,19 @@ import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   adjustBalanceAction,
+  awardWinnerAction,
   cancelAuctionAction,
   closeAuctionAction,
   createLotAction,
+  declareUnsoldAction,
+  grantBonusAction,
   rescheduleAction,
   setUserRoleAction,
   setUserStatusAction,
   type AdminState,
 } from "@/app/actions/admin";
 import { t } from "@/lib/copy";
+import { MAX_BONUS_PTS } from "@/lib/validation";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -295,6 +299,11 @@ export function AuctionControls({
   >(rescheduleAction, IDLE);
 
   const [confirming, setConfirming] = useState<"close" | "cancel" | null>(null);
+  /*
+   * `review` is deliberately NOT settled here. A lot awaiting a decision can
+   * still be cancelled outright — the fees go back and nobody wins — which is
+   * the only escape from a sale that should not have run.
+   */
   const settled = outcome === "sold" || outcome === "unsold";
 
   if (settled) {
@@ -379,6 +388,149 @@ export function AuctionControls({
   );
 }
 
+/* ── Naming a winner ─────────────────────────────────────────────────────── */
+
+/**
+ * One candidate, as the dashboard needs them.
+ *
+ * Declared here rather than imported from `@/lib/repo/admin`, which is
+ * `server-only`. A type-only import would be erased, but it would also invite
+ * the next person to reach for a value from the same module — and this file is
+ * a Client Component, where that is a build error at best.
+ */
+export interface WinnerCandidate {
+  userId: number;
+  name: string;
+  paddle: string;
+  topPts: number;
+  topRound: number;
+  bidCount: number;
+  status: "active" | "suspended" | "closed";
+}
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE DECISION, AS A FORM
+ *
+ * Two controls, deliberately unequal in weight. The dropdown defaults to the
+ * highest bidder, because that is the answer nearly every time and an operator
+ * working through a queue should be able to confirm it without reading. What
+ * costs a deliberate act is DEPARTING from it: choosing anyone else raises a
+ * warning above the note field, and the note is what the audit row carries.
+ *
+ * Giving the lot to nobody is a separate, two-step control rather than an
+ * option in the same dropdown. It is not a kind of winner, and a list where
+ * "nobody" sits one arrow-key away from a person is a list that eventually
+ * awards the wrong thing.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+export function WinnerPicker({
+  lotId,
+  candidates,
+}: {
+  lotId: string;
+  candidates: WinnerCandidate[];
+}) {
+  const [awardState, awardFormAction] = useActionState<AdminState, FormData>(
+    awardWinnerAction,
+    IDLE,
+  );
+  const [unsoldState, unsoldFormAction] = useActionState<AdminState, FormData>(
+    declareUnsoldAction,
+    IDLE,
+  );
+
+  /* Candidates arrive highest bid first, so the standing leader is [0]. */
+  const standing = candidates[0] ?? null;
+  const [chosen, setChosen] = useState<number | null>(standing?.userId ?? null);
+  const [confirmingUnsold, setConfirmingUnsold] = useState(false);
+
+  if (candidates.length === 0) {
+    return <p className="text-muted text-sm">{t.admin.reviewNoCandidates}</p>;
+  }
+
+  const overriding = standing !== null && chosen !== standing.userId;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <form action={awardFormAction} className="flex flex-col gap-2.5">
+        <input type="hidden" name="lotId" value={lotId} />
+
+        <label className="block">
+          <span className="eyebrow">{t.admin.reviewPickWinner}</span>
+          <select
+            name="winnerUserId"
+            value={chosen ?? ""}
+            onChange={(e) => setChosen(Number(e.target.value))}
+            className={`${field} mt-1.5`}
+          >
+            {candidates.map((c) => (
+              <option key={c.userId} value={c.userId}>
+                {c.name} · {c.paddle} — {c.topPts} оноо ({c.topRound}-р тойрог,{" "}
+                {c.bidCount} хаялт)
+                {c.status !== "active"
+                  ? ` · ${t.admin.reviewSuspendedMark}`
+                  : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {/*
+          Only when it applies. A warning that is always on screen is furniture,
+          and the whole point of this one is that it appears the moment the
+          operator does the unusual thing.
+        */}
+        {overriding && (
+          <p className="border-flare text-flare border-l-2 pl-2.5 text-xs leading-relaxed">
+            {t.admin.winnerOverrideWarning}
+          </p>
+        )}
+
+        <input
+          name="note"
+          required
+          minLength={4}
+          placeholder={t.admin.winnerNotePlaceholder}
+          className={field}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <Submit label={t.admin.declareWinner} />
+          <button
+            type="button"
+            onClick={() => setConfirmingUnsold((o) => !o)}
+            className="eyebrow text-muted hover:text-rust h-10 px-1 transition-colors"
+          >
+            {t.admin.declareUnsold}
+          </button>
+        </div>
+        <Result state={awardState} />
+      </form>
+
+      {confirmingUnsold && (
+        <form
+          action={unsoldFormAction}
+          className="border-line flex flex-col gap-2 border-t pt-3"
+        >
+          <input type="hidden" name="lotId" value={lotId} />
+          <p className="text-rust text-xs leading-relaxed">
+            {t.admin.declareUnsoldWarning}
+          </p>
+          <input
+            name="reason"
+            required
+            minLength={4}
+            placeholder={t.admin.reasonPlaceholder}
+            className={field}
+          />
+          <Submit label={t.admin.confirmDeclareUnsold} danger />
+          <Result state={unsoldState} />
+        </form>
+      )}
+    </div>
+  );
+}
+
 /* ── User control ────────────────────────────────────────────────────────── */
 
 export function UserControls({
@@ -400,6 +552,10 @@ export function UserControls({
   );
   const [adjustState, adjustAction] = useActionState<AdminState, FormData>(
     adjustBalanceAction,
+    IDLE,
+  );
+  const [bonusState, bonusAction] = useActionState<AdminState, FormData>(
+    grantBonusAction,
     IDLE,
   );
   const [open, setOpen] = useState(false);
@@ -472,6 +628,45 @@ export function UserControls({
         />
         <Submit label={t.admin.applyRole} danger />
         <Result state={roleState} />
+      </form>
+
+      {/*
+        Free points, above the correction and visibly a different control.
+
+        Two money forms in one panel is a real hazard, so they are made to look
+        and read differently: this one has its own heading, takes only a
+        positive number, and its button is the plain style rather than the
+        danger style. `min`/`max` on the input match the schema, so the browser
+        refuses the typo before the round trip — the server checks it again.
+      */}
+      <form
+        action={bonusAction}
+        className="border-line flex flex-col gap-2 border-t pt-3"
+      >
+        <input type="hidden" name="userId" value={userId} />
+        <p className="eyebrow text-flare">{t.admin.grantBonus}</p>
+        <p className="text-muted text-[0.625rem] leading-relaxed">
+          {t.admin.bonusNote}
+        </p>
+        <input
+          name="deltaPts"
+          type="number"
+          min={1}
+          max={MAX_BONUS_PTS}
+          step={1}
+          required
+          placeholder={t.admin.bonusAmountPlaceholder(MAX_BONUS_PTS)}
+          className={`${field} h-8 text-xs`}
+        />
+        <input
+          name="memo"
+          required
+          minLength={4}
+          placeholder={t.admin.bonusMemoPlaceholder}
+          className={`${field} h-8 text-xs`}
+        />
+        <Submit label={t.admin.applyBonus} />
+        <Result state={bonusState} />
       </form>
 
       <form

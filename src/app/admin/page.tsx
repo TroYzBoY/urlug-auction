@@ -5,8 +5,9 @@ import {
   AuctionControls,
   CreateLotForm,
   UserControls,
+  WinnerPicker,
 } from "@/components/admin/AdminForms";
-import { lots, recentAudit, stats, users } from "@/lib/repo/admin";
+import { lots, recentAudit, reviewQueue, stats, users } from "@/lib/repo/admin";
 import { reconcileBalances } from "@/lib/repo/users";
 import { requireAdmin } from "@/lib/session";
 import { groupNumber, lotDate, pts } from "@/lib/format";
@@ -20,6 +21,7 @@ export const metadata: Metadata = {
 const OUTCOME_LABEL: Record<string, string> = {
   scheduled: t.lots.filterUpcoming,
   running: t.room.live,
+  review: t.admin.reviewStatus,
   sold: t.lot.statusSold,
   unsold: t.lot.statusUnsold,
 };
@@ -32,9 +34,15 @@ export default async function AdminPage() {
    */
   const admin = await requireAdmin();
 
-  const [figures, lotRows, userRows, audit, drift] = await Promise.all([
+  const [figures, lotRows, pending, userRows, audit, drift] = await Promise.all([
     stats(),
     lots(),
+    /*
+     * The decision queue leads the page below the alarms: a lot sitting in
+     * review is a bidder waiting on an answer, and it is the only thing here
+     * that gets worse the longer nobody looks at it.
+     */
+    reviewQueue(),
     users(),
     recentAudit(),
     /*
@@ -60,6 +68,11 @@ export default async function AdminPage() {
         <Stat
           label={t.admin.statPointsOut}
           value={pts(figures.pointsIssued)}
+          sub={t.common.point}
+        />
+        <Stat
+          label={t.admin.statPointsGifted}
+          value={pts(figures.pointsGifted)}
           sub={t.common.point}
         />
         <Stat
@@ -127,6 +140,63 @@ export default async function AdminPage() {
           </div>
         )}
       </section>
+
+      <Panel
+        heading={t.admin.reviewQueue}
+        empty={t.admin.reviewQueueEmpty}
+        isEmpty={pending.length === 0}
+      >
+        <p className="text-muted mb-5 max-w-prose text-sm leading-relaxed">
+          {t.admin.reviewQueueHint}
+        </p>
+
+        <ul className="flex flex-col gap-5">
+          {pending.map((lot) => (
+            <li key={lot.lotId} className="border-line border p-4 sm:p-5">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+                <p className="min-w-0">
+                  <Link
+                    href={`/auction/${lot.lotId}`}
+                    className="hover:text-accent transition-colors"
+                  >
+                    <span data-numerals className="text-muted">
+                      {lot.code}
+                    </span>{" "}
+                    <span className="text-ink">{lot.title}</span>
+                  </Link>
+                </p>
+                <p data-numerals className="text-faint text-xs">
+                  {t.admin.reviewClosedAt}:{" "}
+                  {lot.closedAt ? lotDate(lot.closedAt) : "—"} ·{" "}
+                  {lot.closedInRound}-{t.common.roundWord} · {lot.bidCount}{" "}
+                  {t.lot.bidCount.toLowerCase()}
+                </p>
+              </div>
+
+              {/*
+                The standing bid is shown as a fact above the control rather
+                than only as the selected option inside it. An operator should
+                be able to see what the clock decided without opening a
+                dropdown — that is the number they are being asked to confirm
+                or to depart from.
+              */}
+              <p className="text-ink-soft mt-2 text-sm">
+                <span className="eyebrow text-muted">
+                  {t.admin.reviewStanding}
+                </span>{" "}
+                <span data-numerals>
+                  {lot.standingPaddle ?? "—"} · {pts(lot.standingPts)}{" "}
+                  {t.common.point}
+                </span>
+              </p>
+
+              <div className="border-line mt-4 border-t pt-4">
+                <WinnerPicker lotId={lot.lotId} candidates={lot.candidates} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Panel>
 
       <Panel heading={t.admin.lots} empty="—" isEmpty={false}>
         <div className="mb-5">

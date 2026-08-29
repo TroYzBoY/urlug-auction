@@ -258,7 +258,14 @@ export function Descent() {
       <Shaft />
       <div className={s.vignette} aria-hidden />
 
-      <div className={`${s.float} ${s.mark}`}>{t.brand.name}</div>
+      {/* The wordmark is a way out, not just a label — on the About page this
+          landing has no navbar, so tapping the logo returns to the catalogue.
+          Anchor nested inside the .float .mark box, the same shape as the jump
+          link below, so `.float a` gives it the right opacity, hover glow and
+          no underline. */}
+      <div className={`${s.float} ${s.mark}`}>
+        <Link href="/lots">{t.brand.name}</Link>
+      </div>
       <div className={`${s.float} ${s.jump}`}>
         <Link href="/lots">{t.nav.lots}</Link>
       </div>

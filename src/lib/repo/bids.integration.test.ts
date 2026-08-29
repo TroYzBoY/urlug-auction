@@ -187,23 +187,78 @@ describe("the rules, re-enforced server-side", () => {
     if (!res.ok) expect(res.reason).toBe("suspended");
   });
 
-  it("closes a lot whose bid clock expired during the request", async () => {
+  it("accepts a bid into the next round when the SOFT clock expired mid-request", async () => {
+    /*
+     * The bid clock ran out a second before this request arrived. Under the
+     * old rule that was the hammer and the bid was refused; now it only moves
+     * the sale up a gear, so the bid lands — in round 2, at round 2's rules.
+     */
     await seedRunningLot(url, { lotId: LOT, bidClockMsFromNow: -1_000 });
     const user = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
 
+    /*
+     * 1220, not 1202. The bid lands in round 2, so round 2's rules decide it —
+     * and this bidder has never bid on the lot, so the late-entry floor of
+     * round × 10 applies. The round the clock moved the sale into is the round
+     * the bid is judged by, which is the point of settling before validating.
+     */
     const res = await placeBid(
-      args({ userId: user.id, paddle: user.paddle, points: 1201 }),
+      args({ userId: user.id, paddle: user.paddle, points: 1220 }),
+    );
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.round).toBe(2);
+
+    const [auction] = await query<{ outcome: string; round: number }>(
+      "SELECT outcome, round FROM auctions WHERE lot_id = $1",
+      [LOT],
+    );
+    expect(auction!.outcome).toBe("running");
+    expect(auction!.round).toBe(2);
+  });
+
+  it("closes a lot whose clock expired in round 6, where there is no next round", async () => {
+    await seedRunningLot(url, {
+      lotId: LOT,
+      round: 6,
+      bidClockMsFromNow: -1_000,
+      leaderPaddle: "Т-200",
+    });
+    const user = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
+
+    const res = await placeBid(
+      args({ userId: user.id, paddle: user.paddle, points: 1400 }),
     );
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.reason).toBe("round-closed");
 
     // And it persists that, rather than leaving the catalogue advertising a
-    // live lot that rejects every bid.
+    // live lot that rejects every bid. `review` for a lot with a standing bid —
+    // a clock does not name a winner.
     const [auction] = await query<{ outcome: string }>(
       "SELECT outcome FROM auctions WHERE lot_id = $1",
       [LOT],
     );
-    expect(["sold", "unsold"]).toContain(auction!.outcome);
+    expect(auction!.outcome).toBe("review");
+  });
+
+  it("keeps round_ends_at current, so the ticker stops re-settling a live lot", async () => {
+    /*
+     * `auctions_due_idx` selects on `round_ends_at <= now()`. A stale value
+     * makes every live lot permanently due, and the ticker re-locks it four
+     * times a second for the rest of the sale — see the note on
+     * `persistSettlement`.
+     */
+    await seedRunningLot(url, { lotId: LOT, bidClockMsFromNow: -1_000 });
+    const user = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
+
+    await placeBid(args({ userId: user.id, paddle: user.paddle, points: 1220 }));
+
+    const [auction] = await query<{ due: boolean }>(
+      `SELECT (round_ends_at <= now()) AS due FROM auctions WHERE lot_id = $1`,
+      [LOT],
+    );
+    expect(auction!.due).toBe(false);
   });
 });
 

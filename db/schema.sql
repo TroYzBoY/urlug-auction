@@ -125,7 +125,7 @@ CREATE INDEX IF NOT EXISTS lots_starts_idx ON lots (starts_at);
 -- reader never has to know when the row was written to interpret it.
 
 DO $$ BEGIN
-  CREATE TYPE auction_outcome AS ENUM ('scheduled', 'running', 'sold', 'unsold');
+  CREATE TYPE auction_outcome AS ENUM ('scheduled', 'running', 'review', 'sold', 'unsold');
   EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -149,10 +149,35 @@ CREATE TABLE IF NOT EXISTS auctions (
 );
 
 -- The ticker scans for auctions whose clocks are due. Both predicates are
--- cheap because settled rows drop out of the index.
+-- cheap because settled rows drop out of the index — and so do rows in
+-- `review`, which are waiting on a person rather than on a clock.
 CREATE INDEX IF NOT EXISTS auctions_due_idx
   ON auctions (bid_clock_ends_at, round_ends_at)
   WHERE outcome IN ('scheduled', 'running');
+
+-- ── Review, and who was awarded the lot ──────────────────────────────────────
+--
+-- A lot whose clocks run out does not sell itself. Bidding closes, the lot
+-- moves to `review`, and a person decides who takes it — the standing leader
+-- nearly always, but the house has to be able to pass over a bid it will not
+-- honour without that decision being a hand-written UPDATE against production.
+--
+-- `review` is terminal as far as the engine is concerned: no more rounds, no
+-- more bids, no clock. That is why it is absent from `auctions_due_idx` above —
+-- the ticker has nothing left to do with these rows.
+--
+-- ⚠ ADD VALUE runs inside migrate.ts's single transaction, which Postgres 12+
+-- allows *provided the new value is not used in the same transaction*. Nothing
+-- below writes the literal 'review'; do not add an index or a CHECK that does,
+-- or this file stops applying to any database that predates the value.
+ALTER TYPE auction_outcome ADD VALUE IF NOT EXISTS 'review';
+
+-- When the decision was made, and by whom. `settled_at` already records when
+-- BIDDING stopped; these record when the house acted on it, which is a
+-- different moment and sometimes a much later one.
+ALTER TABLE auctions ADD COLUMN IF NOT EXISTS awarded_at TIMESTAMPTZ;
+ALTER TABLE auctions ADD COLUMN IF NOT EXISTS awarded_by BIGINT
+  REFERENCES users (id) ON DELETE SET NULL;
 
 -- ── Bids — APPEND ONLY ───────────────────────────────────────────────────────
 

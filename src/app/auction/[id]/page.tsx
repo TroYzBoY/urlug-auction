@@ -24,9 +24,9 @@ export async function generateMetadata(props: PageProps<"/auction/[id]">) {
 }
 
 /**
- * One URL per lot, two states. Live lots get the dark bidding room; everything
- * else gets the catalogue preview, and the same link becomes the room when the
- * session opens.
+ * One URL per lot, two surfaces. A lot that is live — or closed and awaiting a
+ * decision — gets the dark room; everything else gets the catalogue preview,
+ * and the same link becomes the room when the session opens.
  */
 export default async function AuctionPage(props: PageProps<"/auction/[id]">) {
   const { id } = await props.params;
@@ -34,7 +34,13 @@ export default async function AuctionPage(props: PageProps<"/auction/[id]">) {
   const [lot, user] = await Promise.all([getLot(id), currentUser()]);
   if (!lot) notFound();
 
-  if (lot.status !== "live") {
+  /*
+   * `review` gets the room as well as `live`. Bidding is over, but everyone who
+   * was in there is waiting on an answer, and the room is the only surface with
+   * an open stream — so the award arrives on screen the moment an admin makes
+   * it, instead of on the viewer's next reload.
+   */
+  if (lot.status !== "live" && lot.status !== "review") {
     return (
       <LotPreview
         lot={lot}
@@ -66,6 +72,7 @@ export default async function AuctionPage(props: PageProps<"/auction/[id]">) {
     <AuctionRoom
       initialState={room}
       viewerPaddle={user?.paddle ?? null}
+      viewerName={user?.name ?? null}
       canBid={user !== null && user.phoneVerified && user.status === "active"}
     />
   );

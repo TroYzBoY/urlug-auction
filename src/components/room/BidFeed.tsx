@@ -47,7 +47,7 @@ export function BidFeed({ bids }: { bids: Bid[] }) {
                       bid.isYou ? "text-flare font-bold" : "text-ink-soft"
                     }`}
                   >
-                    {bid.isYou ? t.room.you : bid.paddle}
+                    {bid.isYou ? t.room.you : bid.name}
                   </span>
                   <span className="eyebrow shrink-0 border border-line px-1.5 py-0.5 text-[0.5625rem]">
                     {bid.round} {t.room.round.toLowerCase()}

@@ -69,6 +69,8 @@ export interface PlaceBidArgs {
   lotId: string;
   userId: number;
   paddle: string;
+  /** The bidder's real name — carried onto the returned Bid for the feed. */
+  name: string;
   points: number;
   idempotencyKey: string;
   ip: string | null;
@@ -114,6 +116,7 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
         bid: {
           id: String(prior.id),
           paddle: prior.paddle,
+          name: args.name,
           points: prior.points,
           round: prior.round,
           at: prior.placed_at.getTime(),
@@ -316,6 +319,7 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
       bid: {
         id: String(bidRow.id),
         paddle: args.paddle,
+        name: args.name,
         points: args.points,
         round: live.round,
         at: bidRow.placed_at.getTime(),
@@ -330,6 +334,22 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
  *
  * Shared by the bid path and the ticker so there is one definition of what
  * "settled" looks like on disk.
+ *
+ * `settled_at` is stamped for `review` as well as for the two final outcomes,
+ * and it means the same thing in all three: the moment BIDDING stopped. When a
+ * lot is later awarded, `awarded_at` records when the house decided — two
+ * columns because they are two facts, and a review that sat for three days
+ * should not be able to backdate itself.
+ *
+ * ⚠ `round_ends_at` is written here, and has to be.
+ *
+ * Nothing READS that column except the ticker's due query, which is exactly why
+ * it matters: `auctions_due_idx` selects rows where `round_ends_at <= now()`,
+ * so a stale value makes every live lot permanently due. Left unwritten, each
+ * one would be re-scanned, re-locked and re-settled to no effect four times a
+ * second for the rest of the sale. It went unnoticed while an expired bid clock
+ * ended a lot outright — lots did not stay running long past a boundary. Now
+ * that a quiet round only moves the sale up a gear, they do.
  */
 export async function persistSettlement(
   client: PoolClient,
@@ -348,10 +368,11 @@ export async function persistSettlement(
         SET round             = $2::int,
             outcome           = $3::auction_outcome,
             bid_clock_ends_at = to_timestamp($4::double precision / 1000.0),
+            round_ends_at     = to_timestamp($7::double precision / 1000.0),
             hammer_round      = COALESCE($5::int, hammer_round),
             settled_at        = COALESCE(
                                   settled_at,
-                                  CASE WHEN $3::auction_outcome IN ('sold', 'unsold')
+                                  CASE WHEN $3::auction_outcome IN ('review', 'sold', 'unsold')
                                        THEN to_timestamp($6::double precision / 1000.0)
                                   END),
             version           = version + 1,
@@ -364,6 +385,7 @@ export async function persistSettlement(
       live.bidClockEndsAt,
       live.hammerRound,
       live.settledAt ?? Date.now(),
+      live.roundEndsAt,
     ],
   );
 }

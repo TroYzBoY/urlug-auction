@@ -1,0 +1,100 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Render Blueprint for URLUG.
+#
+# Stands up a long-running Docker web service + a managed Postgres in one shot.
+# Why a container and not serverless: the SSE route holds a connection open for
+# the length of a sale and the ticker holds a pg advisory lock — see DEPLOY.md.
+#
+# ⚠ Confirm the plan names below in the Render dashboard before applying; Render
+# renames tiers from time to time and an unknown plan fails the blueprint.
+#
+# Blueprint spec: https://render.com/docs/blueprint-spec
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Region ───────────────────────────────────────────────────────────────────
+#
+# Singapore, and it is the single largest decision in this file for how the
+# room FEELS.
+#
+# Render defaults to Oregon when no region is given, which is what this
+# blueprint did before. Bidders are in Mongolia, and US-West is most of a
+# planet away — every bid is a round trip, and round 6 gives them five seconds
+# to make one. Singapore is Render's closest region to Ulaanbaatar.
+#
+# ⚠ The database region MUST match the service region.
+#
+# That is not a nicety. Placing a bid runs several statements inside one
+# transaction while holding `SELECT ... FOR UPDATE` on the auction row, so a
+# cross-region database multiplies the ocean crossing by the number of
+# statements AND holds the lock that serialises every other bidder on the lot
+# for the whole of it. Same region turns those into sub-millisecond hops.
+#
+# Regions Render offers: oregon, ohio, virginia, frankfurt, singapore.
+# ─────────────────────────────────────────────────────────────────────────────
+
+databases:
+  - name: urlug-db
+    # Postgres 14+ is the floor (LISTEN/NOTIFY, advisory locks, FOR UPDATE).
+    postgresMajorVersion: "16"
+    plan: basic-256mb
+    region: singapore
+
+services:
+  - type: web
+    name: urlug
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # ⚠ NOT the free plan: free instances spin down when idle and cap request
+    # duration, which kills every SSE stream and leaves the ticker no process.
+    plan: starter
+    # Must equal the database's region above.
+    region: singapore
+    healthCheckPath: /api/health
+
+    # Idempotent schema apply, run in the built image before traffic is routed.
+    # migrate.ts needs only DATABASE_URL and pg (traced into the standalone
+    # build), so it runs even before the SMS/QPAY secrets are filled in.
+    preDeployCommand: node --experimental-strip-types db/migrate.ts
+
+    envVars:
+      # Render injects the INTERNAL connection string — a direct connection, not
+      # a transaction-mode pooler, so LISTEN/NOTIFY keeps working.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: urlug-db
+          property: connectionString
+
+      # Absolute URLs in metadata/robots/sitemap. After the first deploy, set
+      # this to the service's public URL (or your custom domain).
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false
+
+      # MUST be 1 in production — the build throws otherwise.
+      - key: NEXT_PUBLIC_ROUND_TIME_SCALE
+        value: "1"
+
+      # ── SMS (REQUIRED — the server refuses to boot without SMS_API_URL) ──
+      - key: SMS_API_URL
+        sync: false
+      - key: SMS_API_KEY
+        sync: false
+      - key: SMS_SENDER
+        value: URLUG
+
+      # ── Payments (required to take real money) ──
+      - key: QPAY_API_URL
+        sync: false
+      - key: QPAY_USERNAME
+        sync: false
+      - key: QPAY_PASSWORD
+        sync: false
+      - key: QPAY_INVOICE_CODE
+        sync: false
+      - key: QPAY_CALLBACK_SECRET
+        sync: false
+
+      - key: TERMS_VERSION
+        value: "2026-08-21"
+
+      # ENABLE_HSTS is deliberately left unset. Turn it on (value "1") ONLY once
+      # the domain and every subdomain are HTTPS — it has a two-year no-undo.

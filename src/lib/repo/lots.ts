@@ -85,6 +85,7 @@ function engineStateOf(row: LotRow): EngineState {
 const STATUS_OF: Record<EngineState["outcome"], LotStatus> = {
   scheduled: "upcoming",
   running: "live",
+  review: "review",
   sold: "sold",
   unsold: "unsold",
 };
@@ -176,9 +177,21 @@ export async function getUpcomingLots(): Promise<Lot[]> {
   return lots.filter((l) => l.status === "upcoming");
 }
 
+/**
+ * Lots that are over, including the ones still waiting on a decision.
+ *
+ * A lot in `review` is deliberately in here rather than nowhere. Its clock has
+ * stopped, so it is not live; it has no hammer price, so it is not a result
+ * yet — and leaving it out of both would make it vanish from the catalogue for
+ * as long as the house takes to decide, which is exactly the window in which
+ * the people who bid on it come looking.
+ */
 export async function getResultLots(): Promise<Lot[]> {
   const lots = await selectLots("ORDER BY a.opens_at DESC");
-  return lots.filter((l) => l.status === "sold" || l.status === "unsold");
+  return lots.filter(
+    (l) =>
+      l.status === "review" || l.status === "sold" || l.status === "unsold",
+  );
 }
 
 /** The lot the hero and header CTA point at — the longest-running live one. */
@@ -205,19 +218,22 @@ export async function recentBids(
   const res = await runner.query<{
     id: number;
     paddle: string;
+    name: string;
     points: number;
     round: number;
     placed_at: Date;
     user_id: number;
   }>(
-    `SELECT id, paddle, points, round, placed_at, user_id
-       FROM bids WHERE lot_id = $1 ORDER BY id DESC LIMIT ${FEED_SIZE}`,
+    `SELECT b.id, b.paddle, u.name, b.points, b.round, b.placed_at, b.user_id
+       FROM bids b JOIN users u ON u.id = b.user_id
+       WHERE b.lot_id = $1 ORDER BY b.id DESC LIMIT ${FEED_SIZE}`,
     [lotId],
   );
 
   return res.rows.map((b) => ({
     id: String(b.id),
     paddle: b.paddle,
+    name: b.name,
     points: b.points,
     round: b.round,
     at: b.placed_at.getTime(),
@@ -271,13 +287,15 @@ export async function getRoomSnapshot(
   const rows = await query<{
     id: number;
     paddle: string;
+    name: string;
     points: number;
     round: number;
     placed_at: Date;
     user_id: number;
   }>(
-    `SELECT id, paddle, points, round, placed_at, user_id
-       FROM bids WHERE lot_id = $1 ORDER BY id DESC LIMIT ${FEED_SIZE}`,
+    `SELECT b.id, b.paddle, u.name, b.points, b.round, b.placed_at, b.user_id
+       FROM bids b JOIN users u ON u.id = b.user_id
+       WHERE b.lot_id = $1 ORDER BY b.id DESC LIMIT ${FEED_SIZE}`,
     [lotId],
   );
 
@@ -292,6 +310,7 @@ export async function getRoomSnapshot(
     bids: rows.map((b) => ({
       id: String(b.id),
       paddle: b.paddle,
+      name: b.name,
       points: b.points,
       round: b.round,
       at: b.placed_at.getTime(),

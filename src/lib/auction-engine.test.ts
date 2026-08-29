@@ -100,40 +100,85 @@ describe("the round clock", () => {
   });
 });
 
-describe("the bid clock", () => {
-  it("hammers to the standing leader when it reaches zero", () => {
-    const s = settle(state({ bidClockEndsAt: OPEN + 10_000 }), OPEN + 10_001);
-    expect(s.outcome).toBe("sold");
-    expect(s.hammerRound).toBe(1);
-    expect(s.settledAt).toBe(OPEN + 10_000);
+describe("the SOFT clock — the bid clock", () => {
+  it("moves the sale up a round rather than ending it", () => {
+    /*
+     * The rule this file exists to pin down. Silence costs a gear, not the lot:
+     * a quiet round 1 drops the answer time from five minutes to three, and
+     * anybody may still bid in round 2.
+     */
+    const expiry = OPEN + 10_000;
+    const s = settle(state({ bidClockEndsAt: expiry }), expiry + 1);
+
+    expect(s.outcome).toBe("running");
+    expect(s.round).toBe(2);
+    expect(s.settledAt).toBeNull();
+  });
+
+  it("starts the next round's clock at the moment it expired", () => {
+    /*
+     * At the expiry, not at `now` and not at the round boundary the sale never
+     * reached — round 2's bidders get round 2's full three minutes.
+     */
+    const expiry = OPEN + 10_000;
+    const s = settle(state({ bidClockEndsAt: expiry }), expiry + 1);
+    expect(s.bidClockEndsAt).toBe(expiry + bidClockMs(2));
+  });
+
+  it("leaves the HARD boundaries where they were", () => {
+    /*
+     * Advancing early does not move the schedule. Round 2 still ends when it
+     * was always going to, which is what keeps the sale inside 2h45m however
+     * quiet the room gets.
+     */
+    const expiry = OPEN + 10_000;
+    const s = settle(state({ bidClockEndsAt: expiry }), expiry + 1);
+    expect(s.roundEndsAt).toBe(OPEN + roundEndOffsetMs(2));
+  });
+
+  it("does end the sale in round 6, where there is no round to move up to", () => {
+    const expiry = OPEN + roundEndOffsetMs(5) + 5_000;
+    const s = settle(
+      state({ round: 6, bidClockEndsAt: expiry }),
+      expiry + 1,
+    );
+    expect(s.outcome).toBe("review");
+    expect(s.hammerRound).toBe(6);
+    expect(s.settledAt).toBe(expiry);
   });
 
   it("goes unsold when the lot never drew a bid", () => {
+    const expiry = OPEN + roundEndOffsetMs(5) + 5_000;
     const s = settle(
-      state({ bidClockEndsAt: OPEN + 10_000, leaderPaddle: null }),
-      OPEN + 10_001,
+      state({ round: 6, bidClockEndsAt: expiry, leaderPaddle: null }),
+      expiry + 1,
     );
     expect(s.outcome).toBe("unsold");
   });
 
   it("settles at the moment the clock expired, not the moment it was noticed", () => {
-    const expiry = OPEN + 10_000;
+    const expiry = OPEN + roundEndOffsetMs(5) + 5_000;
     // Server was down for five minutes.
-    const s = settle(state({ bidClockEndsAt: expiry }), expiry + 300_000);
+    const s = settle(
+      state({ round: 6, bidClockEndsAt: expiry }),
+      expiry + 300_000,
+    );
     expect(s.settledAt).toBe(expiry);
   });
 });
 
 describe("when both clocks expire together", () => {
-  it("hammers rather than rolling into the next round", () => {
+  it("advances exactly one round, not two", () => {
     /*
-     * A bidder watching the clock hit zero has been told the lot is gone.
-     * Advancing at that instant would take it back from whoever just won it.
+     * Both clocks now do the same thing, so the tie no longer decides an
+     * outcome — but it must still be ONE advance. Counting the same instant
+     * twice would skip a round the bidders were promised.
      */
     const boundary = OPEN + roundEndOffsetMs(1);
     const s = settle(state({ bidClockEndsAt: boundary }), boundary);
-    expect(s.outcome).toBe("sold");
-    expect(s.hammerRound).toBe(1);
+    expect(s.outcome).toBe("running");
+    expect(s.round).toBe(2);
+    expect(s.bidClockEndsAt).toBe(boundary + bidClockMs(2));
   });
 });
 
@@ -144,8 +189,21 @@ describe("round 6", () => {
       state({ round: 6, bidClockEndsAt: end + 10_000 }),
       end + 1,
     );
-    expect(s.outcome).toBe("sold");
+    expect(s.outcome).toBe("review");
     expect(s.settledAt).toBe(end);
+  });
+
+  it("is the only round either clock can end the sale in", () => {
+    /*
+     * Walked explicitly rather than asserted round by round: from a silent
+     * open, every boundary in rounds 1–5 must leave the sale running.
+     */
+    for (let round = 1; round < 6; round++) {
+      const expiry = OPEN + roundEndOffsetMs(round);
+      const s = settle(state({ round, bidClockEndsAt: expiry }), expiry + 1);
+      expect(s.outcome).toBe("running");
+      expect(s.round).toBe(round + 1);
+    }
   });
 
   it("does not advance past round 6", () => {
@@ -161,24 +219,42 @@ describe("replaying missed boundaries", () => {
    * these events were due. Settling must produce the state that WOULD have
    * existed, not the state as of the moment someone finally looked.
    */
-  it("hammers in the round the clock actually expired in, not the round we noticed in", () => {
+  it("cascades through the gears when nobody answers, and stops at round 6", () => {
+    /*
+     * The shape of the new format, replayed in one go.
+     *
+     * A bid lands late in round 1, so its five-minute clock outlives the round
+     * boundary. From there nobody answers, and each expiry buys the room a
+     * shorter clock rather than ending the lot:
+     *
+     *   r1End          → round 2, 3 minutes
+     *   +3min          → round 3, 1 minute
+     *   +1min          → round 4, 30 seconds
+     *   +30s           → round 5, 15 seconds
+     *   +15s           → round 6, 5 seconds
+     *   +5s            → over
+     *
+     * Observed long afterwards, and the answer is the state that WOULD have
+     * existed — not the state as of the moment somebody finally looked.
+     */
     const r1End = OPEN + roundEndOffsetMs(1);
+    const closedAt =
+      r1End +
+      bidClockMs(2) +
+      bidClockMs(3) +
+      bidClockMs(4) +
+      bidClockMs(5) +
+      bidClockMs(6);
+
     const s = settle(
-      // A bid landed late in round 1, so its 5-minute clock outlives the round.
       state({ bidClockEndsAt: r1End + 60_000 }),
-      // Observed 75 minutes in, by which point round 3 would have started.
       OPEN + roundEndOffsetMs(3),
     );
-    expect(s.outcome).toBe("sold");
-    /*
-     * Round 2, not round 3. The boundary reset the bid clock to round 2's
-     * 3-minute clock, which then expired unanswered 3 minutes into round 2 —
-     * long before round 2's own boundary. The lot was over at that moment, so
-     * replaying stops there rather than carrying on to where the observer is.
-     */
-    expect(s.round).toBe(2);
-    expect(s.hammerRound).toBe(2);
-    expect(s.settledAt).toBe(r1End + bidClockMs(2));
+
+    expect(s.outcome).toBe("review");
+    expect(s.round).toBe(6);
+    expect(s.hammerRound).toBe(6);
+    expect(s.settledAt).toBe(closedAt);
   });
 
   it("resets the bid clock at a round boundary, shortening a bid's lead", () => {
@@ -198,16 +274,45 @@ describe("replaying missed boundaries", () => {
     expect(s.bidClockEndsAt).toBeLessThan(r1End + 240_000);
   });
 
-  it("walks through several silent rounds without skipping any", () => {
+  it("walks through every silent round without skipping any", () => {
     /*
-     * No bid since the open, so each round's clock expires. Round 1's clock is
-     * 5 minutes and round 1 is 25 minutes long, so the hammer falls inside
-     * round 1 — it never reaches round 2 at all.
+     * Nothing since the open, so each round's soft clock expires unanswered.
+     * The sale runs all the way down the gears and closes about ten minutes in
+     * — the sum of the six bid clocks — rather than at round 1's boundary
+     * twenty-five minutes in, and rather than at the 2h45m end.
      */
+    const closedAt =
+      OPEN +
+      bidClockMs(1) +
+      bidClockMs(2) +
+      bidClockMs(3) +
+      bidClockMs(4) +
+      bidClockMs(5) +
+      bidClockMs(6);
+
     const s = settle(state(), OPEN + roundEndOffsetMs(6));
-    expect(s.outcome).toBe("sold");
-    expect(s.hammerRound).toBe(1);
-    expect(s.settledAt).toBe(OPEN + bidClockMs(1));
+    expect(s.outcome).toBe("review");
+    expect(s.round).toBe(6);
+    expect(s.hammerRound).toBe(6);
+    expect(s.settledAt).toBe(closedAt);
+    // Under ten and a half minutes, against a scheduled 2h45m.
+    expect(closedAt - OPEN).toBeLessThan(11 * 60_000);
+  });
+
+  it("lets a single bid at any point in the descent reset the clock", () => {
+    /*
+     * The reason the cascade is not just a faster way to kill a lot. A bidder
+     * who turns up in round 4 buys the room round 4's full thirty seconds, and
+     * the sale carries on from there.
+     */
+    const r4Bid = OPEN + 9 * 60_000;
+    const s = settle(
+      state({ round: 4, bidClockEndsAt: r4Bid + bidClockMs(4) }),
+      r4Bid + 1_000,
+    );
+    expect(s.outcome).toBe("running");
+    expect(s.round).toBe(4);
+    expect(s.changed).toBe(false);
   });
 
   it("terminates on a nonsense row rather than looping", () => {
@@ -216,7 +321,7 @@ describe("replaying missed boundaries", () => {
       state({ round: 6, bidClockEndsAt: 0 }),
       OPEN + 10 * roundEndOffsetMs(6),
     );
-    expect(["sold", "unsold"]).toContain(s.outcome);
+    expect(["review", "unsold"]).toContain(s.outcome);
   });
 });
 
@@ -225,6 +330,17 @@ describe("terminal states", () => {
     const s = settle(state({ outcome: "sold" }), OPEN + 10 * 60 * 60_000);
     expect(s.outcome).toBe("sold");
     expect(s.changed).toBe(false);
+  });
+
+  it("does not award a lot in review just because nobody looked at it", () => {
+    /*
+     * The whole point of the state: a week of silence must leave the lot
+     * exactly where the clock left it, waiting on a person.
+     */
+    const s = settle(state({ outcome: "review" }), OPEN + 7 * 24 * 60 * 60_000);
+    expect(s.outcome).toBe("review");
+    expect(s.changed).toBe(false);
+    expect(nextEventAt(s)).toBeNull();
   });
 
   it("reports no further events", () => {
