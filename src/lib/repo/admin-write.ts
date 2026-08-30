@@ -753,6 +753,51 @@ export async function rescheduleAuction(
   });
 }
 
+/* ── The contact inbox ───────────────────────────────────────────────────── */
+
+export type ContactResult =
+  { ok: true } | { ok: false; reason: "not-found" | "already-handled" };
+
+/**
+ * Marks a contact message answered.
+ *
+ * Reversible by nothing, on purpose — there is no "unhandle". If a message
+ * needs picking up again, that is a new conversation and the old row is the
+ * record that somebody already replied once. Audited, because "who answered
+ * this and when" is the only question anybody asks about a support inbox.
+ */
+export async function markContactHandled(
+  id: number,
+  actor: Actor,
+): Promise<ContactResult> {
+  return transaction(async (client) => {
+    const res = await client.query<{ handled_at: Date | null; name: string }>(
+      "SELECT handled_at, name FROM contact_messages WHERE id = $1 FOR UPDATE",
+      [id],
+    );
+    const row = res.rows[0];
+    if (!row) return { ok: false, reason: "not-found" };
+    if (row.handled_at) return { ok: false, reason: "already-handled" };
+
+    await client.query(
+      "UPDATE contact_messages SET handled_at = now() WHERE id = $1",
+      [id],
+    );
+
+    await record(client, {
+      actorUserId: actor.id,
+      action: "admin.contact_handled",
+      targetType: "contact_message",
+      targetId: String(id),
+      detail: { from: row.name },
+      ip: actor.ip,
+      userAgent: actor.userAgent,
+    });
+
+    return { ok: true };
+  });
+}
+
 /* ── Users ───────────────────────────────────────────────────────────────── */
 
 export type UserActionResult =

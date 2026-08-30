@@ -14,6 +14,7 @@ import {
   createLot,
   declareUnsold,
   grantBonus,
+  markContactHandled,
   rescheduleAuction,
   setUserRole,
   setUserStatus,
@@ -285,6 +286,32 @@ export async function declareUnsoldAction(
   await publish(parsed.data.lotId);
   refresh();
   return { status: "ok", message: t.admin.declaredUnsold };
+}
+
+/** Marks one contact message answered. */
+export async function markContactHandledAction(
+  _prev: AdminState,
+  formData: FormData,
+): Promise<AdminState> {
+  const who = await actor();
+  const id = Number(formData.get("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return { status: "error", message: "Мессеж олдсонгүй." };
+  }
+
+  const result = await markContactHandled(id, who);
+  if (!result.ok) {
+    return {
+      status: "error",
+      message:
+        result.reason === "already-handled"
+          ? "Энэ мессежийг аль хэдийн хариулсан байна."
+          : "Мессеж олдсонгүй.",
+    };
+  }
+
+  refresh();
+  return { status: "ok", message: t.admin.contactMarked };
 }
 
 export async function rescheduleAction(

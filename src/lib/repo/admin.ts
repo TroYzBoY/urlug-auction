@@ -330,6 +330,69 @@ export async function users(limit = 200): Promise<AdminUserRow[]> {
   }));
 }
 
+/* ── The contact inbox ───────────────────────────────────────────────────── */
+
+/**
+ * Messages sent through /contact.
+ *
+ * ⚠ Unhandled first, then newest — not simply newest.
+ *
+ * The point of an inbox is the queue, and a plain reverse-chronological list
+ * buries the oldest unanswered message under every new one. That is exactly
+ * backwards: the message somebody has been waiting longest on is the one that
+ * most needs answering.
+ *
+ * `contact` is shown in full, unlike the bidder table's deliberately hidden
+ * phone numbers. It is the whole purpose of the row — a message you cannot
+ * reply to is not a contact form.
+ */
+export interface ContactRow {
+  id: number;
+  name: string;
+  /** However they asked to be reached — a phone number or an email. */
+  contact: string;
+  topic: string;
+  message: string;
+  createdAt: string;
+  handledAt: string | null;
+}
+
+export async function contactMessages(limit = 100): Promise<ContactRow[]> {
+  const rows = await query<{
+    id: number;
+    name: string;
+    contact: string;
+    topic: string;
+    message: string;
+    created_at: Date;
+    handled_at: Date | null;
+  }>(
+    `SELECT id, name, contact, topic, message, created_at, handled_at
+       FROM contact_messages
+      ORDER BY handled_at IS NOT NULL, created_at DESC
+      LIMIT $1`,
+    [limit],
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    contact: r.contact,
+    topic: r.topic,
+    message: r.message,
+    createdAt: r.created_at.toISOString(),
+    handledAt: r.handled_at?.toISOString() ?? null,
+  }));
+}
+
+/** How many are still waiting — the number worth putting on the panel heading. */
+export async function unhandledContactCount(): Promise<number> {
+  const row = await queryOne<{ n: number }>(
+    "SELECT count(*)::int AS n FROM contact_messages WHERE handled_at IS NULL",
+  );
+  return row?.n ?? 0;
+}
+
 export interface AuditRow {
   id: number;
   action: string;

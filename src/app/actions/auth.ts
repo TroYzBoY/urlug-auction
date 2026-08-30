@@ -6,6 +6,8 @@ import { env } from "@/lib/env";
 import { REGISTRATION_CONSENTS } from "@/lib/legal";
 import { LIMITS, consume } from "@/lib/rate-limit";
 import { recordDetached } from "@/lib/audit";
+import { reportError } from "@/lib/observability";
+import { t } from "@/lib/copy";
 import { fakeVerifyDelay, hashPassword, verifyPassword } from "@/lib/password";
 import {
   clientIpFrom,
@@ -13,7 +15,7 @@ import {
   destroySession,
   revokeAllSessions,
 } from "@/lib/session";
-import { issueCode, otpBypassed, verifyCode } from "@/lib/sms";
+import { SmsDeliveryError, issueCode, otpBypassed, verifyCode } from "@/lib/sms";
 import {
   createUser,
   findByPhone,
@@ -53,6 +55,33 @@ export type AuthState =
   | { status: "ok" };
 
 const GENERIC_LOGIN_ERROR = "Утасны дугаар эсвэл нууц үг буруу байна.";
+
+/**
+ * Sends a code, and turns a gateway failure into something the form can show.
+ *
+ * ⚠ Every `issueCode` call goes through here. A raw throw from the gateway
+ * reaches the client as Next's "A server error occurred" page — which tells a
+ * bidder nothing, offers no retry, and looks like the whole site is down when
+ * in fact one upstream is. It also happens at the single worst moment: the
+ * first thing anybody does on the site.
+ *
+ * The failure is logged so it can be alerted on. A gateway that is refusing
+ * messages is an outage — every new bidder is locked out for its duration —
+ * and it is invisible from the outside, because the pages all still render.
+ */
+async function sendCode(
+  phone: string,
+  purpose: "verify" | "reset",
+): Promise<AuthState | null> {
+  try {
+    await issueCode(phone, purpose);
+    return null;
+  } catch (err) {
+    if (!(err instanceof SmsDeliveryError)) throw err;
+    reportError(err, { event: "otp.delivery_failed", purpose });
+    return { status: "error", message: t.auth.codeUndelivered };
+  }
+}
 
 async function context() {
   const h = await headers();
@@ -138,7 +167,8 @@ export async function register(
     redirect("/lots");
   }
 
-  await issueCode(parsed.data.phone, "verify");
+  const undelivered = await sendCode(parsed.data.phone, "verify");
+  if (undelivered) return undelivered;
   return { status: "code-sent", phone: parsed.data.phone };
 }
 
@@ -223,7 +253,8 @@ export async function resendCode(
     };
   }
 
-  await issueCode(parsed.data, "verify");
+  const undelivered = await sendCode(parsed.data, "verify");
+  if (undelivered) return undelivered;
   return { status: "code-sent", phone: parsed.data };
 }
 
@@ -282,7 +313,8 @@ export async function login(
   if (!user.phone_verified_at && !otpBypassed()) {
     // Correct credentials, unverified number: send a fresh code rather than
     // stranding them at a form they cannot get past.
-    await issueCode(user.phone, "verify");
+    const undelivered = await sendCode(user.phone, "verify");
+    if (undelivered) return undelivered;
     return { status: "code-sent", phone: user.phone };
   }
   /*
@@ -335,7 +367,13 @@ export async function requestReset(
   }
 
   const user = await findByPhone(parsed.data);
-  if (user && user.status === "active") await issueCode(parsed.data, "reset");
+  /*
+   * The reset path answers the same way whether or not the account exists, so a
+   * delivery failure must not become a distinguishing error either — it is
+   * logged and swallowed. Telling an attacker "we tried to text that number"
+   * is the account enumeration this branch exists to prevent.
+   */
+  if (user && user.status === "active") await sendCode(parsed.data, "reset");
 
   // Reported identically whether or not the number is registered.
   return { status: "code-sent", phone: parsed.data };

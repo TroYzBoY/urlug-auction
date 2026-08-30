@@ -77,12 +77,42 @@ export async function issueCode(
     [phone, purpose, hashToken(code), String(CODE_TTL_MIN)],
   );
 
-  await sendSms(
-    phone,
-    purpose === "verify"
-      ? `${t.brand.name} баталгаажуулах код: ${code}. ${CODE_TTL_MIN} минутын дотор хүчинтэй.`
-      : `${t.brand.name} нууц үг сэргээх код: ${code}. ${CODE_TTL_MIN} минутын дотор хүчинтэй.`,
-  );
+  /*
+   * A gateway failure is turned into a NAMED error rather than left to
+   * propagate as whatever the fetch threw.
+   *
+   * The code row above is already written, deliberately — the bidder may still
+   * receive a message from a retry, and an orphaned row expires by itself. What
+   * must not happen is the raw throw reaching the Server Function, which is how
+   * a registration ends at Next's "A server error occurred" page: no
+   * explanation, no retry affordance, and a bidder who reasonably concludes the
+   * whole site is broken. Callers catch this and say what actually went wrong.
+   */
+  try {
+    await sendSms(
+      phone,
+      purpose === "verify"
+        ? `${t.brand.name} баталгаажуулах код: ${code}. ${CODE_TTL_MIN} минутын дотор хүчинтэй.`
+        : `${t.brand.name} нууц үг сэргээх код: ${code}. ${CODE_TTL_MIN} минутын дотор хүчинтэй.`,
+    );
+  } catch (cause) {
+    /* The message is never logged — it carries the code. Only the reason. */
+    throw new SmsDeliveryError(cause);
+  }
+}
+
+/**
+ * The gateway would not take the message.
+ *
+ * Its own class so a caller can tell "we could not send the code" — worth
+ * showing the user and worth alerting on — apart from a bug in the code path
+ * around it, which is not.
+ */
+export class SmsDeliveryError extends Error {
+  constructor(cause: unknown) {
+    super("SMS delivery failed", { cause });
+    this.name = "SmsDeliveryError";
+  }
 }
 
 export type OtpResult = "ok" | "invalid" | "expired" | "exhausted";

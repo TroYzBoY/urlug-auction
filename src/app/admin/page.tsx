@@ -3,11 +3,19 @@ import Link from "next/link";
 import { AccountShell, Panel, Stat } from "@/components/account/AccountShell";
 import {
   AuctionControls,
+  ContactHandledButton,
   CreateLotForm,
   UserControls,
   WinnerPicker,
 } from "@/components/admin/AdminForms";
-import { lots, recentAudit, reviewQueue, stats, users } from "@/lib/repo/admin";
+import {
+  contactMessages,
+  lots,
+  recentAudit,
+  reviewQueue,
+  stats,
+  users,
+} from "@/lib/repo/admin";
 import { reconcileBalances } from "@/lib/repo/users";
 import { requireAdmin } from "@/lib/session";
 import { groupNumber, lotDate, pts } from "@/lib/format";
@@ -34,7 +42,8 @@ export default async function AdminPage() {
    */
   const admin = await requireAdmin();
 
-  const [figures, lotRows, pending, userRows, audit, drift] = await Promise.all([
+  const [figures, lotRows, pending, userRows, inbox, audit, drift] =
+    await Promise.all([
     stats(),
     lots(),
     /*
@@ -44,6 +53,7 @@ export default async function AdminPage() {
      */
     reviewQueue(),
     users(),
+    contactMessages(),
     recentAudit(),
     /*
      * Run on every page load rather than on a schedule. It is a single
@@ -53,6 +63,9 @@ export default async function AdminPage() {
      */
     reconcileBalances(),
   ]);
+
+  /* Counted here rather than queried: the rows are already in memory. */
+  const unhandled = inbox.filter((m) => m.handledAt === null).length;
 
   return (
     <AccountShell
@@ -360,6 +373,62 @@ export default async function AdminPage() {
             </tbody>
           </table>
         </div>
+      </Panel>
+
+      {/*
+        The inbox sits above the audit log because it is the only list on this
+        page with somebody waiting at the other end of it.
+      */}
+      <Panel
+        heading={
+          unhandled > 0
+            ? `${t.admin.contactInbox} · ${t.admin.contactUnhandled(unhandled)}`
+            : t.admin.contactInbox
+        }
+        empty={t.admin.contactEmpty}
+        isEmpty={inbox.length === 0}
+      >
+        <ul className="flex flex-col gap-4">
+          {inbox.map((msg) => (
+            <li
+              key={msg.id}
+              className={`border p-4 ${
+                msg.handledAt ? "border-line opacity-60" : "border-flare/40"
+              }`}
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+                <p className="min-w-0">
+                  <span className="text-ink">{msg.name}</span>
+                  <span aria-hidden className="text-line-strong mx-2">
+                    /
+                  </span>
+                  {/* Selectable and shown in full — replying to it is the point. */}
+                  <span data-numerals className="text-accent select-all">
+                    {msg.contact}
+                  </span>
+                </p>
+                <p data-numerals className="text-faint text-xs">
+                  {msg.topic} · {lotDate(msg.createdAt)}
+                </p>
+              </div>
+
+              {/* whitespace-pre-wrap: somebody's paragraphs are how they wrote them. */}
+              <p className="text-ink-soft mt-3 text-sm leading-relaxed whitespace-pre-wrap">
+                {msg.message}
+              </p>
+
+              <div className="border-line mt-3 border-t pt-3">
+                {msg.handledAt ? (
+                  <p data-numerals className="text-olive text-xs">
+                    {t.admin.contactHandled} · {lotDate(msg.handledAt)}
+                  </p>
+                ) : (
+                  <ContactHandledButton id={msg.id} />
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
       </Panel>
 
       <Panel

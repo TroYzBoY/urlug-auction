@@ -10,6 +10,7 @@ import {
   createLotAction,
   declareUnsoldAction,
   grantBonusAction,
+  markContactHandledAction,
   rescheduleAction,
   setUserRoleAction,
   setUserStatusAction,
@@ -528,6 +529,31 @@ export function WinnerPicker({
         </form>
       )}
     </div>
+  );
+}
+
+/* ── Contact inbox ───────────────────────────────────────────────────────── */
+
+/**
+ * One button, and no confirmation step.
+ *
+ * Unlike the auction controls, marking a message answered takes nothing away
+ * from anybody — the worst case is that somebody gets replied to twice. A
+ * two-step confirm on a control this harmless is friction that trains an
+ * operator to click through the ones that do matter.
+ */
+export function ContactHandledButton({ id }: { id: number }) {
+  const [state, action] = useActionState<AdminState, FormData>(
+    markContactHandledAction,
+    IDLE,
+  );
+
+  return (
+    <form action={action} className="flex flex-col gap-1">
+      <input type="hidden" name="id" value={id} />
+      <Submit label={t.admin.contactMarkHandled} />
+      <Result state={state} />
+    </form>
   );
 }
 
