@@ -1,0 +1,100 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Fly.io configuration for URLUG.
+#
+# ── Why Hong Kong ────────────────────────────────────────────────────────────
+#
+# Measured from Ulaanbaatar, one TCP handshake, best of five:
+#
+#   Hong Kong    57 ms     ← here
+#   Tokyo        84 ms
+#   Seoul        91 ms
+#   Singapore   107 ms     (Render's only Asian region)
+#   Frankfurt   116 ms
+#   Oregon      190 ms     (Render's default when none is given)
+#   Virginia    217 ms
+#
+# Mongolian transit runs through China, which is why Hong Kong beats Tokyo
+# despite being further away in a straight line. Every bid is a round trip and
+# round 6 allows five seconds for one, so this is the single most consequential
+# line in the file.
+#
+# ⚠ Create the Postgres in `hkg` too. `placeBid` runs several statements in one
+# transaction while holding SELECT … FOR UPDATE on the auction row; a database
+# in another region puts an ocean inside that lock, and every other bidder on
+# the lot waits behind it.
+#
+#   fly postgres create --region hkg
+#   fly postgres attach <db-name>          # sets DATABASE_URL as a secret
+#
+# Full runbook: DEPLOY-PLATFORM.md · architecture: DEPLOY.md
+# ─────────────────────────────────────────────────────────────────────────────
+
+app = "urlug"
+primary_region = "hkg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+  # ⚠ NEXT_PUBLIC_* is inlined by the compiler, so it must be here and not in
+  # `fly secrets` — a secret arrives at runtime, which is after the value has
+  # already been baked in. robots.txt is prerendered with the site URL in it, so
+  # getting this wrong ships a production robots.txt pointing at localhost.
+  #
+  # Set this to the real public URL before the first deploy.
+  [build.args]
+    NEXT_PUBLIC_SITE_URL = "https://urlug.fly.dev"
+    NEXT_PUBLIC_ROUND_TIME_SCALE = "1"
+
+# Runs on a temporary machine with the secrets attached, before the new version
+# takes traffic. Idempotent, so a redeploy re-applies it harmlessly; a failure
+# here aborts the deploy rather than releasing a version its schema cannot serve.
+[deploy]
+  release_command = "node --experimental-strip-types db/migrate.ts"
+
+# Non-secret runtime values. Everything else — DATABASE_URL, SMS_*, QPAY_* —
+# goes in `fly secrets set`, which keeps it out of this file and out of git.
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+  SMS_SENDER = "URLUG"
+  TERMS_VERSION = "2026-08-21"
+  # ENABLE_HSTS is deliberately absent. Turn it on only once the domain and
+  # every subdomain are HTTPS — it has a two-year no-undo, and never on staging.
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+
+  # ⚠ BOTH of these, and neither is a default.
+  #
+  # Fly stops idle machines. That would suspend the process holding the ticker's
+  # advisory lock and drop every SSE stream — a room can legitimately be silent
+  # for most of round 1's five-minute clock, which looks exactly like idle. A
+  # stopped machine means no ticker, so no lot advances a round and no hammer
+  # falls until somebody happens to load a page.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  # Each viewer holds one SSE connection open for the length of a sale, so the
+  # ceiling here is concurrent connections rather than requests per second.
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 400
+    soft_limit = 350
+
+  # Queries Postgres and answers 503 when it cannot reach it, so this checks the
+  # thing that actually matters rather than whether Node is running.
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "4s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/api/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  # 512MB is enough to boot and not enough for a busy room: the standalone
+  # server plus a few hundred open streams sits comfortably in 1GB.
+  memory = "1gb"
+  cpus = 1

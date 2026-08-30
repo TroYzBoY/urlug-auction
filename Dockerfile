@@ -33,6 +33,24 @@ COPY . .
 # No DATABASE_URL here, deliberately. src/lib/env.ts reads through getters and
 # src/lib/db.ts creates the pool lazily, so a build needs no credentials — CI
 # can compile this without a production password.
+#
+# ⚠ The two NEXT_PUBLIC_ values are a different matter and MUST be passed here.
+#
+# Next inlines `NEXT_PUBLIC_*` at compile time wherever it appears — server
+# components included — so a value supplied only as a runtime secret arrives
+# too late and is silently ignored. `robots.txt` is prerendered to a static
+# file carrying the site URL, which is how "it works locally" ships a
+# production robots.txt pointing at localhost.
+#
+#   docker build --build-arg NEXT_PUBLIC_SITE_URL=https://example.mn .
+#
+# ROUND_TIME_SCALE defaults to 1 and src/lib/auction.ts throws on a production
+# build that sees anything else, so the default here is also the safe one.
+ARG NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_ROUND_TIME_SCALE=1
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+ENV NEXT_PUBLIC_ROUND_TIME_SCALE=$NEXT_PUBLIC_ROUND_TIME_SCALE
+
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 

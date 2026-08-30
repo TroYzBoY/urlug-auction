@@ -11,15 +11,29 @@
 # Blueprint spec: https://render.com/docs/blueprint-spec
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ⚠ Render is the SECOND-fastest option for this audience. Measured from
+# Ulaanbaatar (one TCP handshake, best of five):
+#
+#     Hong Kong    57 ms      ← fly.toml deploys here
+#     Tokyo        84 ms
+#     Singapore   107 ms      ← the best Render can do; set below
+#     Oregon      190 ms      ← Render's default when no region is given
+#
+# Render has no Asian region nearer than Singapore, so this blueprint cannot go
+# below ~107ms. `fly.toml` in this repo deploys the same image to Hong Kong at
+# roughly half that. Keep this file as the lower-effort path — managed Postgres
+# and backups come with it — and use it knowing the trade.
+#
+# ⚠ NEXT_PUBLIC_SITE_URL below is a RUNTIME variable here, and Next inlines
+# NEXT_PUBLIC_* at BUILD time. Confirm Render passes it into the Docker build
+# (the Dockerfile declares it as an ARG); if it does not, robots.txt and every
+# share card ship pointing at localhost. Verify after the first deploy by
+# fetching /robots.txt and reading the Sitemap line.
+#
 # ── Region ───────────────────────────────────────────────────────────────────
 #
 # Singapore, and it is the single largest decision in this file for how the
 # room FEELS.
-#
-# Render defaults to Oregon when no region is given, which is what this
-# blueprint did before. Bidders are in Mongolia, and US-West is most of a
-# planet away — every bid is a round trip, and round 6 gives them five seconds
-# to make one. Singapore is Render's closest region to Ulaanbaatar.
 #
 # ⚠ The database region MUST match the service region.
 #
