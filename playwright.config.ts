@@ -32,6 +32,12 @@ const TEST_DATABASE_URL =
 
 export default defineConfig({
   testDir: "./e2e",
+  /*
+   * Applies db/schema.sql to the test database before anything runs. Without
+   * it a schema change makes sixteen tests fail on assertions that have
+   * nothing to do with it — see the note in the file.
+   */
+  globalSetup: "./e2e/global-setup.ts",
   // These share one database and one server; parallel files would race on the
   // fixtures each of them sets up.
   fullyParallel: false,
@@ -67,6 +73,13 @@ export default defineConfig({
        */
       NEXT_PUBLIC_ROUND_TIME_SCALE: "60",
       SMS_API_URL: "",
+      /*
+       * Off, for exactly the reason DEV_SKIP_OTP is below: with it on,
+       * registering redirects straight to /lots and the code step these tests
+       * exist to exercise never renders. It is a production flag, so unlike
+       * DEV_SKIP_OTP nothing else would stop it leaking in from a .env.local.
+       */
+      ALLOW_UNVERIFIED_SIGNUP: "",
       /*
        * Off, whatever .env.local says. These tests exist to exercise the real
        * sign-up path, and the first thing that path does is ask for a code —

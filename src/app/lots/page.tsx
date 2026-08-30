@@ -128,7 +128,40 @@ export default async function LotsPage(props: PageProps<"/lots">) {
           </div>
 
           {visible.length === 0 ? (
-            <p className="mt-10 text-sm text-muted">{t.lots.empty}</p>
+            /*
+              Two different kinds of empty, and saying the wrong one costs a
+              visitor. "No lots in this category" is only true when another
+              category has some — it invites a click that helps. When the whole
+              catalogue is empty it is a lie that sends somebody round all four
+              filters before they leave, and right now it is the first thing
+              anybody arriving at the site would read.
+            */
+            <div className="mt-10">
+              {pools.all.length === 0 ? (
+                <>
+                  <p className="text-ink text-base">{t.lots.emptyHouse}</p>
+                  <p className="text-muted mt-2 max-w-prose text-sm leading-relaxed">
+                    {t.lots.emptyHouseHint}
+                  </p>
+                  <Link
+                    href="/rules"
+                    className="eyebrow border-line text-ink hover:border-accent hover:text-accent mt-5 inline-flex h-10 items-center border px-4 transition-colors"
+                  >
+                    {t.room.rulesLink}
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <p className="text-muted text-sm">{t.lots.empty}</p>
+                  <Link
+                    href="/lots?filter=all"
+                    className="text-accent mt-3 inline-block text-sm underline underline-offset-4"
+                  >
+                    {t.lots.emptyOther}
+                  </Link>
+                </>
+              )}
+            </div>
           ) : (
             <>
               <p className="eyebrow mt-6" data-numerals>

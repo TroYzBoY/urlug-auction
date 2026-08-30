@@ -29,16 +29,19 @@ const THIN = " ";
  * The headline price.
  *
  * `getByText` on the number alone matches five things — the estimate range, the
- * tugrik conversion, and the copies of both in the aside. Nor can the figure be
- * read as text: RollingNumber is an odometer, so every digit is a column of
- * 0-9 and the paragraph reads "0123456789 0123456789..." with CSS deciding
- * which line shows.
+ * tugrik conversion, and the copies of both in the aside. So it is located by
+ * the live region it sits in.
  *
- * The value a screen reader gets is on the wrapper's aria-label, and that is
- * the honest thing to assert: it is what the number IS, rather than what the
- * animation happens to have in the DOM.
+ * The screen-reader copy specifically, not the visible one. RollingNumber
+ * counts to a new price rather than jumping to it, so the visible span holds
+ * intermediate values for a few hundred milliseconds; the sr-only span is
+ * always the settled figure. Asserting on it is both what the number IS and
+ * immune to catching the animation mid-count.
+ *
+ * (It used to assert an aria-label, because the odometer this replaced put all
+ * ten digits of every column in the DOM and the text was unreadable.)
  */
-const PRICE = 'p[aria-live="polite"][aria-atomic="true"] span[aria-label]';
+const PRICE = 'p[aria-live="polite"][aria-atomic="true"] span.sr-only';
 
 /*
  * The app's digit grouping, thin space and all — the same loop as groupNumber
@@ -112,10 +115,7 @@ test("a second tab sees the bid without reloading", async ({ browser }) => {
   const watcher = await browser.newContext();
   const watcherPage = await watcher.newPage();
   await watcherPage.goto("/auction/E03");
-  await expect(watcherPage.locator(PRICE)).toHaveAttribute(
-    "aria-label",
-    `1${THIN}200`,
-  );
+  await expect(watcherPage.locator(PRICE)).toHaveText(`1${THIN}200`);
 
   const bidderContext = await browser.newContext();
   const bidderPage = await bidderContext.newPage();
@@ -139,11 +139,9 @@ test("a second tab sees the bid without reloading", async ({ browser }) => {
     .toBeGreaterThan(1200);
   const moved = await currentPts("E03");
 
-  await expect(watcherPage.locator(PRICE)).toHaveAttribute(
-    "aria-label",
-    grouped(moved),
-    { timeout: 15_000 },
-  );
+  await expect(watcherPage.locator(PRICE)).toHaveText(grouped(moved), {
+    timeout: 15_000,
+  });
 
   await watcher.close();
   await bidderContext.close();

@@ -27,7 +27,8 @@ test("registering asks for a code and signs the bidder in", async ({ page }) => 
   });
 
   await page.goto("/register");
-  await page.getByLabel(/Овог нэр/).fill("Батбаяр");
+  await page.getByLabel(/^Овог$/).fill("Мөнхболд");
+  await page.getByLabel(/^Нэр$/).fill("Батбаяр");
   await page.getByLabel(/Утасны дугаар/).fill("99117777");
   await page.getByLabel(/^Нууц үг$/).fill("test-password-123");
   await page.getByLabel(/Нууц үгээ давтах/).fill("test-password-123");
@@ -51,7 +52,8 @@ test("registering asks for a code and signs the bidder in", async ({ page }) => 
  */
 test("registering under 18 is refused", async ({ page }) => {
   await page.goto("/register");
-  await page.getByLabel(/Овог нэр/).fill("Залуу");
+  await page.getByLabel(/^Овог$/).fill("Дорж");
+  await page.getByLabel(/^Нэр$/).fill("Залуу");
   await page.getByLabel(/Утасны дугаар/).fill("99118888");
   await page.getByLabel(/^Нууц үг$/).fill("test-password-123");
   await page.getByLabel(/Нууц үгээ давтах/).fill("test-password-123");

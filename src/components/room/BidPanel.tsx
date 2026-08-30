@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
+  LATE_JOIN_PENALTY_PTS,
   isLegalBid,
   minIncrementPts,
   minNextBidPts,
@@ -19,6 +20,8 @@ export function BidPanel({
   isYourLead,
   leaderName,
   canBid,
+  balancePts,
+  shortOfJoinFee,
   rejection,
   onBid,
 }: {
@@ -34,6 +37,18 @@ export function BidPanel({
    * shown a sign-in link instead of a button that fails.
    */
   canBid: boolean;
+  /** The viewer's points. Shown only where they decide something. */
+  balancePts: number;
+  /**
+   * This bidder cannot cover the join fee, so their first bid on this lot will
+   * be refused. Computed in AuctionRoom, where the round is.
+   *
+   * ⚠ A UX gate like `canBid`, not a control. The balance is charged and
+   * checked in one statement on the server (`bids.ts`), which is what actually
+   * stops an overdraw; this only means somebody is told before they tap rather
+   * than after.
+   */
+  shortOfJoinFee: boolean;
   /** The server's reason for turning the last bid down, already translated. */
   rejection: string | null;
   onBid: (points: number) => void;
@@ -281,7 +296,7 @@ export function BidPanel({
         whileHover={{ scale: 1.01 }}
         whileTap={{ scale: 0.97 }}
         onClick={() => commit(total)}
-        disabled={!canBid}
+        disabled={!canBid || shortOfJoinFee}
         className="mt-2.5 flex h-14 w-full touch-manipulation items-center justify-between gap-3 bg-accent px-4 text-accent-ink transition-colors duration-150 disabled:opacity-60 font-sans shadow-lg"
       >
         {/*
@@ -317,6 +332,24 @@ export function BidPanel({
             className="font-medium text-flare underline underline-offset-2"
           >
             {t.room.signInToBid}
+          </Link>
+        </p>
+      )}
+
+      {/*
+        Said here rather than left to the server's rejection. The bid would be
+        refused for funds, and the difference between learning that before the
+        tap and after it is the difference between a route out — top up — and a
+        dead button with an error under it.
+      */}
+      {canBid && shortOfJoinFee && (
+        <p className="mt-2 text-xs leading-relaxed text-rust">
+          {t.room.joinFeeShort(LATE_JOIN_PENALTY_PTS, balancePts)}{" "}
+          <Link
+            href="/wallet"
+            className="font-medium text-flare underline underline-offset-2"
+          >
+            {t.room.topUp}
           </Link>
         </p>
       )}

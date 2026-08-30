@@ -74,6 +74,7 @@ export default async function AuctionPage(props: PageProps<"/auction/[id]">) {
       viewerPaddle={user?.paddle ?? null}
       viewerName={user?.name ?? null}
       canBid={user !== null && user.phoneVerified && user.status === "active"}
+      balancePts={user?.balancePts ?? 0}
     />
   );
 }

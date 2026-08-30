@@ -5,7 +5,11 @@ import { Header } from "@/components/site/Header";
 import { RollingNumber } from "@/components/site/RollingNumber";
 import { LiveDot } from "@/components/lot/LotCard";
 import { placeBid as submitBid } from "@/app/actions/bid";
-import { LATE_JOIN_PENALTY_PTS, ROUND_TIME_SCALE } from "@/lib/auction";
+import {
+  LATE_ENTRY_FROM_ROUND,
+  LATE_JOIN_PENALTY_PTS,
+  ROUND_TIME_SCALE,
+} from "@/lib/auction";
 import { ptsToMnt } from "@/lib/format";
 import { t } from "@/lib/copy";
 import type { RoomState } from "@/lib/types";
@@ -32,6 +36,7 @@ export function AuctionRoom({
   viewerPaddle,
   viewerName,
   canBid,
+  balancePts,
 }: {
   initialState: RoomState;
   /** null when signed out. The identity the lead is decided on. */
@@ -40,6 +45,8 @@ export function AuctionRoom({
   viewerName: string | null;
   /** Signed in, verified and not suspended. The server checks this too. */
   canBid: boolean;
+  /** The viewer's points. 0 when signed out. Only the join fee spends them. */
+  balancePts: number;
 }) {
   const { state, spec, isYourLead, leaderName, applyOptimistic, rollback, refetch } =
     useAuctionRoom(initialState, viewerPaddle, viewerName);
@@ -96,6 +103,18 @@ export function AuctionRoom({
    * is still happening and that this screen will say so.
    */
   const underReview = state.outcome === "review";
+
+  /*
+   * The join fee, and whether this bidder can cover it.
+   *
+   * It is the ONLY thing a bid spends from the balance — the hammer price is
+   * recorded as an obligation, never deducted — so this is the whole of what
+   * "insufficient funds" can mean in the room, and it applies to exactly one
+   * person: somebody entering a lot that is already past round 1.
+   */
+  const joinFeeApplies =
+    !frozen && !state.hasBid && state.round >= LATE_ENTRY_FROM_ROUND;
+  const shortOfJoinFee = joinFeeApplies && balancePts < LATE_JOIN_PENALTY_PTS;
   const bidClockTotalMs = spec.bidClockSec * 1000;
   const roundTotalMs = (spec.durationMin * 60_000) / ROUND_TIME_SCALE;
 
@@ -169,7 +188,16 @@ export function AuctionRoom({
             */}
             {underReview && <ReviewNotice />}
 
-            {!frozen && !state.hasBid && (
+            {/*
+              ⚠ Gated on the ROUND, which it was not before.
+              `placeBid` charges the join fee only from LATE_ENTRY_FROM_ROUND
+              onward — round 1 is free — and this line was shown to everybody
+              who had not yet bid. A bidder arriving at the open was told ten
+              points would come out of their account, and then none did. A
+              disclosure that overstates a charge is still a wrong disclosure:
+              it talks people out of bidding for a fee that does not exist.
+            */}
+            {joinFeeApplies && (
               <p className="border-flare/60 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-l-2 pl-3 text-xs leading-snug text-ink-soft">
                 <span className="eyebrow text-flare">
                   {t.room.joinPenaltyLabel}
@@ -272,6 +300,8 @@ export function AuctionRoom({
               isYourLead={isYourLead}
               leaderName={leaderName}
               canBid={canBid}
+              balancePts={balancePts}
+              shortOfJoinFee={shortOfJoinFee}
               rejection={rejection}
               onBid={attemptBid}
             />

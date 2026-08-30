@@ -79,6 +79,13 @@ test("a bidder changes their display name", async ({ page }) => {
   await signIn(page, bidder);
   await page.goto("/profile");
 
+  /*
+   * Both halves. The form asks for овог and нэр separately and requires
+   * each, and this fixture predates the split so its овог starts empty —
+   * which is exactly the case a returning bidder meets, and exactly what the
+   * form is for.
+   */
+  await page.getByLabel(/^Овог$/).fill("Дорж");
   await page.getByLabel(/Харагдах нэр/).fill("Шинэ Нэр");
   await page.getByRole("button", { name: /Нэр хадгалах/ }).click();
 
@@ -86,6 +93,7 @@ test("a bidder changes their display name", async ({ page }) => {
 
   await page.reload();
   await expect(page.getByLabel(/Харагдах нэр/)).toHaveValue("Шинэ Нэр");
+  await expect(page.getByLabel(/^Овог$/)).toHaveValue("Дорж");
 });
 
 test("changing a password needs the current one", async ({ page }) => {
