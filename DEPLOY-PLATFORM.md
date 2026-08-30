@@ -48,10 +48,10 @@ Measured from Ulaanbaatar — one TCP handshake, best of five:
 | Region | RTT | |
 | --- | --- | --- |
 | Ulaanbaatar (domestic) | ~5 ms | a Mongolian datacentre, if you can operate Postgres yourself |
-| **Hong Kong** | **57 ms** | **what [`fly.toml`](fly.toml) uses** |
-| Tokyo | 84 ms | |
+| Hong Kong | 57 ms | fastest — but no managed platform here offers it |
+| **Tokyo** | **84 ms** | **what [`fly.toml`](fly.toml) uses (`nrt`)** |
 | Seoul / Osaka | 91 ms | |
-| Singapore | 107 ms | the best Render can do |
+| Singapore | 107 ms | Fly `sin`, and the best Render can do |
 | Frankfurt | 116 ms | |
 | Oregon | 190 ms | Render's default when none is given |
 | Virginia | 217 ms | |
@@ -63,9 +63,15 @@ bidders are on.
 
 | Platform | Choose |
 | --- | --- |
-| Fly.io | `hkg` |
+| Fly.io | `nrt` (Tokyo). Its Asia-Pacific list is Singapore, Sydney and Tokyo only — check with `fly platform regions`, it changes |
 | Railway | Southeast Asia |
 | Render | `singapore` (service *and* database — [`render.yaml`](render.yaml) pins both) |
+
+Hong Kong is the fastest for this audience and **no managed platform in this
+document offers it**. Getting below ~84ms means a VPS — Vultr and Alibaba both
+have Hong Kong, and a Mongolian datacentre is ~5ms — and that trades managed
+Postgres with backups for operating it yourself. `DEPLOY.md` is emphatic about
+what that costs.
 
 Two things make this bigger than a single round trip:
 
@@ -99,19 +105,20 @@ duration, so the p99 in the logs is the real answer for real bidders.
 
 ---
 
-## Option A — Fly.io, Hong Kong (recommended)
+## Option A — Fly.io, Tokyo (recommended)
 
 Fastest for a Mongolian audience by a clear margin, and the repo carries a
-[`fly.toml`](fly.toml) that pins `hkg`, the health check, the release-time
+[`fly.toml`](fly.toml) that pins `nrt`, the health check, the release-time
 migration and — importantly — the build arg.
 
 ```bash
 fly launch --no-deploy --copy-config      # keeps the fly.toml in this repo
 
 # Postgres in the SAME region. A database elsewhere puts an ocean inside the
-# transaction that holds the bid lock.
-fly postgres create --region hkg
-fly postgres attach <db-name>             # sets DATABASE_URL as a secret
+# transaction that holds the bid lock. Managed Postgres is available in nrt,
+# which is worth taking: `fly postgres` is unmanaged and has no PITR.
+fly mpg create --region nrt
+fly mpg attach <db-name>                  # sets DATABASE_URL as a secret
 
 # Runtime secrets. NEXT_PUBLIC_* deliberately absent — see the build-time trap.
 fly secrets set \
@@ -139,14 +146,15 @@ auction rather than merely slowing it:
   five-minute clock — which looks exactly like idle. A stopped machine has no
   ticker, so no lot advances a round and no hammer falls until somebody happens
   to load a page.
-- `primary_region = "hkg"`, matching the database's region.
+- `primary_region = "nrt"`, matching the database's region.
 - `[build.args] NEXT_PUBLIC_SITE_URL`. Not a secret. See the build-time trap
   above, and check `/robots.txt` after the first deploy.
 
-⚠ `fly postgres` is **unmanaged** — Fly operates the VM, you operate Postgres.
-Snapshots are volume-level, not point-in-time. `DEPLOY.md` is emphatic that
-`bids` and `ledger_entries` need WAL archiving with a *tested* restore; budget
-for that, or use Fly's Managed Postgres offering where it is available in `hkg`.
+⚠ Use **Managed** Postgres (`fly mpg`), not `fly postgres`. The latter is
+unmanaged — Fly operates the VM, you operate Postgres, and its snapshots are
+volume-level rather than point-in-time. `DEPLOY.md` is emphatic that `bids` and
+`ledger_entries` need WAL archiving with a *tested* restore. `fly platform
+regions` marks Managed availability in its MPG column; `nrt` has it.
 
 Scaling out is `fly scale count 2` — the ticker elects one leader through a
 Postgres advisory lock and `LISTEN/NOTIFY` fans out across machines, so nothing

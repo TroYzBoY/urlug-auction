@@ -1,36 +1,41 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Fly.io configuration for URLUG.
 #
-# ── Why Hong Kong ────────────────────────────────────────────────────────────
+# ── Why Tokyo ────────────────────────────────────────────────────────────────
 #
 # Measured from Ulaanbaatar, one TCP handshake, best of five:
 #
-#   Hong Kong    57 ms     ← here
-#   Tokyo        84 ms
+#   Hong Kong    57 ms     ← fastest, but Fly does not offer it
+#   Tokyo        84 ms     ← here: the best Fly has for this audience
 #   Seoul        91 ms
-#   Singapore   107 ms     (Render's only Asian region)
+#   Singapore   107 ms     (Fly `sin`, and Render's only Asian region)
 #   Frankfurt   116 ms
 #   Oregon      190 ms     (Render's default when none is given)
 #   Virginia    217 ms
 #
-# Mongolian transit runs through China, which is why Hong Kong beats Tokyo
-# despite being further away in a straight line. Every bid is a round trip and
-# round 6 allows five seconds for one, so this is the single most consequential
-# line in the file.
+# Mongolian transit runs through China, which is why Hong Kong would win if it
+# were on the menu. Fly's Asia-Pacific list is Singapore, Sydney and Tokyo only
+# (`fly platform regions`), so Tokyo it is — 23ms better than the Singapore any
+# other managed platform would give, and 106ms better than a US default.
 #
-# ⚠ Create the Postgres in `hkg` too. `placeBid` runs several statements in one
+# Every bid is a round trip and round 6 allows five seconds for one, so this is
+# the single most consequential line in the file. If ~84ms is ever not good
+# enough, the next step down is a Hong Kong or Ulaanbaatar VPS, and that trades
+# managed Postgres for operating it yourself.
+#
+# ⚠ Create the Postgres in `nrt` too. `placeBid` runs several statements in one
 # transaction while holding SELECT … FOR UPDATE on the auction row; a database
 # in another region puts an ocean inside that lock, and every other bidder on
 # the lot waits behind it.
 #
-#   fly postgres create --region hkg
-#   fly postgres attach <db-name>          # sets DATABASE_URL as a secret
+#   fly mpg create --region nrt            # Managed Postgres — backups included
+#   fly mpg attach <db-name>               # sets DATABASE_URL as a secret
 #
 # Full runbook: DEPLOY-PLATFORM.md · architecture: DEPLOY.md
 # ─────────────────────────────────────────────────────────────────────────────
 
 app = "urlug"
-primary_region = "hkg"
+primary_region = "nrt"
 
 [build]
   dockerfile = "Dockerfile"
