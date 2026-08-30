@@ -9,7 +9,7 @@ process**.
 | --- | --- |
 | Persistent Node server | The SSE route holds a connection open for the length of a sale — up to 2h45m. The ticker holds a Postgres connection for its advisory lock. |
 | Postgres 14+ | `LISTEN/NOTIFY`, advisory locks, `SELECT … FOR UPDATE`. |
-| Session-mode pooling, or none | PgBouncer in **transaction mode breaks `LISTEN`** — the registration belongs to a connection that gets handed to someone else's query. Point `DATABASE_URL` at the server directly, or use session mode. |
+| Session-mode pooling, or none | PgBouncer in **transaction mode breaks `LISTEN`** — the registration belongs to a connection that gets handed to someone else's query. Point `DATABASE_URL` at the server directly, or use session mode. Managed Postgres commonly hands out the pooled endpoint by default; Fly's `mpg attach` does. `db/check-realtime.ts` proves which you have. |
 
 **Serverless will not work.** The stream is killed at the platform's execution
 limit; `EventSource` reconnects, so it degrades rather than breaks — but every

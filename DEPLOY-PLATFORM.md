@@ -150,6 +150,45 @@ auction rather than merely slowing it:
 - `[build.args] NEXT_PUBLIC_SITE_URL`. Not a secret. See the build-time trap
   above, and check `/robots.txt` after the first deploy.
 
+### ⚠ `fly mpg attach` gives you the WRONG endpoint
+
+`fly mpg attach` sets `DATABASE_URL` to `pgbouncer.<cluster>.flympg.net`, and
+that pooler is in **transaction mode**. This app cannot use it. Two separate
+failures, and the first one at least is loud:
+
+```
+FATAL 08P01: unsupported startup parameter: statement_timeout
+```
+
+`src/lib/db.ts` sets `statement_timeout` on the pool — a startup parameter, and
+a transaction pooler rejects those. The server will not boot at all.
+
+The second failure is the one that matters more, because it is silent: a
+transaction pooler hands each transaction whichever server connection is free,
+so `LISTEN` registered by `src/lib/realtime.ts` is not there for the next query.
+No error. Every auction room simply stops updating.
+
+Use the **direct** endpoint instead. It exists, it is just not what `attach`
+writes, and it is discoverable from inside a machine:
+
+```bash
+fly ssh console --app <app> -C "node -e \"require('dns').lookup('direct.<cluster>.flympg.net',{all:true},(e,a)=>console.log(e||a))\""
+
+fly secrets set DATABASE_URL="postgresql://<user>:<pass>@direct.<cluster>.flympg.net:5432/<db>" --app <app>
+```
+
+⚠ Use the **hostname**, not the IPv6 address behind it. `pg` parses a bracketed
+IPv6 host out of a connection URL with the brackets still attached and hands
+that to `getaddrinfo`, which fails with `ENOTFOUND [fdaa:...]`. The hostname has
+no such problem.
+
+Confirm it afterwards — `/api/health` passes either way, so it proves nothing
+here:
+
+```bash
+fly ssh console --app <app> -C "node --experimental-strip-types db/check-realtime.ts"
+```
+
 ⚠ Use **Managed** Postgres (`fly mpg`), not `fly postgres`. The latter is
 unmanaged — Fly operates the VM, you operate Postgres, and its snapshots are
 volume-level rather than point-in-time. `DEPLOY.md` is emphatic that `bids` and
