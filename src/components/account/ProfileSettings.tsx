@@ -25,38 +25,76 @@ const IDLE: AccountState = { status: "idle" };
 const field =
   "h-11 w-full border border-line bg-ground px-3 text-base text-ink transition-colors placeholder:text-faint focus:border-accent focus:outline-none";
 
-export function ProfileSettings({ name }: { name: string }) {
+export function ProfileSettings({
+  name,
+  familyName,
+}: {
+  name: string;
+  familyName: string | null;
+}) {
   return (
     <div className="border-line mt-5 grid gap-8 border-t pt-6 lg:grid-cols-2">
-      <NameForm name={name} />
+      <NameForm name={name} familyName={familyName} />
       <PasswordForm />
     </div>
   );
 }
 
-function NameForm({ name }: { name: string }) {
+/**
+ * `familyName` is nullable: accounts that predate the овог/нэр split have only
+ * the one field. The input is still required, so editing here is what fills it
+ * in — an empty box on an old account is a prompt, not a bug.
+ */
+function NameForm({
+  name,
+  familyName,
+}: {
+  name: string;
+  familyName: string | null;
+}) {
   const [state, action] = useActionState<AccountState, FormData>(
     changeName,
     IDLE,
   );
   const id = useId();
+  const familyId = useId();
 
   return (
     <form action={action}>
-      <label htmlFor={id} className="eyebrow">
-        {t.account.displayName}
-      </label>
-      <input
-        id={id}
-        name="name"
-        type="text"
-        autoComplete="name"
-        required
-        minLength={2}
-        maxLength={80}
-        defaultValue={name}
-        className={`${field} mt-2`}
-      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor={familyId} className="eyebrow">
+            {t.auth.familyName}
+          </label>
+          <input
+            id={familyId}
+            name="familyName"
+            type="text"
+            autoComplete="family-name"
+            required
+            minLength={2}
+            maxLength={80}
+            defaultValue={familyName ?? ""}
+            className={`${field} mt-2`}
+          />
+        </div>
+        <div>
+          <label htmlFor={id} className="eyebrow">
+            {t.account.displayName}
+          </label>
+          <input
+            id={id}
+            name="name"
+            type="text"
+            autoComplete="given-name"
+            required
+            minLength={2}
+            maxLength={80}
+            defaultValue={name}
+            className={`${field} mt-2`}
+          />
+        </div>
+      </div>
       <p className="text-muted mt-2 text-xs leading-relaxed">
         {t.account.displayNameHint}
       </p>

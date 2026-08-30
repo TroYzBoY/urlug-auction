@@ -21,6 +21,7 @@ import { MINIMUM_AGE } from "./legal";
  */
 
 const VALID = {
+  familyName: "Мөнхболд",
   name: "Батбаяр",
   phone: "99112233",
   password: "test-password-123",
@@ -30,6 +31,27 @@ const VALID = {
 };
 
 describe("registerSchema", () => {
+  /*
+   * Овог and нэр are separate fields and both are required. A single combined
+   * box cannot be split back afterwards — both orders read naturally in
+   * Mongolian, so nothing can tell which half is which — which is why this is
+   * pinned rather than left to the form.
+   */
+  it("requires the family name as well as the given name", () => {
+    expect(
+      registerSchema.safeParse({ ...VALID, familyName: undefined }).success,
+    ).toBe(false);
+    expect(
+      registerSchema.safeParse({ ...VALID, name: undefined }).success,
+    ).toBe(false);
+  });
+
+  it("keeps the two apart rather than joining them", () => {
+    const parsed = registerSchema.safeParse(VALID);
+    expect(parsed.success && parsed.data.familyName).toBe("Мөнхболд");
+    expect(parsed.success && parsed.data.name).toBe("Батбаяр");
+  });
+
   it("accepts a complete registration", () => {
     const parsed = registerSchema.safeParse(VALID);
     expect(parsed.success).toBe(true);

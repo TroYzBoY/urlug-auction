@@ -53,6 +53,7 @@ export async function SiteHeader({ minimal = false }: { minimal?: boolean }) {
       account={
         user
           ? {
+              name: user.name,
               paddle: user.paddle,
               balancePts: user.balancePts,
               isStaff: user.role === "admin" || user.role === "staff",

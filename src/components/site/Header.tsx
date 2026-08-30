@@ -34,6 +34,17 @@ const LINKS = [
  * simply render the signed-out header.
  */
 export interface HeaderAccount {
+  /**
+   * The bidder's own name.
+   *
+   * The paddle used to be here, and it is the wrong thing for this spot. It is
+   * an ANONYMISING label — "Т-341" is what the room shows other people so that
+   * bidders are not identifiable to each other. Showing it back to its owner as
+   * their account chip means the one place on the site that should say "this is
+   * you" instead says a code they have to remember is theirs. The paddle still
+   * belongs everywhere it did: the feed, the leader, the admin tables.
+   */
+  name: string;
   paddle: string;
   balancePts: number;
   isStaff: boolean;
@@ -180,10 +191,10 @@ export function Header({
           )}
 
           {account ? (
-            /* Signed in: the paddle and the balance, linking to the profile.
-               The balance is here because it is the number that decides whether
-               a bidder can act, and hunting for it mid-sale is the wrong time
-               to discover it is empty. */
+            /* Signed in: who you are and what you can spend, linking to the
+               profile. The balance is here because it is the number that
+               decides whether a bidder can act, and hunting for it mid-sale is
+               the wrong time to discover it is empty. */
             <Link href="/profile" className="hidden sm:block">
               <motion.span
                 whileHover={{ scale: 1.03 }}
@@ -191,7 +202,12 @@ export function Header({
                 data-numerals
                 className="border-line-strong/30 text-ink-soft hover:border-accent hover:text-accent inline-flex h-7.5 items-center gap-2 rounded-full border px-3 text-[0.6875rem] font-medium transition-colors"
               >
-                <span>{account.paddle}</span>
+                {/* `data-numerals` sits on the wrapper for the balance; the
+                    name is prose and gets the normal face, so it is scoped off
+                    here and back on for the figure. */}
+                <span className="max-w-[9rem] truncate font-sans">
+                  {account.name}
+                </span>
                 <span aria-hidden className="bg-line/60 h-3 w-px" />
                 <span className="text-flare font-semibold">
                   {pts(account.balancePts)}
@@ -275,8 +291,8 @@ export function Header({
                   onClick={() => setOpen(false)}
                   className="border-line/40 text-accent hover:bg-raise mt-1 flex items-center justify-between rounded-2xl border-t px-4 py-3 text-sm font-medium transition-colors"
                 >
-                  <span data-numerals>{account.paddle}</span>
-                  <span data-numerals className="text-flare">
+                  <span className="min-w-0 truncate">{account.name}</span>
+                  <span data-numerals className="text-flare shrink-0">
                     {pts(account.balancePts)} {t.common.point}
                   </span>
                 </Link>

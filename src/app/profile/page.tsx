@@ -99,7 +99,7 @@ export default async function ProfilePage() {
         isEmpty={false}
         note={t.account.settingsLede}
       >
-        <ProfileSettings name={user.name} />
+        <ProfileSettings name={user.name} familyName={user.familyName} />
       </Panel>
 
       {/*

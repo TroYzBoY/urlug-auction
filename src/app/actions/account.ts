@@ -5,7 +5,7 @@ import { refresh } from "next/cache";
 import { recordDetached } from "@/lib/audit";
 import { LIMITS, consume } from "@/lib/rate-limit";
 import { hashPassword, verifyPassword } from "@/lib/password";
-import { findByPhone, setName, setPassword } from "@/lib/repo/users";
+import { findByPhone, setNames, setPassword } from "@/lib/repo/users";
 import {
   clientIpFrom,
   createSession,
@@ -53,16 +53,22 @@ export async function changeName(
   const user = await currentUser();
   if (!user) return { status: "error", message: "Нэвтэрнэ үү." };
 
-  const parsed = nameChangeSchema.safeParse({ name: formData.get("name") });
+  const parsed = nameChangeSchema.safeParse({
+    familyName: formData.get("familyName"),
+    name: formData.get("name"),
+  });
   if (!parsed.success) {
     return { status: "error", message: firstError(parsed.error) };
   }
 
-  if (parsed.data.name === user.name) {
+  if (
+    parsed.data.name === user.name &&
+    parsed.data.familyName === user.familyName
+  ) {
     return { status: "ok", message: "Нэр өөрчлөгдөөгүй." };
   }
 
-  await setName(user.id, parsed.data.name);
+  await setNames(user.id, parsed.data.familyName, parsed.data.name);
 
   const { ip, userAgent } = await context();
   recordDetached({

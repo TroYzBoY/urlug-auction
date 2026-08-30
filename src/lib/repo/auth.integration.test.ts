@@ -45,6 +45,7 @@ beforeEach(async () => {
 
 function newUser(phone = "99110001") {
   return {
+    familyName: "Мөнхболд",
     name: "Батбаяр",
     phone,
     passwordHash: "argon2-placeholder",

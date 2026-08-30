@@ -26,6 +26,8 @@ const COOKIE = "urlug_session";
 export interface SessionUser {
   id: number;
   name: string;
+  /** Family name (овог). Null on accounts created before the split. */
+  familyName: string | null;
   phone: string;
   paddle: string;
   role: "bidder" | "staff" | "admin";
@@ -49,6 +51,7 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
   const row = await queryOne<{
     id: number;
     name: string;
+    family_name: string | null;
     phone: string;
     paddle: string;
     role: SessionUser["role"];
@@ -57,7 +60,7 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
     balance_pts: number | null;
   }>(
     `
-    SELECT u.id, u.name, u.phone, u.paddle, u.role, u.status, u.phone_verified_at,
+    SELECT u.id, u.name, u.family_name, u.phone, u.paddle, u.role, u.status, u.phone_verified_at,
            b.pts AS balance_pts
       FROM sessions s
       JOIN users    u ON u.id = s.user_id
@@ -81,6 +84,7 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
   return {
     id: row.id,
     name: row.name,
+    familyName: row.family_name,
     phone: row.phone,
     paddle: row.paddle,
     role: row.role,

@@ -41,11 +41,24 @@ export const passwordSchema = z
   // a way to make the server spend a second per request.
   .max(200, "Нууц үг хэт урт байна.");
 
+/**
+ * The GIVEN name (нэр) — what a room calls somebody, and what the bid feed
+ * shows. Kept separate from the family name below rather than the two sharing
+ * one box: nobody can later split "Мөнхболд Тэмүүлэн" back into its halves, and
+ * both orders are idiomatic in Mongolian.
+ */
 export const nameSchema = z
   .string()
   .trim()
-  .min(2, "Нэрээ бүрэн бичнэ үү.")
+  .min(2, "Нэрээ бичнэ үү.")
   .max(80, "Нэр хэт урт байна.");
+
+/** The family name (овог). */
+export const familyNameSchema = z
+  .string()
+  .trim()
+  .min(2, "Овгоо бичнэ үү.")
+  .max(80, "Овог хэт урт байна.");
 
 /*
  * Date of birth, not a "I am over 18" checkbox.
@@ -69,6 +82,7 @@ export const dateOfBirthSchema = z
 
 export const registerSchema = z
   .object({
+    familyName: familyNameSchema,
     name: nameSchema,
     phone: phoneSchema,
     password: passwordSchema,
@@ -138,6 +152,7 @@ export const bidSchema = z.object({
 /* ── The bidder's own account ────────────────────────────────────────────── */
 
 export const nameChangeSchema = z.object({
+  familyName: familyNameSchema,
   name: nameSchema,
 });
 

@@ -98,6 +98,7 @@ export async function register(
   formData: FormData,
 ): Promise<AuthState> {
   const parsed = registerSchema.safeParse({
+    familyName: formData.get("familyName"),
     name: formData.get("name"),
     phone: formData.get("phone"),
     password: formData.get("password"),
@@ -121,6 +122,7 @@ export async function register(
 
   const passwordHash = await hashPassword(parsed.data.password);
   const created = await createUser({
+    familyName: parsed.data.familyName,
     name: parsed.data.name,
     phone: parsed.data.phone,
     passwordHash,

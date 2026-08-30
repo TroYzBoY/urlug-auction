@@ -502,6 +502,18 @@ CREATE INDEX IF NOT EXISTS lot_images_lot_idx ON lot_images (lot_id, sort_order)
 -- only in a text file beside it is one nobody can lawfully publish later.
 ALTER TABLE lot_images ADD COLUMN IF NOT EXISTS credit TEXT;
 
+-- Family name (овог), kept separate from the given name.
+--
+-- Mongolian names are an овог and a нэр, and collapsing them into one box makes
+-- the pair unrecoverable: nobody can later tell which half of "Мөнхболд
+-- Тэмүүлэн" is which, and the two orders are both idiomatic. Asking for them
+-- separately is the only way to store what was actually given.
+--
+-- Nullable, because accounts created before the split have only the one field —
+-- and `name` remains the GIVEN name, which is what a room calls somebody and
+-- what the bid feed shows.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS family_name TEXT;
+
 -- Contact email. NOT a login credential — accounts are identified and
 -- authenticated by phone number, and nothing in the auth path reads this. It
 -- exists so staff accounts can be reached by mail and so an operator can

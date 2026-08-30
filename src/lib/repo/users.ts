@@ -47,6 +47,9 @@ function candidatePaddle(attempt: number): string {
 }
 
 export interface CreateUserArgs {
+  /** Family name (овог). */
+  familyName: string;
+  /** Given name (нэр) — what the bid feed and the room show. */
   name: string;
   phone: string;
   passwordHash: string;
@@ -90,13 +93,14 @@ export async function createUser(
       paddle = candidatePaddle(attempt);
 
       const inserted = await client.query<{ id: number }>(
-        `INSERT INTO users (name, phone, password_hash, paddle, date_of_birth,
-                            terms_version, terms_accepted_at)
-         VALUES ($1, $2, $3, $4, $5, $6, now())
+        `INSERT INTO users (name, family_name, phone, password_hash, paddle,
+                            date_of_birth, terms_version, terms_accepted_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, now())
          ON CONFLICT DO NOTHING
          RETURNING id`,
         [
           args.name,
+          args.familyName,
           args.phone,
           args.passwordHash,
           paddle,
@@ -173,11 +177,15 @@ export async function markPhoneVerified(phone: string): Promise<void> {
 }
 
 /** The bidder's display name. Everything else about them is fixed. */
-export async function setName(userId: number, name: string): Promise<void> {
-  await query("UPDATE users SET name = $2, updated_at = now() WHERE id = $1", [
-    userId,
-    name,
-  ]);
+export async function setNames(
+  userId: number,
+  familyName: string,
+  name: string,
+): Promise<void> {
+  await query(
+    "UPDATE users SET family_name = $2, name = $3, updated_at = now() WHERE id = $1",
+    [userId, familyName, name],
+  );
 }
 
 export async function setPassword(

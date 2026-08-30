@@ -36,6 +36,7 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo?: string
   );
 
   const nameId = useId();
+  const familyNameId = useId();
   const phoneId = useId();
   const passwordId = useId();
   const confirmId = useId();
@@ -57,14 +58,32 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo?: string
       {redirectTo && <input type="hidden" name="redirect" value={redirectTo} />}
       <div className="flex flex-col gap-5">
         {isRegister && (
-          <Field
-            id={nameId}
-            name="name"
-            label={t.auth.name}
-            type="text"
-            autoComplete="name"
-            required
-          />
+          /*
+            Овог and нэр side by side, and separate fields rather than one.
+            A single box cannot be split back afterwards: both orders read
+            naturally in Mongolian, so nothing can tell which half is which.
+
+            `autoComplete` names them for the browser — family-name / given-name
+            rather than the generic `name`, so a saved profile fills both.
+          */
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field
+              id={familyNameId}
+              name="familyName"
+              label={t.auth.familyName}
+              type="text"
+              autoComplete="family-name"
+              required
+            />
+            <Field
+              id={nameId}
+              name="name"
+              label={t.auth.name}
+              type="text"
+              autoComplete="given-name"
+              required
+            />
+          </div>
         )}
 
         <Field
