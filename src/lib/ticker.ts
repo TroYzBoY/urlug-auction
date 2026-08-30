@@ -272,6 +272,50 @@ export async function startTicker(): Promise<void> {
   }
 
   handle.lockClient = client;
+
+  /*
+   * ⚠ A checked-out PoolClient emits its OWN errors.
+   *
+   * The pool's handler in db.ts covers idle clients only, so it does not see
+   * this one — and an `error` event with no listener is an uncaught exception.
+   * This connection is held for the life of the process, which makes a routine
+   * Postgres restart, a failover or a network blip enough to take the whole
+   * server down. On the elected leader that is the auction's clock: no round
+   * advances and no hammer falls until somebody notices the box is gone.
+   *
+   * Observed in production as `uncaughtException: Connection terminated
+   * unexpectedly`, which is what this handler exists to answer.
+   *
+   * Recovered rather than merely logged. The advisory lock died with the
+   * connection, so this process is no longer the leader whatever it believes —
+   * the election has to be re-run, or the fleet is left with no ticker at all.
+   */
+  client.on("error", (err) => {
+    console.error("[ticker] lock connection lost", err);
+
+    /* Cleared BEFORE releasing, so a concurrent stopTicker cannot double-release. */
+    handle.lockClient = null;
+    try {
+      // Passing the error tells the pool to destroy this client, not reuse it.
+      client.release(err);
+    } catch {
+      // Already gone; the pool is discarding it regardless.
+    }
+
+    if (handle.timer) {
+      clearTimeout(handle.timer);
+      handle.timer = null;
+    }
+    if (handle.stopped) return;
+
+    handle.timer = setTimeout(() => {
+      handle.timer = null;
+      void startTicker().catch((e) =>
+        console.error("[ticker] re-election after lock loss failed", e),
+      );
+    }, RETRY_LOCK_MS);
+  });
+
   console.info("[ticker] elected leader");
 
   const loop = async () => {
