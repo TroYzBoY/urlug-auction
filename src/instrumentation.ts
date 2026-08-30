@@ -21,10 +21,14 @@ export async function register() {
    */
   const { otpBypassed } = await import("./lib/sms");
   if (otpBypassed()) {
+    const which =
+      process.env.ALLOW_UNVERIFIED_SIGNUP === "1"
+        ? "ALLOW_UNVERIFIED_SIGNUP=1"
+        : "DEV_SKIP_OTP=1";
     console.warn(`
-  DEV_SKIP_OTP=1 - phone verification is OFF. Registering signs you straight
-  in and no code is sent. Development only; the server refuses to boot with
-  this set in production.
+  ${which} - phone verification is OFF. Registering signs you straight in
+  and no code is sent. Anyone who can reach this server can open an account
+  on a number they do not own.
 `);
   }
 

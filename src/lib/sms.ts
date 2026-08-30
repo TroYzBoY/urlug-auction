@@ -45,7 +45,18 @@ const MAX_ATTEMPTS = 5;
  * somebody's password is a different shape of hole, and no more convenient.
  */
 export function otpBypassed(): boolean {
-  return !IS_PRODUCTION && env.devSkipOtp;
+  /*
+   * Two switches, and they are not the same switch.
+   *
+   *   DEV_SKIP_OTP             — development only, and the boot assertion
+   *                              refuses a production server that carries it.
+   *   ALLOW_UNVERIFIED_SIGNUP  — works in production, on purpose, as a stopgap
+   *                              while an SMS gateway is being connected. Boots
+   *                              with a banner. See src/lib/env.ts.
+   *
+   * Neither ever applies to a password reset — see the note above.
+   */
+  return (!IS_PRODUCTION && env.devSkipOtp) || env.allowUnverifiedSignup;
 }
 
 export type OtpPurpose = "verify" | "reset";

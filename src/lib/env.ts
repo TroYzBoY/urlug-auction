@@ -94,6 +94,33 @@ export const env = {
     return process.env.DEV_SKIP_OTP === "1";
   },
 
+  /**
+   * ⚠ TEMPORARY: accept registrations without phone verification, IN
+   * PRODUCTION.
+   *
+   * Deliberately NOT `DEV_SKIP_OTP`. That flag is development-only and the boot
+   * assertion below refuses a production server carrying it — a guard worth
+   * keeping exactly as it is, because its failure mode is a staging env file
+   * travelling to production unnoticed. This is the opposite: a decision
+   * somebody made on purpose, for a stated reason, with a name that says so and
+   * a boot banner nobody can miss.
+   *
+   * What it costs while it is on: the site's public URL will accept unlimited
+   * registrations on unverified numbers. `placeBid` still requires a verified
+   * account, and verification is what makes a winner reachable — so this must
+   * come off before the house takes real money.
+   *
+   * It never applies to a password reset. Handing out a session to somebody who
+   * knows a phone number is one thing; letting them take over an existing
+   * account by resetting its password is a different hole, and turning this on
+   * must not open it.
+   *
+   *   fly secrets unset ALLOW_UNVERIFIED_SIGNUP --app urlug
+   */
+  get allowUnverifiedSignup(): boolean {
+    return process.env.ALLOW_UNVERIFIED_SIGNUP === "1";
+  },
+
   /** Version string recorded against each user's terms acceptance. */
   get termsVersion(): string {
     return process.env.TERMS_VERSION ?? "2026-08-21";
@@ -138,6 +165,25 @@ export function assertRuntimeEnv(): void {
     problems.push(
       "DEV_SKIP_OTP is set in a production environment. It disables phone " +
         "verification and must never be set outside development — remove it.",
+    );
+  }
+
+  /*
+   * Not a refusal — this one is meant to be usable in production, for a while,
+   * on purpose. But it is the single largest hole an operator can open in this
+   * system, so it is impossible to have running and not know about.
+   */
+  if (IS_PRODUCTION && env.allowUnverifiedSignup) {
+    console.warn(
+      [
+        "",
+        "  \u26a0  ALLOW_UNVERIFIED_SIGNUP=1 - PHONE VERIFICATION IS OFF.",
+        "     Anyone can register on this public URL without receiving a code.",
+        "     Intended as a stopgap while an SMS gateway is being connected.",
+        "     Remove it as soon as one is:",
+        "       fly secrets unset ALLOW_UNVERIFIED_SIGNUP",
+        "",
+      ].join("\n"),
     );
   }
 

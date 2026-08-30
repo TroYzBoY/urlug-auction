@@ -15,13 +15,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-async function load(nodeEnv: string, flag: string | undefined) {
+async function load(
+  nodeEnv: string,
+  flag: string | undefined,
+  allowUnverified: string | undefined = undefined,
+) {
   vi.resetModules();
   vi.stubEnv("NODE_ENV", nodeEnv);
   vi.stubEnv("DATABASE_URL", "postgres://user:pw@localhost:5432/urlug");
   vi.stubEnv("SMS_API_URL", "https://sms.example.test/send");
   if (flag === undefined) vi.stubEnv("DEV_SKIP_OTP", "");
   else vi.stubEnv("DEV_SKIP_OTP", flag);
+  vi.stubEnv("ALLOW_UNVERIFIED_SIGNUP", allowUnverified ?? "");
 
   return {
     env: await import("./env"),
@@ -82,6 +87,47 @@ describe("assertRuntimeEnv", () => {
   it("boots a production server without the flag", async () => {
     const { env } = await load("production", undefined);
     expect(() => env.assertRuntimeEnv()).not.toThrow();
+  });
+});
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ALLOW_UNVERIFIED_SIGNUP
+ *
+ * The deliberate one. Unlike DEV_SKIP_OTP it is meant to work in production —
+ * as a stopgap while an SMS gateway is being connected — so what needs pinning
+ * is that it is the ONLY thing that changes: the dev-only flag keeps its
+ * production refusal, and turning this on does not quietly turn that on too.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+describe("ALLOW_UNVERIFIED_SIGNUP", () => {
+  it("bypasses OTP in production, which DEV_SKIP_OTP cannot", async () => {
+    const { sms } = await load("production", undefined, "1");
+    expect(sms.otpBypassed()).toBe(true);
+  });
+
+  it("boots — it is a decision, not a misconfiguration", async () => {
+    const { env } = await load("production", undefined, "1");
+    expect(() => env.assertRuntimeEnv()).not.toThrow();
+  });
+
+  /* Exactly "1", like every other flag here. */
+  it.each(["0", "true", "yes", "TRUE", " 1"])(
+    "is off for ALLOW_UNVERIFIED_SIGNUP=%j",
+    async (value) => {
+      const { sms } = await load("production", undefined, value);
+      expect(sms.otpBypassed()).toBe(false);
+    },
+  );
+
+  it("does not rescue DEV_SKIP_OTP from its production refusal", async () => {
+    /*
+     * The two must stay independent. If setting the deliberate flag also made
+     * the accidental one acceptable, a staging env file reaching production
+     * would stop being caught — which is the whole point of that check.
+     */
+    const { env } = await load("production", "1", "1");
+    expect(() => env.assertRuntimeEnv()).toThrow(/DEV_SKIP_OTP/);
   });
 
   it("boots a development server with the flag", async () => {
