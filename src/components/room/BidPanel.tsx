@@ -182,14 +182,27 @@ export function BidPanel({
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md lg:static lg:border lg:p-5 lg:pb-5 shadow-2xl lg:shadow-none">
       {/* Status line */}
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="eyebrow">{t.room.minNext}</p>
-        <p className="text-right">
-          <span data-numerals className="text-sm font-semibold text-ink">
+      {/*
+        At 320px the label takes two lines and the figure beside it broke across
+        them mid-number. `min-w-0` lets the label shrink, and each figure is
+        kept whole with the tugrik amount allowed to drop to its own line rather
+        than splitting — a price that wraps between its digits and its currency
+        is unreadable at exactly the moment it matters.
+      */}
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="eyebrow min-w-0">{t.room.minNext}</p>
+        <p className="shrink-0 text-right">
+          <span
+            data-numerals
+            className="text-sm font-semibold text-ink whitespace-nowrap"
+          >
             {pts(minTotal)}{" "}
             <span className="font-normal text-muted">{t.common.point}</span>
           </span>
-          <span data-numerals className="ml-2 text-xs text-faint">
+          <span
+            data-numerals
+            className="ml-2 inline-block text-xs text-faint whitespace-nowrap"
+          >
             {ptsToMnt(minTotal)}
           </span>
         </p>

@@ -100,7 +100,14 @@ export default async function LotsPage(props: PageProps<"/lots">) {
         <section className="gutter py-10 md:py-14">
           {/* Filters. Links, not buttons — each is a real, shareable URL.
               Scrollable on phones so four chips never wrap awkwardly. */}
-          <div className="-mx-5 flex gap-2 overflow-x-auto px-5 scroll-quiet md:mx-0 md:px-0">
+          {/*
+            Scrolls rather than wraps — four chips wrapping to two lines reads
+            worse than one line that moves. `scroll-fade` is what makes that
+            honest: the row needs 443px and a 320px phone gives it 320, so the
+            fourth filter was entirely off-screen with nothing to say so. The
+            fade is scoped to the widths where it actually overflows.
+          */}
+          <div className="-mx-5 flex gap-1 overflow-x-auto px-5 scroll-quiet scroll-fade sm:gap-2 md:mx-0 md:px-0">
             {FILTERS.map((f) => {
               const active = f.key === filter;
               const count = pools[f.key].length;
@@ -109,7 +116,7 @@ export default async function LotsPage(props: PageProps<"/lots">) {
                   key={f.key}
                   href={`/lots?filter=${f.key}`}
                   aria-current={active ? "page" : undefined}
-                  className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-4 text-[0.75rem] font-medium tracking-[0.08em] uppercase transition-colors ${
+                  className={`flex h-9 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[0.7rem] font-medium tracking-[0.06em] uppercase transition-colors sm:gap-1.5 sm:px-4 sm:text-[0.75rem] sm:tracking-[0.08em] ${
                     active
                       ? "border-transparent bg-ink text-ground"
                       : "border-line-strong/30 text-ink-soft hover:border-accent hover:text-accent"

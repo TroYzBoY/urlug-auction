@@ -314,6 +314,32 @@
   }
 }
 
+/*
+ * The other half of `scroll-quiet`: a row that scrolls with no scrollbar is a
+ * row nobody knows scrolls.
+ *
+ * The catalogue's four filter chips need more width than a 320px phone has, so
+ * the fourth — "Дууссан" — was simply not there, with no bar, no edge and
+ * nothing to suggest a swipe would find it. Hiding the scrollbar was right;
+ * hiding the fact that there is anything to scroll to was not.
+ *
+ * A mask rather than a gradient overlay, so it sits on any background and adds
+ * no element to position or to keep in step with the theme.
+ *
+ * It is a STATIC fade, applied only where the row actually overflows — below
+ * the breakpoint at which the chips fit. A fade that also appeared when there
+ * was nothing to scroll to would be its own small lie.
+ */
+@utility scroll-fade {
+  @media (width < 48rem) {
+    mask-image: linear-gradient(
+      to right,
+      black calc(100% - 2rem),
+      transparent 100%
+    );
+  }
+}
+
 /* ── View transitions ──────────────────────────────────────────────────────
  *
  * One use left: a lot's plate morphing from the catalogue grid into the lot
