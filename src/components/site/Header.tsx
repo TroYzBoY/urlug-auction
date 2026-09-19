@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { LiveDot } from "@/components/lot/LotCard";
 import { NotificationBell, type BellItem } from "./NotificationBell";
@@ -9,10 +10,8 @@ import { t } from "@/lib/copy";
 import { pts } from "@/lib/format";
 
 /**
- * `desktop: false` keeps a link out of the pill but still in the burger. The
- * pill already carries the theme toggle and the login button, and a fourth
- * label crowds it before the max-width does — the menu has room, so contact
- * lives there.
+ * `desktop: false` keeps a link in the compact menu. Desktop navigation leaves
+ * room for the notification bell, staff controls and the bidder's balance.
  */
 const LINKS = [
   { href: "/lots", label: t.nav.lots, desktop: true },
@@ -67,6 +66,7 @@ export function Header({
 }) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
+  const pathname = usePathname();
 
   /*
    * Escape closes the menu. Registered only while it is open, so the site is not
@@ -97,7 +97,7 @@ export function Header({
      * it reads as a stray line floating over the artwork.
      */
     return (
-      <header className="sticky top-0 z-40 bg-transparent backdrop-blur-md">
+      <header className="house-header bg-ground/90 sticky top-0 z-40 border-b backdrop-blur-md">
         <div className="gutter flex h-14 items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             {/*
@@ -119,7 +119,7 @@ export function Header({
 
             <Link
               href="/lots"
-              className="text-ink min-w-0 truncate font-sans text-xs font-bold tracking-[0.2em] uppercase"
+              className="house-wordmark text-ink min-w-0 truncate font-sans text-xs font-bold tracking-[0.2em] uppercase"
             >
               {t.brand.name}
             </Link>
@@ -135,33 +135,37 @@ export function Header({
   }
 
   return (
-    <header className="fixed top-3 left-1/2 z-50 w-[calc(100%-1.5rem)] max-w-3xl -translate-x-1/2 sm:top-5 sm:w-[calc(100%-2.5rem)]">
+    <header className="fixed top-3 left-1/2 z-50 w-[calc(100%-2.5rem)] max-w-[73rem] -translate-x-1/2 sm:top-5 md:w-[calc(100%-5rem)]">
       <motion.div
-        initial={{ y: -16, opacity: 0 }}
+        initial={false}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 300, damping: 25 }}
-        className="border-line-strong/20 bg-surface/85 flex h-11 items-center justify-between rounded-full border px-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-colors duration-300 sm:px-5"
+        className="house-header flex h-16 items-center justify-between rounded-xl border px-4 backdrop-blur-xl sm:px-6"
       >
         <Link
           href="/lots"
-          className="text-ink shrink-0 font-sans text-[0.8125rem] font-bold tracking-[0.18em] uppercase"
+          className="house-wordmark text-ink shrink-0 font-sans text-[0.9375rem] font-bold tracking-[0.14em] uppercase"
         >
-          {t.brand.name}
+          <span>
+            {t.brand.name}
+            <span className="house-brand-caption">AUCTION HOUSE</span>
+          </span>
         </Link>
 
         <nav className="flex items-center gap-2.5 sm:gap-5">
-          {/* Full links from sm up; below that they live in the menu. */}
+          {/* Full navigation needs desktop width when account controls appear. */}
           {LINKS.filter((l) => l.desktop).map((l) => (
             <Link
               key={l.href}
               href={l.href}
-              className="eyebrow text-ink-soft hover:text-ink hidden text-[0.6875rem] font-medium transition-colors duration-200 sm:block"
+              aria-current={pathname === l.href ? "page" : undefined}
+              className="house-nav eyebrow text-ink-soft hover:text-accent aria-[current=page]:text-accent hidden text-[0.6875rem] font-medium transition-colors duration-200 lg:block"
             >
               {l.label}
             </Link>
           ))}
 
-          <span aria-hidden className="bg-line/60 hidden h-3 w-px sm:block" />
+          <span aria-hidden className="bg-line/60 hidden h-3 w-px lg:block" />
 
           {notifications && (
             <NotificationBell
@@ -179,7 +183,7 @@ export function Header({
             page is for.
           */}
           {account?.isStaff && (
-            <Link href="/admin" className="hidden sm:block">
+            <Link href="/admin" className="hidden lg:block">
               <motion.span
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.96 }}
@@ -195,7 +199,7 @@ export function Header({
                profile. The balance is here because it is the number that
                decides whether a bidder can act, and hunting for it mid-sale is
                the wrong time to discover it is empty. */
-            <Link href="/profile" className="hidden sm:block">
+            <Link href="/profile" className="hidden lg:block">
               <motion.span
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.96 }}
@@ -215,25 +219,25 @@ export function Header({
               </motion.span>
             </Link>
           ) : (
-            <Link href="/login" className="hidden sm:block">
+            <Link href="/login" className="hidden lg:block">
               <motion.span
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.96 }}
-                className="eyebrow bg-ink text-ground hover:bg-accent hover:text-accent-ink inline-flex h-7.5 items-center rounded-full px-3.5 text-[0.625rem] font-bold tracking-[0.14em] uppercase shadow-sm transition-colors"
+                className="house-login eyebrow inline-flex h-10 items-center rounded-lg px-5 text-[0.625rem] font-bold tracking-[0.12em] uppercase transition-colors"
               >
                 {t.nav.enter}
               </motion.span>
             </Link>
           )}
 
-          {/* Burger, phones only. */}
+          {/* Compact navigation for phones and tablets. */}
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-controls={menuId}
             aria-label={open ? t.nav.close : t.nav.menu}
-            className="text-ink hover:bg-raise grid size-7.5 shrink-0 touch-manipulation place-items-center rounded-full transition-colors sm:hidden"
+            className="text-accent hover:bg-raise grid size-11 shrink-0 touch-manipulation place-items-center rounded transition-colors lg:hidden"
           >
             <Burger open={open} />
           </button>
@@ -248,16 +252,17 @@ export function Header({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.18 }}
-            className="border-line-strong/20 bg-surface/95 mt-2 overflow-hidden rounded-3xl border p-2 shadow-[0_8px_30px_rgb(0,0,0,0.08)] backdrop-blur-xl sm:hidden"
+            className="house-header bg-surface/95 mt-2 overflow-hidden rounded-lg border p-2 backdrop-blur-xl lg:hidden"
           >
             {LINKS.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
+                aria-current={pathname === l.href ? "page" : undefined}
                 /* Closing on tap rather than watching the pathname in an effect:
                    the tap IS the intent, and it avoids a cascading render. */
                 onClick={() => setOpen(false)}
-                className="text-ink-soft hover:bg-raise hover:text-ink block rounded-2xl px-4 py-3 text-sm font-medium transition-colors"
+                className="house-nav text-ink-soft hover:bg-raise hover:text-accent aria-[current=page]:text-accent block rounded px-4 py-3 text-sm font-medium transition-colors"
               >
                 {l.label}
               </Link>
@@ -266,7 +271,7 @@ export function Header({
             {/*
               Login as a plain row, not a filled button — the CTA button was
               removed from this menu on purpose. Without it phones would have no
-              route to sign in at all, since the pill version is sm-and-up.
+              route to sign in at all, since the header button is desktop-only.
             */}
             {account ? (
               <>
@@ -343,10 +348,14 @@ function Burger({ open }: { open: boolean }) {
       strokeLinecap="round"
     >
       <motion.path
+        d={open ? "M4 4 L12 12" : "M2.5 5.5 L13.5 5.5"}
+        initial={false}
         animate={open ? { d: "M4 4 L12 12" } : { d: "M2.5 5.5 L13.5 5.5" }}
         transition={{ duration: 0.2 }}
       />
       <motion.path
+        d={open ? "M12 4 L4 12" : "M2.5 10.5 L13.5 10.5"}
+        initial={false}
         animate={open ? { d: "M12 4 L4 12" } : { d: "M2.5 10.5 L13.5 10.5" }}
         transition={{ duration: 0.2 }}
       />

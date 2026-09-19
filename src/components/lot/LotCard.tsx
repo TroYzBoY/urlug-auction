@@ -8,8 +8,8 @@ import { coverOf, type Lot, type LotStatus } from "@/lib/types";
 export function LiveDot() {
   return (
     <span aria-hidden className="relative grid size-2 place-items-center">
-      <span className="absolute size-2 rounded-full bg-rust animate-ring-out" />
-      <span className="size-2 rounded-full bg-rust" />
+      <span className="bg-rust animate-ring-out absolute size-2 rounded-full" />
+      <span className="bg-rust size-2 rounded-full" />
     </span>
   );
 }
@@ -43,18 +43,19 @@ export function LotCard({ lot }: { lot: Lot }) {
    * matters: it says the whole card is a link.
    */
   return (
-    <div>
+    <article className="auction-card">
       <Link
         href={`/auction/${lot.id}`}
         className="group block text-left focus-visible:outline-offset-4"
       >
-        <div className="relative overflow-hidden border border-line/30 bg-surface/30 rounded-sm">
+        <div className="auction-card-image bg-surface relative overflow-hidden">
           <ViewTransition name={`lot-${lot.id}`} share="morph" default="none">
             <LotPlate
               category={lot.category}
               code={lot.code}
               image={coverOf(lot)?.url}
               alt={coverOf(lot)?.alt ?? lot.title}
+              ratio="aspect-[4/3]"
             />
           </ViewTransition>
 
@@ -62,7 +63,10 @@ export function LotCard({ lot }: { lot: Lot }) {
               characters, and at the eyebrow's full 0.18em tracking it stretched
               across most of a 169px card. At 8px/0.08em it sits at ~105px —
               still legible, no longer competing with the photograph. */}
-          <div className="absolute top-2 right-2 flex items-center gap-1 rounded-full border border-line/30 bg-ground/90 px-1.5 py-1 backdrop-blur-sm sm:top-2.5 sm:right-2.5 sm:gap-1.5 sm:px-2">
+          <div
+            data-live={isLive}
+            className="auction-status bg-ground/95 absolute top-2 right-2 flex items-center gap-1 border px-1.5 py-1.5 backdrop-blur-sm sm:top-2.5 sm:right-2.5 sm:gap-1.5 sm:px-2"
+          >
             {isLive && <LiveDot />}
             <span
               className={`eyebrow text-[0.5rem] tracking-[0.08em] sm:text-[0.625rem] sm:tracking-[0.18em] ${status.tone}`}
@@ -72,35 +76,46 @@ export function LotCard({ lot }: { lot: Lot }) {
           </div>
         </div>
 
-        <div className="pt-3.5">
-          <p className="eyebrow text-muted">{lot.code}</p>
-          <h3 className="mt-1.5 text-lg leading-tight font-normal tracking-[-0.02em] text-ink transition-colors duration-300 group-hover:text-accent font-sans">
+        <div className="auction-card-details">
+          <div className="flex items-center justify-between gap-2">
+            <p className="lot-code">{lot.code}</p>
+            <span
+              className="text-muted group-hover:text-accent text-base"
+              aria-hidden
+            >
+              ↗
+            </span>
+          </div>
+          <h3 className="text-ink group-hover:text-accent mt-3 min-h-10 font-sans text-sm leading-5 font-semibold tracking-[-0.02em] transition-colors duration-300 sm:text-base">
             {lot.title}
           </h3>
-          <p className="mt-1 text-xs text-muted">
+          <p className="text-muted mt-1 text-xs">
             {lot.maker} · {lot.year}
           </p>
 
           {/* Stacked at two-up, where a ~170px card cannot hold the estimate
               and the date on one line, then side by side once there is room. */}
-          <dl className="mt-3.5 flex flex-col gap-2 border-t border-line/30 pt-2.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+          <dl className="border-line/30 mt-3.5 flex flex-col gap-2 border-t pt-2.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
             {isSold ? (
               <>
                 <div>
                   <dt className="eyebrow">{t.lot.hammer}</dt>
                   <dd
                     data-numerals
-                    className="mt-1 text-xs font-semibold text-olive"
+                    className="text-olive mt-1 text-xs font-semibold"
                   >
                     {pts(lot.hammerPts ?? 0)}
-                    <span className="ml-1 text-xs font-normal text-muted">
+                    <span className="text-muted ml-1 text-xs font-normal">
                       {t.common.point}
                     </span>
                   </dd>
                 </div>
                 <div className="sm:text-right">
                   <dt className="eyebrow">{t.lot.hammerRound}</dt>
-                  <dd data-numerals className="mt-1 text-xs font-medium text-ink-soft">
+                  <dd
+                    data-numerals
+                    className="text-ink-soft mt-1 text-xs font-medium"
+                  >
                     {lot.hammerRound} / 6
                   </dd>
                 </div>
@@ -111,10 +126,10 @@ export function LotCard({ lot }: { lot: Lot }) {
                   <dt className="eyebrow">{t.lot.estimate}</dt>
                   <dd
                     data-numerals
-                    className="mt-1 text-xs font-medium text-ink-soft"
+                    className="text-ink-soft mt-1 text-xs font-medium"
                   >
                     {pts(lot.estimateLowPts)} – {pts(lot.estimateHighPts)}
-                    <span className="ml-1 text-xs text-muted">
+                    <span className="text-muted ml-1 text-xs">
                       {t.common.point}
                     </span>
                   </dd>
@@ -125,7 +140,7 @@ export function LotCard({ lot }: { lot: Lot }) {
                   </dt>
                   <dd
                     data-numerals
-                    className="mt-1 text-xs font-medium text-ink-soft"
+                    className="text-ink-soft mt-1 text-xs font-medium"
                   >
                     {isLive ? ptsToMnt(lot.openingPts) : lotDate(lot.startsAt)}
                   </dd>
@@ -135,8 +150,6 @@ export function LotCard({ lot }: { lot: Lot }) {
           </dl>
         </div>
       </Link>
-    </div>
+    </article>
   );
 }
-
-

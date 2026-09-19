@@ -26,7 +26,13 @@ type Mode = "login" | "register";
  * Both modes can end at the code step: registering always does, and logging in
  * does when the account exists but its number was never verified.
  */
-export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo?: string }) {
+export function AuthForm({
+  mode,
+  redirectTo,
+}: {
+  mode: Mode;
+  redirectTo?: string;
+}) {
   const isRegister = mode === "register";
   const [showPassword, setShowPassword] = useState(false);
 
@@ -111,7 +117,7 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo?: string
               autoComplete={isRegister ? "new-password" : "current-password"}
               required
               minLength={isRegister ? 8 : undefined}
-              className="h-12 w-full border border-line bg-ground pr-12 pl-3.5 text-base text-ink transition-colors placeholder:text-faint focus:border-accent focus:outline-none"
+              className="border-line bg-ground text-ink placeholder:text-faint focus:border-accent h-12 w-full border pr-12 pl-3.5 text-base transition-colors focus:outline-none"
             />
             <button
               type="button"
@@ -120,13 +126,13 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo?: string
                 showPassword ? t.auth.hidePassword : t.auth.showPassword
               }
               aria-pressed={showPassword}
-              className="absolute inset-y-0 right-0 grid w-12 touch-manipulation place-items-center text-muted transition-colors hover:text-ink"
+              className="text-muted hover:text-ink absolute inset-y-0 right-0 grid w-12 touch-manipulation place-items-center transition-colors"
             >
               <EyeIcon off={showPassword} />
             </button>
           </div>
           {isRegister && (
-            <p className="mt-1.5 text-xs text-muted">{t.auth.passwordHint}</p>
+            <p className="text-muted mt-1.5 text-xs">{t.auth.passwordHint}</p>
           )}
         </div>
 
@@ -160,9 +166,11 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo?: string
               max={new Date().toISOString().slice(0, 10)}
               required
               data-numerals
-              className="mt-2 h-12 w-full border border-line bg-ground px-3.5 text-base text-ink transition-colors focus:border-accent focus:outline-none"
+              className="border-line bg-ground text-ink focus:border-accent mt-2 h-12 w-full border px-3.5 text-base transition-colors focus:outline-none"
             />
-            <p className="mt-1.5 text-xs text-muted">{t.auth.dateOfBirthHint}</p>
+            <p className="text-muted mt-1.5 text-xs">
+              {t.auth.dateOfBirthHint}
+            </p>
           </div>
         )}
       </div>
@@ -171,7 +179,7 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo?: string
       {isRegister ? (
         <label
           htmlFor={termsId}
-          className="mt-6 flex cursor-pointer items-start gap-2.5 text-sm leading-relaxed text-ink-soft"
+          className="text-ink-soft mt-6 flex cursor-pointer items-start gap-2.5 text-sm leading-relaxed"
         >
           <input
             id={termsId}
@@ -181,15 +189,24 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo?: string
             className="mt-0.5 size-4 shrink-0 accent-[var(--color-accent)]"
           />
           <span>
-            <Link href="/terms" className="text-accent underline underline-offset-2">
+            <Link
+              href="/terms"
+              className="text-accent underline underline-offset-2"
+            >
               {t.footer.terms}
             </Link>
             ,{" "}
-            <Link href="/privacy" className="text-accent underline underline-offset-2">
+            <Link
+              href="/privacy"
+              className="text-accent underline underline-offset-2"
+            >
               {t.footer.privacy}
             </Link>
             ,{" "}
-            <Link href="/rules" className="text-accent underline underline-offset-2">
+            <Link
+              href="/rules"
+              className="text-accent underline underline-offset-2"
+            >
               {t.nav.rules}
             </Link>
             {" — "}
@@ -198,7 +215,7 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo?: string
         </label>
       ) : (
         <div className="mt-5 flex items-center justify-between gap-4">
-          <label className="flex cursor-pointer items-center gap-2.5 text-sm text-ink-soft">
+          <label className="text-ink-soft flex cursor-pointer items-center gap-2.5 text-sm">
             <input
               name="remember"
               type="checkbox"
@@ -224,7 +241,7 @@ export function AuthForm({ mode, redirectTo }: { mode: Mode; redirectTo?: string
         <p
           id={noticeId}
           role="alert"
-          className="mt-4 border-l-2 border-rust pl-3 text-sm leading-relaxed text-rust"
+          className="border-rust text-rust mt-4 border-l-2 pl-3 text-sm leading-relaxed"
         >
           {state.message}
         </p>
@@ -251,7 +268,7 @@ function SubmitButton({
       type="submit"
       disabled={pending}
       aria-describedby={describedBy}
-      className="mt-7 h-12 w-full touch-manipulation rounded-full bg-ink text-[0.75rem] font-bold tracking-[0.14em] text-ground uppercase transition-colors hover:bg-accent hover:text-accent-ink disabled:opacity-60"
+      className="bg-accent text-accent-ink hover:bg-flare mt-7 h-12 w-full touch-manipulation rounded text-[0.75rem] font-bold tracking-[0.14em] uppercase transition-colors disabled:opacity-60"
     >
       {pending ? t.auth.working : label}
     </button>
@@ -283,7 +300,7 @@ function Field({
       <input
         id={id}
         {...input}
-        className="mt-2 h-12 w-full border border-line bg-ground px-3.5 text-base text-ink transition-colors placeholder:text-faint focus:border-accent focus:outline-none"
+        className="border-line bg-ground text-ink placeholder:text-faint focus:border-accent mt-2 h-12 w-full border px-3.5 text-base transition-colors focus:outline-none"
       />
     </div>
   );

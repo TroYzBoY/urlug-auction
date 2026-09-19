@@ -1,0 +1,86 @@
+﻿{
+    "capturedAt":  "2026-09-18T07:55:39.9918951+08:00",
+    "gitCommit":  "9a9dcb37e21715a28c6ee7a0d14a2cdd39cdf851",
+    "originalStatus":  [
+                           "?? design-backups/",
+                           "?? e2e/award.spec.ts"
+                       ],
+    "files":  [
+                  {
+                      "sha256":  "C4C955F5CA92AF32E5475DFA57DC56DE96B69680762C7B4550CA1F0BDD4AA466",
+                      "path":  "src/app/globals.css"
+                  },
+                  {
+                      "sha256":  "3EEE17DAEC81751ADBB9BF96A77AFBFECD93D45DBE09760BBEAED7D5088D22D2",
+                      "path":  "src/app/layout.tsx"
+                  },
+                  {
+                      "sha256":  "BAA617A29179ACBD2F4DDA4405407B360BDE83E8F1D11A60BF3DD8F2925BD379",
+                      "path":  "src/app/lots/page.tsx"
+                  },
+                  {
+                      "sha256":  "994330B466A05713E86ADF7142A4B4C33DB74F50A1B7E849974222298D83C35C",
+                      "path":  "src/app/icon.tsx"
+                  },
+                  {
+                      "sha256":  "11D2FE0601BF4DE717FFBD124C54FED75C475319D38BCFCC54267D66CE91C075",
+                      "path":  "src/app/apple-icon.tsx"
+                  },
+                  {
+                      "sha256":  "EEFC4DE50693A88684BF09CCDB019819E61C4D34081E88B8149BC1E5415D4C3F",
+                      "path":  "src/app/opengraph-image.tsx"
+                  },
+                  {
+                      "sha256":  "C83EE1563BDD08E1978CB8BFD096ED5729201B50009CBD95C4EDA7722968AD4E",
+                      "path":  "src/app/manifest.ts"
+                  },
+                  {
+                      "sha256":  "947100B1617B2E803D7A1C1D57EE926BD772D60B0FE9C58E8E1E2B9B5671C0AB",
+                      "path":  "src/components/site/Header.tsx"
+                  },
+                  {
+                      "sha256":  "0F74A3F7E767A29A50A27B48310651F79603107AB09E36474D69F299A4D6FADF",
+                      "path":  "src/components/site/Footer.tsx"
+                  },
+                  {
+                      "sha256":  "085E29ABF41FB0757CAC6D0726629C49C1241D77BE0590F7F29D63BF4282D5BC",
+                      "path":  "src/components/lot/LotCard.tsx"
+                  },
+                  {
+                      "sha256":  "0E697C3897882B6ACB68194C50DE29DE2E2164536BB1966D66055EEC3F42E7CC",
+                      "path":  "src/components/lot/LotPlate.tsx"
+                  },
+                  {
+                      "sha256":  "F5FC723BD670DED70C2713E6B727D95CDA156E0AD0EDC13D5AA548EEA9765411",
+                      "path":  "src/components/auth/AuthShell.tsx"
+                  },
+                  {
+                      "sha256":  "73B8B75E8DAD915F112F5686EC1314DB7A14C9465CB38A989B2B67DB2E7C3304",
+                      "path":  "src/components/descent/Shaft.tsx"
+                  },
+                  {
+                      "sha256":  "6812FD5AFB5678FFBCB446408E600BD995D490E1C1E375E5700E2C388B376895",
+                      "path":  "src/components/descent/Descent.module.css"
+                  },
+                  {
+                      "sha256":  "0BA5D3AF70F37BAB6D5B33D8D675FE4AA0061D23FA24597B1A80B37151C44F47",
+                      "path":  ".dockerignore"
+                  },
+                  {
+                      "sha256":  "002E33AEA945C0C5892F971548CFC79C60FD060A1F3DC8A205D1C44EA3935596",
+                      "path":  "src/components/auth/AuthForm.tsx"
+                  },
+                  {
+                      "sha256":  "9EC36694931EA9117616641E0475DC292FFF2376577B4092524C66FAC68BD121",
+                      "path":  "src/components/auth/ForgotForm.tsx"
+                  },
+                  {
+                      "sha256":  "E72822BE2CE89029284F4E4736F58195106775502DA76A78DAA65FCA8BB04D32",
+                      "path":  "src/components/auth/OtpForm.tsx"
+                  },
+                  {
+                      "sha256":  "45123C8625A43C932FFB26E0936A671C17339ABA9506F372C328BD4A3703C9F8",
+                      "path":  "src/lib/copy.ts"
+                  }
+              ]
+}

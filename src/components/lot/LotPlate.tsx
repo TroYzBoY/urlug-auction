@@ -79,20 +79,6 @@ const SILHOUETTES: Record<LotCategory, React.ReactNode> = {
  */
 const CATALOGUE_SIZES = "(max-width: 1024px) 50vw, 33vw";
 
-const GROUNDS: Record<LotCategory, string> = {
-  antique:
-    "radial-gradient(120% 90% at 30% 8%, #e6d4bd 0%, #d8c0a2 45%, #b99873 100%)",
-  painting:
-    "radial-gradient(120% 90% at 70% 10%, #e9dcc8 0%, #cdb693 48%, #9e7c56 100%)",
-  timepiece:
-    "radial-gradient(120% 90% at 45% 5%, #ecdfcb 0%, #d3b892 45%, #a8834f 100%)",
-  jewellery:
-    "radial-gradient(120% 90% at 25% 12%, #e8d3c4 0%, #d0ab97 48%, #a8746b 100%)",
-  arms: "radial-gradient(120% 90% at 60% 6%, #ded3c4 0%, #b9a894 45%, #857463 100%)",
-  manuscript:
-    "radial-gradient(120% 90% at 35% 10%, #eadfc9 0%, #cfbb96 46%, #9a8354 100%)",
-};
-
 export function LotPlate({
   category,
   code,
@@ -123,8 +109,7 @@ export function LotPlate({
 }) {
   return (
     <div
-      className={`relative isolate overflow-hidden ${ratio} ${className}`}
-      style={{ background: GROUNDS[category] }}
+      className={`lot-plate relative isolate overflow-hidden ${ratio} ${className}`}
     >
       {image ? (
         <Image
@@ -132,7 +117,7 @@ export function LotPlate({
           alt={alt ?? ""}
           fill
           sizes={sizes}
-          priority={priority}
+          preload={priority}
           className="object-cover"
         />
       ) : null}
@@ -152,7 +137,7 @@ export function LotPlate({
           <svg
             viewBox="0 0 100 100"
             aria-hidden
-            className="absolute inset-0 size-full text-[#3d2a19] opacity-40"
+            className="text-accent absolute inset-0 size-full opacity-50"
             fill="none"
             stroke="currentColor"
             strokeWidth="1.1"
@@ -167,13 +152,10 @@ export function LotPlate({
       {/* Inner hairline, inset so it reads as a mount rather than a border.
           Kept over photographs too — it is what makes the grid read as a
           catalogue of mounted objects rather than a wall of thumbnails. */}
-      <div
-        aria-hidden
-        className="absolute inset-2.5 border border-[#3d2a19]/15 mix-blend-overlay"
-      />
+      <div aria-hidden className="border-ink/15 absolute inset-2.5 border" />
 
       {code && (
-        <span className="absolute bottom-3 left-3 text-[0.625rem] font-semibold tracking-[0.18em] text-[#3d2a19]/55 mix-blend-overlay">
+        <span className="border-line bg-ground/90 text-ink-soft absolute bottom-3 left-3 rounded-sm border px-2 py-1 text-[0.5625rem] font-semibold tracking-[0.16em]">
           {code}
         </span>
       )}

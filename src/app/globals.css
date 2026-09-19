@@ -1,87 +1,38 @@
 @import "tailwindcss";
+@import "./edgerunners.css";
 
-/*
- * ─────────────────────────────────────────────────────────────────────────────
- * URLUG — design tokens
- *
- * Two layers, on purpose:
- *
- *   1. RAW PALETTE — plain custom properties in :root. Deliberately NOT inside
- *      @theme, so Tailwind does not generate a `bg-bone-page` utility for every
- *      swatch. These are the only literal colours in the codebase.
- *
- *   2. SEMANTIC TOKENS — inside @theme, each one pointing at a raw swatch.
- *      These generate the utilities components actually use (bg-ground,
- *      text-ink, border-line …).
- *
- * Re-skinning then means re-pointing semantics at different raws.
- *
- * ── ONE PALETTE ──────────────────────────────────────────────────────────────
- *
- * The house is dark, everywhere, always. There is no light mode, no
- * `prefers-color-scheme` branch, no `data-theme` attribute and no toggle.
- *
- * There used to be four states sharing these names, and keeping the two dark
- * blocks in step was a standing hazard — a token added to one was right for
- * everyone following their OS and wrong for everyone who had used the toggle,
- * and the difference was invisible until somebody sent a screenshot. One
- * palette removes the whole class of bug, and it is what the room already did:
- * the bidding room was always dark regardless of theme, because it is a *place*
- * rather than a preference. Now the whole site is that place.
- *
- * Because plain `@theme` (not `@theme inline`) emits utilities as
- * `var(--color-x)`, a component written with `bg-surface text-ink` needs no
- * `dark:` variant anywhere.
- * ─────────────────────────────────────────────────────────────────────────────
+/* URLUG — cyan and vivid purple auction house.
+ * Semantic tokens below keep forms, auction rooms and account pages in sync.
+ * Raw names remain stable for existing components. The previous warm palette
+ * and exact original files are in design-backups/pre-edgerunners-2026-09-18/.
  */
-
-/* ── 1. Raw palette ──────────────────────────────────────────────────────── */
 :root {
-  /*
-   * Grounds carry a warm hue at the same lightness as the neutrals they
-   * replaced — #141414 → #191310 is the same darkness, just no longer grey.
-   * Holding lightness steady means contrast ratios against the ink are
-   * unchanged, so the page gains colour without losing legibility.
-   *
-   * Saturation stays low on purpose. A background that announces its colour
-   * competes with the lots, and the lots are photographs of objects.
-   */
+  --roast-page: #080b16;
+  --roast-card: #101526;
+  --roast-inset: #1a2140;
 
-  /* Roast — warm brown-black grounds */
-  --roast-page: #26170F;
-  --roast-card: #241c16;
-  --roast-inset: #322820;
+  --cream-ink: #f3f5ff;
+  --cream-soft: #ced6ea;
+  --cream-muted: #a0acc8;
+  --cream-faint: #929fbd;
 
-  /* Cream — ink on dark */
-  --cream-ink: #f6f1e8;
-  --cream-soft: #ded6c8;
-  --cream-muted: #a89e90;
-  /* Raised from #7a7167, which measured 3.84 on the page and 3.50 on a card —
-     both short of the 4.5 WCAG AA asks for. It carries 33 usages and every one
-     of them is text-xs: the smallest type on the site was also the hardest to
-     read. Now 5.28 and 4.81. */
-  --cream-faint: #91887e;
+  --rule-dark: rgba(159, 176, 218, 0.15);
+  --rule-dark-strong: rgba(159, 176, 218, 0.32);
 
-  /* Hairlines — tinted cream rather than pure white, so rules sit in the same
-     warm family as the grounds instead of reading as grey scratches on them. */
-  --rule-dark: rgba(246, 236, 222, 0.09);
-  --rule-dark-strong: rgba(246, 236, 222, 0.21);
+  --amber-gold: var(--neon-cyan);
+  --amber-flare: #a2f5ff;
+  --rust-bright: #ff859e;
+  --olive-bright: var(--neon-cyan);
 
-  /* Quiet Signal Accents */
-  --amber-gold: #c48b48;
-  --amber-flare: #c48b48;
-  /* +6 on each channel, which is imperceptible as a colour and takes the
-     34 text-rust usages from 4.24 on a card to 4.55. The live-room red is
-     the same red. */
-  --rust-bright: #df5b3e;
-  --olive-bright: #4e8c5b;
+  --neon-cyan: #47eaff;
+  --neon-violet: #ba95ff;
+  --vivid-purple: #8338ff;
 
-  /* Easing */
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
-/* ── 2. Semantic tokens ──────────────────────────────────────────────────── */
+/* Semantic tokens generate the shared Tailwind utilities. */
 @theme {
   /*
    * Helvetica Neue first, per the client. macOS/iOS gets the genuine face;
@@ -123,6 +74,9 @@
   --color-rust: var(--rust-bright);
   --color-olive: var(--olive-bright);
   --color-gold: var(--amber-gold);
+  --color-signal: var(--neon-cyan);
+  --color-electric: var(--neon-violet);
+  --color-vivid: var(--vivid-purple);
 
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);

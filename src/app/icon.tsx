@@ -13,27 +13,26 @@ export const contentType = "image/png";
 
 export default function Icon() {
   return new ImageResponse(
-    (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          // The room's ground and its amber gold. A favicon sits against a
-          // browser chrome that is as often dark as light, so the dark ground
-          // is the safer of the two skins here.
-          background: "#17120e",
-          color: "#c98a4b",
-          fontSize: 22,
-          fontWeight: 700,
-          letterSpacing: "-0.02em",
-        }}
-      >
-        {t.brand.mark}
-      </div>
-    ),
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        // A cyan mark on navy stays crisp at tab size; the purple edge
+        // connects the small mark to the site's second accent.
+        background: "#080b16",
+        color: "#47eaff",
+        borderBottom: "3px solid #8338ff",
+        borderRadius: 6,
+        fontSize: 22,
+        fontWeight: 700,
+        letterSpacing: "-0.02em",
+      }}
+    >
+      {t.brand.mark}
+    </div>,
     size,
   );
 }

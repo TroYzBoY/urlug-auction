@@ -45,7 +45,7 @@ export function OtpForm({
 
   return (
     <div className="mt-8">
-      <p className="text-sm leading-relaxed text-ink-soft">
+      <p className="text-ink-soft text-sm leading-relaxed">
         {t.auth.codeSent(phone)}
       </p>
 
@@ -73,7 +73,7 @@ export function OtpForm({
             required
             autoFocus
             data-numerals
-            className="mt-2 h-12 w-full border border-line bg-ground px-3.5 text-center text-2xl tracking-[0.4em] text-ink transition-colors focus:border-accent focus:outline-none"
+            className="border-line bg-ground text-ink focus:border-accent mt-2 h-12 w-full border px-3.5 text-center text-2xl tracking-[0.4em] transition-colors focus:outline-none"
           />
         </div>
 
@@ -89,7 +89,7 @@ export function OtpForm({
               autoComplete="new-password"
               minLength={8}
               required
-              className="mt-2 h-12 w-full border border-line bg-ground px-3.5 text-base text-ink transition-colors focus:border-accent focus:outline-none"
+              className="border-line bg-ground text-ink focus:border-accent mt-2 h-12 w-full border px-3.5 text-base transition-colors focus:outline-none"
             />
           </div>
         )}
@@ -100,7 +100,7 @@ export function OtpForm({
           <p
             id={noticeId}
             role="alert"
-            className="mt-4 border-l-2 border-rust pl-3 text-sm leading-relaxed text-rust"
+            className="border-rust text-rust mt-4 border-l-2 pl-3 text-sm leading-relaxed"
           >
             {state.message}
           </p>
@@ -111,7 +111,7 @@ export function OtpForm({
         <input type="hidden" name="phone" value={phone} />
         <ResendButton />
         {resendState.status === "error" && (
-          <p role="alert" className="mt-2 text-xs text-rust">
+          <p role="alert" className="text-rust mt-2 text-xs">
             {resendState.message}
           </p>
         )}
@@ -126,7 +126,7 @@ function SubmitButton({ label }: { label: string }) {
     <button
       type="submit"
       disabled={pending}
-      className="mt-7 h-12 w-full touch-manipulation rounded-full bg-ink text-[0.75rem] font-bold tracking-[0.14em] text-ground uppercase transition-colors hover:bg-accent hover:text-accent-ink disabled:opacity-60"
+      className="bg-accent text-accent-ink hover:bg-flare mt-7 h-12 w-full touch-manipulation rounded text-[0.75rem] font-bold tracking-[0.14em] uppercase transition-colors disabled:opacity-60"
     >
       {pending ? t.auth.working : label}
     </button>

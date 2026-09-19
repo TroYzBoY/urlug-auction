@@ -79,14 +79,14 @@ export function Footer() {
      * over by a full-viewport canvas, and being transparent it would have
      * nothing of its own to show anyway.
      */
-    <footer className="relative z-10 mt-24 border-t border-line bg-ground">
+    <footer className="house-footer border-line bg-ground relative z-10 mt-24 border-t">
       {/* ── Band 1: the house, and where to go ───────────────────────────── */}
       <div className="gutter grid grid-cols-2 gap-x-8 gap-y-12 py-14 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] md:py-16">
         <div className="col-span-2 max-w-xs md:col-span-1">
-          <p className="text-base font-bold tracking-[0.22em] text-ink">
+          <p className="house-wordmark text-ink text-base font-bold tracking-[0.22em]">
             {t.brand.name}
           </p>
-          <p className="mt-3 text-sm leading-relaxed text-muted">
+          <p className="text-muted mt-3 text-sm leading-relaxed">
             {t.brand.tagline}
           </p>
 
@@ -97,7 +97,7 @@ export function Footer() {
           */}
           <dl
             data-numerals
-            className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-xs text-faint"
+            className="text-faint mt-6 flex flex-wrap gap-x-6 gap-y-3 text-xs"
           >
             <div>
               <dt className="sr-only">{t.home.statRounds}</dt>
@@ -134,7 +134,7 @@ export function Footer() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-sm text-ink-soft transition-colors hover:text-accent"
+                    className="text-ink-soft hover:text-accent text-sm transition-colors"
                   >
                     {link.label}
                   </Link>
@@ -146,10 +146,10 @@ export function Footer() {
       </div>
 
       {/* ── Band 2: who this actually is ─────────────────────────────────── */}
-      <div className="gutter border-t border-line py-8">
+      <div className="gutter border-line border-t py-8">
         <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-          <address className="text-xs leading-relaxed text-faint not-italic">
-            <span className="block font-medium text-muted">
+          <address className="text-faint text-xs leading-relaxed not-italic">
+            <span className="text-muted block font-medium">
               {t.footer.company}
             </span>
             <span className="mt-1 block">{t.footer.registry}</span>
@@ -159,23 +159,23 @@ export function Footer() {
           <div className="flex flex-col gap-3 text-xs md:items-end">
             {/* Contact as links, not as text. A phone number on a phone that
                 cannot be tapped is a phone number somebody has to retype. */}
-            <p className="flex flex-wrap gap-x-4 gap-y-1 text-muted">
+            <p className="text-muted flex flex-wrap gap-x-4 gap-y-1">
               <a
                 href={`tel:${t.contact.phone.replace(/\s/g, "")}`}
-                className="transition-colors hover:text-accent"
+                className="hover:text-accent transition-colors"
               >
                 {t.contact.phone}
               </a>
               <a
                 href={`mailto:${t.contact.email}`}
-                className="transition-colors hover:text-accent"
+                className="hover:text-accent transition-colors"
               >
                 {t.contact.email}
               </a>
             </p>
 
-            <p className="inline-flex items-center gap-2 self-start border border-line px-2.5 py-1 text-faint md:self-end">
-              <span aria-hidden className="font-bold text-rust">
+            <p className="border-line text-faint inline-flex items-center gap-2 self-start border px-2.5 py-1 md:self-end">
+              <span aria-hidden className="text-rust font-bold">
                 18+
               </span>
               {t.footer.ageNotice}
@@ -185,8 +185,8 @@ export function Footer() {
       </div>
 
       {/* ── Band 3: the line at the bottom ───────────────────────────────── */}
-      <div className="gutter border-t border-line py-5">
-        <p className="text-xs text-faint">
+      <div className="gutter border-line border-t py-5">
+        <p className="text-faint text-xs">
           © {new Date().getFullYear()} {t.brand.name}. {t.footer.rights}.
         </p>
       </div>

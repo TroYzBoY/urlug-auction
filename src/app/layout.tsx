@@ -66,7 +66,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   /* One colour, because there is one palette. It tints the browser chrome on
      Android and the status bar on iOS, so it has to match the page ground. */
-  themeColor: "#17120e",
+  themeColor: "#080b16",
   colorScheme: "dark",
   /* The bid panel sits against the bottom edge — it needs the safe area. */
   viewportFit: "cover",
@@ -102,7 +102,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="mn" className={inter.variable} suppressHydrationWarning>
       <head>
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: BEFORE_PAINT }} />
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{ __html: BEFORE_PAINT }}
+        />
       </head>
       <body className="min-h-dvh antialiased">
         {/*
@@ -117,7 +120,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         */}
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:bg-ink focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-ground"
+          className="focus:bg-ink focus:text-ground sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2 focus:text-sm focus:font-medium"
         >
           {t.common.skipToContent}
         </a>

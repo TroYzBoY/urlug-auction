@@ -137,37 +137,11 @@ void main(){
    because the shader needs to interpolate them per frame; globals.css stays
    the source of truth for everything CSS can express. */
 const C = {
-  bone: [250, 246, 239],
-  boneInset: [233, 226, 212],
-  dusk: [150, 133, 113],
-  duskInset: [122, 106, 89],
-  roast: [25, 19, 16],
-  roastInset: [50, 40, 32],
-
-  /*
-   * The shaft's two tones.
-   *
-   * ⚠ `shaftLo` IS `--roast-page` (#191310), exactly. The shader canvas is
-   * `position: fixed` and the footer below the descent has no ground of its
-   * own, so the shaft's darkest tone and the page's ground meet on screen. When
-   * they were four code values apart — #17120e against #191310 — scrolling out
-   * of the descent showed a visible change of colour where none was intended.
-   * If the palette moves, this moves with it.
-   *
-   * `shaftHi` is four values up. The shader mixes between the two by a
-   * noise-driven luminance, so that distance IS how blotchy the ground looks:
-   * enough for the geometry to sit in air, little enough that a still frame
-   * reads as one colour.
-   */
-  shaftLo: [25, 19, 16],
-  shaftHi: [29, 23, 20],
-  umberInk: [28, 23, 20],
-  umberMute: [116, 106, 93],
-  creamInk: [246, 241, 232],
-  creamMute: [168, 158, 144],
-  chestnut: [140, 90, 56],
-  amber: [196, 139, 72],
-  rust: [217, 85, 56],
+  /* Match the navy ground and surface, keeping the shaft geometry subtle. */
+  shaftLo: [8, 11, 22],
+  shaftHi: [16, 21, 38],
+  ink: [243, 245, 255],
+  muted: [160, 172, 200],
 } as const;
 
 type RGB = readonly number[];
@@ -240,8 +214,16 @@ function makeGL(canvas: HTMLCanvasElement, opaque: boolean): Renderer | null {
 
   const u: Record<string, WebGLUniformLocation | null> = {};
   for (const n of [
-    "uRes", "uTime", "uP", "uVel", "uBurn", "uClimax", "uDoor", "uMode",
-    "uHi", "uLo",
+    "uRes",
+    "uTime",
+    "uP",
+    "uVel",
+    "uBurn",
+    "uClimax",
+    "uDoor",
+    "uMode",
+    "uHi",
+    "uLo",
   ]) {
     u[n] = ctx.getUniformLocation(prog, n);
   }
@@ -382,10 +364,10 @@ export function Shaft() {
        */
       root.setProperty("--descent-ground", css(lo));
       root.setProperty("--descent-ground-hi", css(hi));
-      root.setProperty("--descent-ink", css(C.creamInk));
-      root.setProperty("--descent-muted", css(C.creamMute));
-      root.setProperty("--descent-line", "rgba(246,236,222,0.14)");
-      root.setProperty("--descent-glow", "rgba(196,139,72,.42)");
+      root.setProperty("--descent-ink", css(C.ink));
+      root.setProperty("--descent-muted", css(C.muted));
+      root.setProperty("--descent-line", "rgba(71,234,255,0.15)");
+      root.setProperty("--descent-glow", "rgba(71,234,255,.24)");
     });
 
     return () => {

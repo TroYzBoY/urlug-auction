@@ -16,8 +16,8 @@ export default function manifest(): MetadataRoute.Manifest {
     // wants the lots, not the title sequence, every time.
     start_url: "/overview",
     display: "standalone",
-    background_color: "#faf7f2",
-    theme_color: "#17120e",
+    background_color: "#080b16",
+    theme_color: "#080b16",
     lang: "mn",
     icons: [
       { src: "/icon", sizes: "32x32", type: "image/png" },

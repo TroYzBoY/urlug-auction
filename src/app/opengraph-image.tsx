@@ -21,81 +21,93 @@ export default function OpengraphImage() {
   const last = ROUNDS[ROUNDS.length - 1]!.bidClockSec;
 
   return new ImageResponse(
-    (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        position: "relative",
+        background: "linear-gradient(120deg, #080b16 42%, #1a2140 100%)",
+        color: "#f3f5ff",
+        padding: "68px 76px",
+      }}
+    >
       <div
         style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
           width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          background: "#17120e",
-          color: "#f4ece2",
-          padding: "68px 76px",
+          height: 6,
+          background: "linear-gradient(90deg, #47eaff 0%, #8338ff 100%)",
         }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <div
-            style={{
-              fontSize: 26,
-              fontWeight: 700,
-              letterSpacing: "0.22em",
-              color: "#f4ece2",
-            }}
-          >
-            {t.brand.name.toUpperCase()}
-          </div>
-          <div style={{ fontSize: 22, color: "#a08d7c", letterSpacing: "0.14em" }}>
-            {t.home.slatePlace.toUpperCase()}
-          </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <div
-            style={{
-              fontSize: 104,
-              fontWeight: 500,
-              letterSpacing: "-0.045em",
-              lineHeight: 1,
-              display: "flex",
-            }}
-          >
-            {t.home.headline[0]}
-          </div>
-          <div
-            style={{
-              fontSize: 104,
-              fontWeight: 500,
-              letterSpacing: "-0.045em",
-              lineHeight: 1,
-              color: "#c98a4b",
-              display: "flex",
-            }}
-          >
-            {t.home.headline[1]}
-          </div>
-        </div>
-
+      />
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
         <div
           style={{
-            display: "flex",
-            gap: 56,
-            borderTop: "1px solid #3a2c22",
-            paddingTop: 26,
-            fontSize: 24,
-            color: "#a08d7c",
+            fontSize: 26,
+            fontWeight: 700,
+            letterSpacing: "0.22em",
+            color: "#f3f5ff",
           }}
         >
-          <div style={{ display: "flex" }}>
-            {TOTAL_ROUNDS} {t.common.roundWord}
-          </div>
-          <div style={{ display: "flex" }}>
-            {hours} цаг {minutes} минут
-          </div>
-          <div style={{ display: "flex" }}>
-            {first} мин → {last} сек
-          </div>
-          {/*
+          {t.brand.name.toUpperCase()}
+        </div>
+        <div
+          style={{ fontSize: 22, color: "#ba95ff", letterSpacing: "0.14em" }}
+        >
+          {t.home.slatePlace.toUpperCase()}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        <div
+          style={{
+            fontSize: 104,
+            fontWeight: 500,
+            letterSpacing: "-0.045em",
+            lineHeight: 1,
+            display: "flex",
+          }}
+        >
+          {t.home.headline[0]}
+        </div>
+        <div
+          style={{
+            fontSize: 104,
+            fontWeight: 500,
+            letterSpacing: "-0.045em",
+            lineHeight: 1,
+            color: "#47eaff",
+            display: "flex",
+          }}
+        >
+          {t.home.headline[1]}
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 56,
+          borderTop: "1px solid #1a2140",
+          paddingTop: 26,
+          fontSize: 24,
+          color: "#a0acc8",
+        }}
+      >
+        <div style={{ display: "flex" }}>
+          {TOTAL_ROUNDS} {t.common.roundWord}
+        </div>
+        <div style={{ display: "flex" }}>
+          {hours} цаг {minutes} минут
+        </div>
+        <div style={{ display: "flex" }}>
+          {first} мин → {last} сек
+        </div>
+        {/*
             "төгрөг", not "₮".
 
             `next/og` renders with a font it downloads per character set, and it
@@ -103,13 +115,12 @@ export default function OpengraphImage() {
             dynamic font for ₮" and the glyph comes out blank or as a box. The
             word costs three characters of width and always renders.
           */}
-          <div style={{ display: "flex" }}>
-            1 {t.common.point} ={" "}
-            {POINT_MNT.toLocaleString("en-US").replace(/,/g, " ")} төгрөг
-          </div>
+        <div style={{ display: "flex" }}>
+          1 {t.common.point} ={" "}
+          {POINT_MNT.toLocaleString("en-US").replace(/,/g, " ")} төгрөг
         </div>
       </div>
-    ),
+    </div>,
     size,
   );
 }

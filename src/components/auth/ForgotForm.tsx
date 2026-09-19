@@ -15,9 +15,12 @@ import { OtpForm } from "./OtpForm";
  * with a list of phone numbers.
  */
 export function ForgotForm() {
-  const [state, formAction] = useActionState<AuthState, FormData>(requestReset, {
-    status: "idle",
-  });
+  const [state, formAction] = useActionState<AuthState, FormData>(
+    requestReset,
+    {
+      status: "idle",
+    },
+  );
   const phoneId = useId();
 
   if (state.status === "code-sent") {
@@ -38,7 +41,7 @@ export function ForgotForm() {
           autoComplete="tel"
           placeholder="9911 2233"
           required
-          className="mt-2 h-12 w-full border border-line bg-ground px-3.5 text-base text-ink transition-colors placeholder:text-faint focus:border-accent focus:outline-none"
+          className="border-line bg-ground text-ink placeholder:text-faint focus:border-accent mt-2 h-12 w-full border px-3.5 text-base transition-colors focus:outline-none"
         />
       </div>
 
@@ -47,7 +50,7 @@ export function ForgotForm() {
       {state.status === "error" && (
         <p
           role="alert"
-          className="mt-4 border-l-2 border-rust pl-3 text-sm leading-relaxed text-rust"
+          className="border-rust text-rust mt-4 border-l-2 pl-3 text-sm leading-relaxed"
         >
           {state.message}
         </p>
@@ -62,7 +65,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="mt-7 h-12 w-full touch-manipulation rounded-full bg-ink text-[0.75rem] font-bold tracking-[0.14em] text-ground uppercase transition-colors hover:bg-accent hover:text-accent-ink disabled:opacity-60"
+      className="bg-accent text-accent-ink hover:bg-flare mt-7 h-12 w-full touch-manipulation rounded text-[0.75rem] font-bold tracking-[0.14em] uppercase transition-colors disabled:opacity-60"
     >
       {pending ? t.auth.working : t.auth.sendCode}
     </button>

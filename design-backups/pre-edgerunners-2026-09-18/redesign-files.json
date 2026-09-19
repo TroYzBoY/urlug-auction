@@ -1,0 +1,78 @@
+﻿[
+    {
+        "path":  "src/app/globals.css",
+        "sha256":  "C2D08932516A9190AB36BF085795C07BE48F41AFA38ABF4CA7711C0BC1894D7B"
+    },
+    {
+        "path":  "src/app/layout.tsx",
+        "sha256":  "45BCB7983B8E801125FDE6F24D15C9DA54D6AF37E6B8EE4EE81254CCDBA659D7"
+    },
+    {
+        "path":  "src/app/lots/page.tsx",
+        "sha256":  "B37B2D8232DFC7CAC685182EE9674841BD6A9D7A7FF08CE9B4008A251434B00F"
+    },
+    {
+        "path":  "src/app/icon.tsx",
+        "sha256":  "66B460F809006E38EF770725FD43E810156A6FD1E494E4AD0E3B088C49125797"
+    },
+    {
+        "path":  "src/app/apple-icon.tsx",
+        "sha256":  "58294DA1CEC608834CB32429C408BF09778D02CAD3D8CB2EB061D5E8567D1962"
+    },
+    {
+        "path":  "src/app/opengraph-image.tsx",
+        "sha256":  "498065627F2510598C6ECEBE479F607D090A99D16E5BAB2A221D34DE79FC6B1B"
+    },
+    {
+        "path":  "src/app/manifest.ts",
+        "sha256":  "26180E595A08D93D4D69AC63B2D42315E5ACB0CBC6EDE828F6B589029C64D4DC"
+    },
+    {
+        "path":  "src/components/site/Header.tsx",
+        "sha256":  "1C0106D8214EB7CF61DB0116CDC2467041903499CF235EB825275DC7DE319D6A"
+    },
+    {
+        "path":  "src/components/site/Footer.tsx",
+        "sha256":  "3A70B2E351485962A23CB715845E3EB4BB65294E3BB9B3ECE111F45703CEC123"
+    },
+    {
+        "path":  "src/components/lot/LotCard.tsx",
+        "sha256":  "2FBD438A601561E33ACD46EDFB0D26721D61650469426F8B1E97543273C62652"
+    },
+    {
+        "path":  "src/components/lot/LotPlate.tsx",
+        "sha256":  "22DE5D36595FCC25AFC1B45A33FD42AF268730F73301F64DC19F9EBC79C084D6"
+    },
+    {
+        "path":  "src/components/auth/AuthShell.tsx",
+        "sha256":  "388D9CBB23BA36F8704EB5B539477EC90B7D140E2EFBA7A63EA2DBB242464D14"
+    },
+    {
+        "path":  "src/components/descent/Shaft.tsx",
+        "sha256":  "944CE07AAE4115A1B9C00E2DA262C057AECC3A7B96CFC2AE5F16FE6FC49E59C4"
+    },
+    {
+        "path":  "src/components/descent/Descent.module.css",
+        "sha256":  "82F16E12B06349939F91751C6B862EA4A880D74F80720229C8FB204ADB21E9B2"
+    },
+    {
+        "path":  ".dockerignore",
+        "sha256":  "E60C082A4E8BD469273D3FCFF5CAA2576DF20612A505FD235A155597F575108B"
+    },
+    {
+        "path":  "src/components/auth/AuthForm.tsx",
+        "sha256":  "31F2FC2A4BE8419313845FA5D1E030C6994DA5405A7EE211896F87B87896F1F4"
+    },
+    {
+        "path":  "src/components/auth/ForgotForm.tsx",
+        "sha256":  "6AB18622C74E6B38999905480B7C48ABE47051C6AD4B9A74FB105576D0EE36D8"
+    },
+    {
+        "path":  "src/components/auth/OtpForm.tsx",
+        "sha256":  "49BCA208A47DF7768A5566DEF3EFAC7D37471C908ECA62D4CC6AD6FEAE9F0332"
+    },
+    {
+        "path":  "src/app/edgerunners.css",
+        "sha256":  "28799D0EC281B9182C621402B3289BE31B63EE474239A94D32C8DCBEC360D4B7"
+    }
+]
