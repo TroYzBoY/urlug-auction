@@ -776,6 +776,10 @@
 
 /* ── narrow screens ───────────────────────────────────────────────────────── */
 @media (max-width: 760px) {
+  .slate {
+    flex-wrap: wrap;
+  }
+
   /* Dials stay paired and shrink; the callouts stack, because two columns of
      prose at this width is neither readable nor calm. */
   .dials {
@@ -884,25 +888,32 @@
   }
   .s3Wrap {
     overflow: visible;
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--descent-margin);
   }
   .rail {
     position: static;
-    width: 50%;
+    width: 100%;
     transform: none !important;
   }
   .row {
     flex: none;
-    height: auto;
+    height: clamp(7rem, 14vw, 11rem);
     padding: 1.2rem 0;
     opacity: 1;
+  }
+  .railB .clock {
+    /* Match each clock to its round when the animated rails become a table. */
+    font-size: clamp(1.75rem, 6vw, 4rem) !important;
+    white-space: nowrap;
   }
   .axis {
     display: none;
   }
   .s3Note {
     position: static;
+    grid-column: 1 / -1;
     transform: none;
     margin-top: 2rem;
   }
@@ -929,6 +940,7 @@
   .hammer {
     opacity: 1;
     transform: none;
+    font-size: clamp(2.75rem, 14vw, 13rem);
     margin-top: 0.25em;
   }
   .s4Sub {
