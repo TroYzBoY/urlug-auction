@@ -1,6 +1,15 @@
 @import "tailwindcss";
 @import "./edgerunners.css";
 
+/*
+ * Short viewports — a phone with the browser's own bars showing. An iPhone SE
+ * in Safari leaves 375×548 for the page, and the room has to fit its clocks,
+ * price and bid button into that without a scroll. Width breakpoints cannot see
+ * this: a 390px phone held upright and a 390px phone with the keyboard open are
+ * the same `sm` and very different screens.
+ */
+@custom-variant short (@media (max-height: 43.75rem));
+
 /* URLUG — cyan and vivid purple auction house.
  * Semantic tokens below keep forms, auction rooms and account pages in sync.
  * Raw names remain stable for existing components. The previous warm palette
@@ -258,6 +267,61 @@
  */
 @utility animate-ring-out {
   animation: ring-out 1.1s var(--ease-out-soft) infinite;
+}
+
+/*
+ * The room between "no more bids" and the house naming a winner.
+ *
+ * Same reason as the ring above: it is the only way the screen can say that
+ * something is still happening. A stopped clock over static text reads as a
+ * page that broke; a list of the standing bids being gone over reads as a
+ * decision being made, which is what is going on.
+ *
+ * Every keyframe ENDS at the resting state, so the reduced-motion block below —
+ * which cuts each animation to one 0.01ms pass — leaves a plain, readable list
+ * rather than a frozen highlight on one row.
+ */
+@keyframes decision-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@keyframes decision-scan {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(300%);
+  }
+}
+
+@keyframes decision-row {
+  0%,
+  40%,
+  100% {
+    background-color: transparent;
+    color: var(--color-ink-soft);
+  }
+  14% {
+    background-color: color-mix(in oklab, var(--color-flare) 12%, transparent);
+    color: var(--color-ink);
+  }
+}
+
+@utility animate-decision-sweep {
+  animation: decision-sweep 1.6s var(--ease-in-out-soft) infinite;
+}
+
+@utility animate-decision-scan {
+  animation: decision-scan 2.4s var(--ease-in-out-soft) infinite;
+}
+
+@utility animate-decision-row {
+  animation: decision-row 2.4s linear infinite;
 }
 
 /* Hide scrollbar on the bid feed / round rail without losing scrollability. */

@@ -23,11 +23,18 @@ export function BidClock({
   totalMs,
   frozen,
   onExpire,
+  focus = false,
 }: {
   endsAt: number;
   totalMs: number;
   frozen: boolean;
   onExpire: () => void;
+  /**
+   * Focus mode: the clock is the screen. It fills whatever height the room
+   * gives it and the numerals grow to match — the one figure a bidder in round
+   * 6 is watching should not be the size of a footnote beside the price.
+   */
+  focus?: boolean;
 }) {
   const remaining = useCountdown(endsAt, {
     granularityMs: 50,
@@ -38,7 +45,13 @@ export function BidClock({
   const frac = remaining === null ? 1 : Math.max(0, Math.min(1, remaining / totalMs));
 
   return (
-    <div className="relative isolate flex flex-col justify-between overflow-hidden border border-line bg-surface px-4 py-5 md:px-6 md:py-6 transition-all duration-300">
+    <div
+      className={`border-line bg-surface relative isolate flex flex-col overflow-hidden border px-4 transition-all duration-300 md:px-6 ${
+        focus
+          ? "h-full justify-center py-5 short:py-3.5"
+          : "justify-between py-3.5 short:py-3 md:py-6"
+      }`}
+    >
       {/* Warm bloom behind the numerals; intensifies with urgency. */}
       <motion.div
         aria-hidden
@@ -68,15 +81,17 @@ export function BidClock({
         aria-live="off"
         animate={urgency === "hot" && !frozen ? { scale: [1, 1.02, 1] } : { scale: 1 }}
         transition={{ repeat: Infinity, duration: 0.6 }}
-        className={`display mt-2.5 text-[clamp(2.75rem,10vw,4.5rem)] leading-none tracking-tight transition-colors duration-300 ${
-          URGENCY_TEXT[urgency]
-        }`}
+        className={`display leading-none tracking-tight transition-colors duration-300 ${
+          focus
+            ? "mt-3 text-[clamp(3.5rem,min(28vw,17dvh),9rem)] short:mt-2"
+            : "mt-2.5 text-[clamp(2.75rem,10vw,4.5rem)] short:mt-2 short:text-[2.75rem]"
+        } ${URGENCY_TEXT[urgency]}`}
       >
         {remaining === null ? "—" : clockText(remaining)}
       </motion.p>
 
       {/* Hairline progress bar */}
-      <div className="mt-3 h-1 w-full overflow-hidden bg-line-strong/30 rounded-full">
+      <div className={`bg-line-strong/30 h-1 w-full overflow-hidden rounded-full ${focus ? "mt-5 short:mt-3" : "mt-3 short:mt-2.5"}`}>
         <motion.div
           initial={false}
           animate={{ scaleX: frac }}

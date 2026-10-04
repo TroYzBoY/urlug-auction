@@ -24,12 +24,18 @@ export function RoundTimer({
   roundTotalMs,
   frozen,
   onExpire,
+  strip = false,
 }: {
   round: number;
   roundEndsAt: number;
   roundTotalMs: number;
   frozen: boolean;
   onExpire: () => void;
+  /**
+   * One row instead of a card — focus mode, where the bid clock takes the
+   * height and the round only has to answer "which, and how long".
+   */
+  strip?: boolean;
 }) {
   const remaining = useCountdown(roundEndsAt, {
     granularityMs: 1000,
@@ -39,10 +45,58 @@ export function RoundTimer({
   const frac =
     remaining === null ? 1 : Math.max(0, Math.min(1, remaining / roundTotalMs));
 
+  /* Elapsed rather than remaining — the bar fills as the round runs out,
+     the mirror of the bid clock's draining bar beside it. */
+  const bar = (
+    <div className="bg-line-strong/30 h-1 w-full overflow-hidden rounded-full">
+      <motion.div
+        initial={false}
+        animate={{ scaleX: 1 - frac }}
+        transition={{ ease: "linear", duration: 0.4 }}
+        className="bg-accent h-full origin-left"
+        style={{ width: "100%" }}
+      />
+    </div>
+  );
+
+  if (strip) {
+    return (
+      <section
+        aria-label={t.room.round}
+        className="border-line bg-surface border px-4 py-3"
+      >
+        {/* Nothing here may wrap: a strip that breaks onto three lines at
+            360px is a card again, and a worse one. The "until the round ends"
+            label is the first thing to go — next to "Тойрог 3 / 6" a bare
+            "12 мин" already says it. */}
+        <div className="flex items-baseline justify-between gap-3 whitespace-nowrap">
+          <p data-numerals className="eyebrow">
+            {t.room.round} <span className="text-ink">{round}</span>
+            <span className="text-faint"> / {TOTAL_ROUNDS}</span>
+          </p>
+          <p className="flex items-baseline gap-2.5">
+            <span className="eyebrow text-faint hidden min-[26rem]:inline">
+              {t.room.roundClock}
+            </span>
+            <span
+              data-numerals
+              role="timer"
+              aria-live="off"
+              className="display text-ink-soft text-2xl leading-none tracking-tight"
+            >
+              {remaining === null ? "—" : coarseClock(remaining)}
+            </span>
+          </p>
+        </div>
+        <div className="mt-2.5">{bar}</div>
+      </section>
+    );
+  }
+
   return (
     <section
       aria-label={t.room.round}
-      className="border-line bg-surface flex flex-col justify-between border px-4 py-5 md:px-5 md:py-6"
+      className="border-line bg-surface flex flex-col justify-between border px-4 py-3.5 short:py-3 md:px-5 md:py-6"
     >
       <div className="flex items-baseline justify-between gap-2">
         <p className="eyebrow">{t.room.round}</p>
@@ -56,24 +110,14 @@ export function RoundTimer({
         data-numerals
         role="timer"
         aria-live="off"
-        className="display mt-2.5 text-[clamp(1.75rem,7vw,3rem)] leading-none tracking-tight text-ink-soft"
+        className="display mt-2.5 text-[clamp(1.75rem,7vw,3rem)] leading-none tracking-tight text-ink-soft short:mt-2 short:text-[1.75rem]"
       >
         {remaining === null ? "—" : coarseClock(remaining)}
       </p>
 
       <p className="eyebrow mt-1.5 text-faint">{t.room.roundClock}</p>
 
-      {/* Elapsed rather than remaining — the bar fills as the round runs out,
-          the mirror of the bid clock's draining bar beside it. */}
-      <div className="mt-3 h-1 w-full overflow-hidden bg-line-strong/30 rounded-full">
-        <motion.div
-          initial={false}
-          animate={{ scaleX: 1 - frac }}
-          transition={{ ease: "linear", duration: 0.4 }}
-          className="bg-accent h-full origin-left"
-          style={{ width: "100%" }}
-        />
-      </div>
+      <div className="mt-3 short:mt-2.5">{bar}</div>
     </section>
   );
 }

@@ -10,7 +10,6 @@ import {
   minNextBidPts,
   quickStepsPts,
 } from "@/lib/auction";
-import { Spinner } from "@/components/site/Spinner";
 import { t } from "@/lib/copy";
 import { pts, ptsToMnt } from "@/lib/format";
 import type { RoomState } from "@/lib/types";
@@ -72,61 +71,26 @@ export function BidPanel({
   const total = currentPts + step;
 
   /*
-   * Bidding is closed and nobody has been named yet.
+   * The result.
    *
-   * Handled before the sold/unsold panel below, because that panel's whole job
-   * is to announce a result — and announcing one here would mean printing a
-   * hammer price and a winner the house has not agreed to. What this shows
-   * instead is the highest bid RECEIVED, labelled as exactly that, and the fact
-   * that a decision is coming.
+   * `review` never reaches this component — AuctionRoom swaps the whole panel
+   * for DecisionPanel while the house decides, because announcing anything here
+   * would mean printing a hammer price and a winner nobody has agreed to. So
+   * this only ever appears as the END of that wait, arriving over the stream,
+   * and it comes in with a short rise to mark that the answer has landed.
+   *
+   * The rise starts from a dimmed panel rather than an invisible one. Motion
+   * renders `initial` into the server HTML, and a panel that began at opacity 0
+   * would stay blank for anyone whose scripts failed to load.
    */
-  if (outcome === "review") {
-    return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] backdrop-blur-md lg:static lg:border lg:p-6 lg:pb-6"
-      >
-        <div className="flex items-center gap-2.5">
-          <Spinner className="size-4" />
-          <p className="eyebrow text-flare">{t.room.reviewNote}</p>
-        </div>
-        <p className="mt-2 text-lg leading-snug font-medium text-ink">
-          {t.room.reviewBody}
-        </p>
-        <dl className="mt-4 flex items-end justify-between gap-4 border-t border-line pt-3">
-          <div>
-            <dt className="eyebrow">{t.room.reviewStanding}</dt>
-            <dd data-numerals className="mt-1 text-xl font-medium text-ink">
-              {pts(currentPts)}{" "}
-              <span className="text-sm text-muted">{t.common.point}</span>
-            </dd>
-            <dd data-numerals className="text-sm text-muted">
-              {ptsToMnt(currentPts)}
-            </dd>
-          </div>
-          <div className="text-right">
-            <dt className="eyebrow">{t.room.leader}</dt>
-            <dd
-              data-numerals
-              className={`mt-1 text-xl font-medium ${
-                isYourLead ? "text-flare" : "text-ink"
-              }`}
-            >
-              {isYourLead ? t.room.you : (leaderName ?? leader ?? "—")}
-            </dd>
-          </div>
-        </dl>
-        <p className="mt-3 text-xs leading-relaxed text-muted">
-          {t.room.reviewWait}
-        </p>
-      </div>
-    );
-  }
-
   if (outcome !== "running") {
     return (
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] backdrop-blur-md lg:static lg:border lg:p-6 lg:pb-6">
+      <motion.div
+        initial={{ opacity: 0.35, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+        className="border-line bg-surface/95 flex flex-1 flex-col justify-center border-t px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] backdrop-blur-md lg:block lg:border lg:p-6 lg:pb-6"
+      >
         <p className="eyebrow">
           {outcome === "sold" ? t.room.soldNote : t.room.unsold}
         </p>
@@ -158,7 +122,7 @@ export function BidPanel({
             </div>
           </dl>
         )}
-      </div>
+      </motion.div>
     );
   }
 
@@ -180,7 +144,7 @@ export function BidPanel({
   }
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md lg:static lg:border lg:p-5 lg:pb-5 shadow-2xl lg:shadow-none">
+    <div className="border-line bg-surface/95 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md short:pt-2.5 lg:border lg:p-5 lg:pb-5">
       {/* Status line */}
       {/*
         At 320px the label takes two lines and the figure beside it broke across
@@ -222,7 +186,7 @@ export function BidPanel({
       )}
 
       {/* Step chips + custom toggle */}
-      <div className="mt-3 flex items-center gap-1.5">
+      <div className="mt-3 flex items-center gap-1.5 short:mt-2">
         {steps.map((s) => (
           <motion.button
             key={s}
@@ -310,7 +274,7 @@ export function BidPanel({
         whileTap={{ scale: 0.97 }}
         onClick={() => commit(total)}
         disabled={!canBid || shortOfJoinFee}
-        className="mt-2.5 flex h-14 w-full touch-manipulation items-center justify-between gap-3 bg-accent px-4 text-accent-ink transition-colors duration-150 disabled:opacity-60 font-sans shadow-lg"
+        className="mt-2.5 flex h-14 short:h-12 w-full touch-manipulation items-center justify-between gap-3 bg-accent px-4 text-accent-ink transition-colors duration-150 disabled:opacity-60 font-sans shadow-lg"
       >
         {/*
           Always the plain label — never a "bidding…" pending state. The bid is

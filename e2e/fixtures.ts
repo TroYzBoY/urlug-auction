@@ -142,6 +142,27 @@ export async function makeLiveLot(
   });
 }
 
+/**
+ * Puts a live lot into its final round with the bid clock about to run out.
+ *
+ * Round 6 because it is the only round where a clock reaching zero ends the
+ * lot rather than moving it up a gear (auction-engine.ts).
+ */
+export async function finalRoundEndingIn(
+  lotId: string,
+  ms: number,
+): Promise<void> {
+  await withClient((c) =>
+    c.query(
+      `UPDATE auctions
+          SET round = 6,
+              bid_clock_ends_at = now() + make_interval(secs => $2::float / 1000)
+        WHERE lot_id = $1`,
+      [lotId, ms],
+    ),
+  );
+}
+
 /** Signs in through the real form, so the session cookie is a real one. */
 export async function signIn(page: Page, bidder: TestBidder): Promise<void> {
   await page.goto("/login");
