@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { Header } from "@/components/site/Header";
 import { RollingNumber } from "@/components/site/RollingNumber";
 import { LiveDot } from "@/components/lot/LotCard";
@@ -21,6 +21,20 @@ import { DecisionPanel } from "./DecisionPanel";
 import { RoundTimer } from "./RoundTimer";
 import { useAuctionRoom } from "./useAuctionRoom";
 import { useFocusMode } from "./useFocusMode";
+
+/**
+ * How long the room keeps "Ялагчийг тодруулж байна" up after a lot closes,
+ * when the answer has already arrived.
+ *
+ * Most lots are sold in the same transaction that closes them, so the result
+ * lands a fraction of a second after the last clock — and a lot an admin
+ * decides by hand shows the same screen until they do. Without a floor the
+ * two would differ in the one way every bidder notices: one answers at once,
+ * the other makes you wait. With it, both are a short wait and then a result;
+ * the hand-decided one is just sometimes longer. Long enough to read the
+ * standing bids once, short enough not to feel like stalling.
+ */
+const DECISION_HOLD_MS = 4_000;
 
 /** What the bidder is told when the server turns a bid down. */
 const REJECTION_COPY: Record<string, string> = {
@@ -50,8 +64,16 @@ export function AuctionRoom({
   /** The viewer's points. 0 when signed out. Only the join fee spends them. */
   balancePts: number;
 }) {
-  const { state, spec, isYourLead, leaderName, applyOptimistic, rollback, refetch } =
-    useAuctionRoom(initialState, viewerPaddle, viewerName);
+  const {
+    state,
+    spec,
+    isYourLead,
+    leaderName,
+    closedAt,
+    applyOptimistic,
+    rollback,
+    refetch,
+  } = useAuctionRoom(initialState, viewerPaddle, viewerName);
   const lot = state.lot;
   const [focus, setFocus] = useFocusMode();
 
@@ -138,7 +160,27 @@ export function AuctionRoom({
     state.round >= TOTAL_ROUNDS &&
     (expiredBidClock === state.bidClockEndsAt ||
       expiredRound === state.roundEndsAt);
-  const deciding = underReview || closing;
+  /*
+   * The result is in, and the room is still showing the wait — see
+   * DECISION_HOLD_MS. Released by a timer rather than by reading the clock
+   * during render, so the same state always renders the same way.
+   */
+  const holdUntil = closedAt === null ? null : closedAt + DECISION_HOLD_MS;
+  const [releasedFor, setReleasedFor] = useState<number | null>(null);
+  useEffect(() => {
+    if (holdUntil === null) return;
+    const timer = setTimeout(
+      () => setReleasedFor(holdUntil),
+      Math.max(0, holdUntil - Date.now()),
+    );
+    return () => clearTimeout(timer);
+  }, [holdUntil]);
+  const holding =
+    state.outcome === "sold" &&
+    holdUntil !== null &&
+    releasedFor !== holdUntil;
+
+  const deciding = underReview || closing || holding;
 
   /*
    * Focus mode is for BIDDING. Once there is nothing left to bid on, the room
@@ -333,7 +375,7 @@ export function AuctionRoom({
                   wrapping it onto its own line cost the phone a whole row. */}
               <div className="shrink-0">
                 <p className="eyebrow">
-                  {underReview ? t.room.reviewStanding : t.room.currentPrice}
+                  {deciding ? t.room.reviewStanding : t.room.currentPrice}
                 </p>
                 {/* The headline number rolls rather than swaps. aria-live sits
                     on the wrapper with plain text, so assistive tech announces
@@ -378,7 +420,7 @@ export function AuctionRoom({
                     {t.room.outbid}
                   </p>
                 )}
-                {underReview && isYourLead && (
+                {deciding && isYourLead && (
                   <p className="text-flare mt-1 text-xs font-medium">
                     {t.room.reviewYouStanding}
                   </p>
@@ -406,7 +448,7 @@ export function AuctionRoom({
           >
             {deciding ? (
               <DecisionPanel
-                phase={underReview ? "review" : "closing"}
+                phase={closing ? "closing" : "review"}
                 bids={state.bids}
               />
             ) : (

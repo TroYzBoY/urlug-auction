@@ -10,7 +10,7 @@
  * text, and the text is in the repository. A deploy that changes one without
  * the other would be lying.
  */
-export const TERMS_VERSION = "2026-08-21";
+export const TERMS_VERSION = "2026-10-04";
 export const PRIVACY_VERSION = "2026-08-21";
 export const RULES_VERSION = "2026-08-21";
 

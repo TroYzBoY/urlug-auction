@@ -83,28 +83,37 @@ export interface AdminLotRow {
   bidCount: number;
   leaderPaddle: string | null;
   round: number;
+  /** An admin names this lot's winner, rather than the clock. */
+  manualAward: boolean;
+  /** Who named the winner of a sold lot; null when the clock did. */
+  awardedByPaddle: string | null;
 }
 
-export async function lots(limit = 200): Promise<AdminLotRow[]> {
-  const rows = await query<{
-    lot_id: string;
-    code: string;
-    title: string;
-    outcome: AdminLotRow["outcome"];
-    opens_at: Date;
-    current_pts: number;
-    bid_count: number;
-    leader_paddle: string | null;
-    round: number;
-  }>(
-    `SELECT a.lot_id, l.code, l.title, a.outcome, a.opens_at, a.current_pts,
-            a.bid_count, a.leader_paddle, a.round
-       FROM auctions a JOIN lots l ON l.id = a.lot_id
-      ORDER BY a.opens_at DESC LIMIT $1`,
-    [limit],
-  );
+interface AdminLotDbRow {
+  lot_id: string;
+  code: string;
+  title: string;
+  outcome: AdminLotRow["outcome"];
+  opens_at: Date;
+  current_pts: number;
+  bid_count: number;
+  leader_paddle: string | null;
+  round: number;
+  manual_award: boolean;
+  awarded_by_paddle: string | null;
+}
 
-  return rows.map((r) => ({
+const ADMIN_LOT_SELECT = `
+  SELECT a.lot_id, l.code, l.title, a.outcome, a.opens_at, a.current_pts,
+         a.bid_count, a.leader_paddle, a.round, a.manual_award,
+         awarder.paddle AS awarded_by_paddle
+    FROM auctions a
+    JOIN lots l ON l.id = a.lot_id
+    LEFT JOIN users awarder ON awarder.id = a.awarded_by
+`;
+
+function toAdminLot(r: AdminLotDbRow): AdminLotRow {
+  return {
     lotId: r.lot_id,
     code: r.code,
     title: r.title,
@@ -114,7 +123,26 @@ export async function lots(limit = 200): Promise<AdminLotRow[]> {
     bidCount: r.bid_count,
     leaderPaddle: r.leader_paddle,
     round: r.round,
-  }));
+    manualAward: r.manual_award,
+    awardedByPaddle: r.awarded_by_paddle,
+  };
+}
+
+export async function lots(limit = 200): Promise<AdminLotRow[]> {
+  const rows = await query<AdminLotDbRow>(
+    `${ADMIN_LOT_SELECT} ORDER BY a.opens_at DESC LIMIT $1`,
+    [limit],
+  );
+  return rows.map(toAdminLot);
+}
+
+/** One lot, for its page on the dashboard. Null if there is no such lot. */
+export async function lot(lotId: string): Promise<AdminLotRow | null> {
+  const row = await queryOne<AdminLotDbRow>(
+    `${ADMIN_LOT_SELECT} WHERE a.lot_id = $1`,
+    [lotId],
+  );
+  return row ? toAdminLot(row) : null;
 }
 
 /* ── The review queue ────────────────────────────────────────────────────── */
@@ -185,10 +213,11 @@ export async function reviewQueue(): Promise<ReviewLotRow[]> {
     outcome: EngineState["outcome"];
     settled_at: Date | null;
     bid_count: number;
+    manual_award: boolean;
   }>(
     `SELECT a.lot_id, l.code, l.title, a.opens_at, a.round, a.current_pts,
             a.leader_paddle, a.leader_user_id, a.bid_clock_ends_at, a.outcome,
-            a.settled_at, a.bid_count
+            a.settled_at, a.bid_count, a.manual_award
        FROM auctions a JOIN lots l ON l.id = a.lot_id
       WHERE a.outcome IN ('running', 'review')
       ORDER BY a.opens_at DESC`,
@@ -210,7 +239,19 @@ export async function reviewQueue(): Promise<ReviewLotRow[]> {
         now,
       ),
     }))
-    .filter(({ live }) => live.outcome === "review");
+    /*
+     * A lot the clock has just closed belongs here only if a person is to
+     * decide it. An automatic one is about to be sold by the ticker — listing
+     * it for the quarter-second until that happens would invite an admin to
+     * race the clock for a decision that is not theirs. A lot already STORED
+     * as review is always shown, whatever its flag: something put it there,
+     * and nothing but this queue will take it out.
+     */
+    .filter(
+      ({ row, live }) =>
+        live.outcome === "review" &&
+        (row.manual_award || row.outcome === "review"),
+    );
 
   if (pending.length === 0) return [];
 

@@ -121,10 +121,13 @@ export const env = {
     return process.env.ALLOW_UNVERIFIED_SIGNUP === "1";
   },
 
-  /** Version string recorded against each user's terms acceptance. */
-  get termsVersion(): string {
-    return process.env.TERMS_VERSION ?? "2026-08-21";
-  },
+  /*
+   * No `termsVersion`. It used to come from TERMS_VERSION here while the
+   * consent rows and /terms read the constant in src/lib/legal.ts, so bumping
+   * one after an edit to the rules left users.terms_version and consents
+   * disagreeing about what a bidder had accepted. legal.ts is the only source
+   * now — the version belongs to the text, and the text is in the repository.
+   */
 } as const;
 
 /**

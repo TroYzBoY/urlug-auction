@@ -42,7 +42,7 @@ const OPTIMISTIC_TTL_MS = 6_000;
 
 type Action =
   /** Authoritative. Replaces everything the server owns. */
-  | { type: "sync"; state: RoomState }
+  | { type: "sync"; state: RoomState; receivedAt: number }
   /** Local prediction of a bid this client just sent. */
   | { type: "optimistic"; bid: Bid; bidClockEndsAt: number }
   /** The server rejected it, or it timed out. */
@@ -53,6 +53,13 @@ interface State {
   server: RoomState;
   /** Unconfirmed local bids, oldest first. Usually empty, rarely more than 1. */
   pending: { bid: Bid; bidClockEndsAt: number }[];
+  /**
+   * When this screen saw the lot stop taking bids — the first push whose
+   * outcome was no longer `running`, after one that was. Local time, because
+   * it times what the viewer sees next. null if it never happened here (the
+   * page was opened after the close).
+   */
+  closedAt: number | null;
 }
 
 /**
@@ -88,6 +95,12 @@ function reducer(state: State, action: Action): State {
         pending: state.pending.filter(
           (p) => p.bid.points > action.state.currentPts,
         ),
+        closedAt:
+          state.closedAt ??
+          (state.server.outcome === "running" &&
+          action.state.outcome !== "running"
+            ? action.receivedAt
+            : null),
       };
 
     case "optimistic":
@@ -125,6 +138,7 @@ export function useAuctionRoom(
   const [internal, dispatch] = useReducer(reducer, {
     server: initial,
     pending: [],
+    closedAt: null,
   });
 
   /*
@@ -164,7 +178,7 @@ export function useAuctionRoom(
       try {
         const next = JSON.parse((event as MessageEvent<string>).data) as RoomState;
         syncServerClock(next.serverNow);
-        dispatch({ type: "sync", state: next });
+        dispatch({ type: "sync", state: next, receivedAt: Date.now() });
       } catch (err) {
         console.error("[room] malformed state push", err);
       }
@@ -265,5 +279,12 @@ export function useAuctionRoom(
     [state.round, state.leader, state.bids, viewerPaddle],
   );
 
-  return { state, ...derived, applyOptimistic, rollback, refetch };
+  return {
+    state,
+    ...derived,
+    closedAt: internal.closedAt,
+    applyOptimistic,
+    rollback,
+    refetch,
+  };
 }

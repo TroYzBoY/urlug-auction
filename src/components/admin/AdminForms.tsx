@@ -12,6 +12,7 @@ import {
   grantBonusAction,
   markContactHandledAction,
   rescheduleAction,
+  setAwardModeAction,
   setUserRoleAction,
   setUserStatusAction,
   type AdminState,
@@ -385,6 +386,93 @@ export function AuctionControls({
           <Result state={rescheduleState} />
         </form>
       )}
+    </div>
+  );
+}
+
+/* ── Who names the winner ───────────────────────────────────────────────── */
+
+/**
+ * The switch between the clock naming a lot's winner and an admin doing it.
+ *
+ * Same shape as the controls above: the direction that lets the outcome depart
+ * from the bidding — handing it to a person — is a two-step button with a
+ * reason; the way back to the clock is one press. Once the lot has closed the
+ * switch is gone and the page says which way it went.
+ */
+export function AwardModeControl({
+  lotId,
+  manual,
+  outcome,
+}: {
+  lotId: string;
+  manual: boolean;
+  outcome: string;
+}) {
+  const [state, formAction] = useActionState<AdminState, FormData>(
+    setAwardModeAction,
+    IDLE,
+  );
+  const [confirming, setConfirming] = useState(false);
+  const open = outcome === "scheduled" || outcome === "running";
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-ink text-base font-medium">
+        {manual ? t.admin.awardModeManual : t.admin.awardModeAuto}
+      </p>
+      <p className="text-muted max-w-prose text-sm leading-relaxed">
+        {manual ? t.admin.awardModeManualHint : t.admin.awardModeAutoHint}
+      </p>
+
+      {!open ? (
+        <p className="text-faint text-xs">{t.admin.awardModeClosed}</p>
+      ) : manual ? (
+        <form action={formAction} className="flex flex-col gap-2">
+          <input type="hidden" name="lotId" value={lotId} />
+          <input type="hidden" name="manual" value="0" />
+          <div>
+            <Submit label={t.admin.awardModeSetAuto} />
+          </div>
+        </form>
+      ) : confirming ? (
+        <form action={formAction} className="flex max-w-md flex-col gap-2">
+          <input type="hidden" name="lotId" value={lotId} />
+          <input type="hidden" name="manual" value="1" />
+          <p className="text-flare text-xs leading-relaxed">
+            {t.admin.awardModeManualWarning}
+          </p>
+          <input
+            name="reason"
+            required
+            minLength={4}
+            placeholder={t.admin.reasonPlaceholder}
+            className={field}
+          />
+          <div className="flex flex-wrap items-center gap-3">
+            <Submit label={t.admin.awardModeConfirmManual} />
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="eyebrow text-muted hover:text-ink h-10 px-1 transition-colors"
+            >
+              {t.admin.awardModeBack}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div>
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="eyebrow border-line text-ink hover:border-flare hover:text-flare h-10 border px-4 transition-colors"
+          >
+            {t.admin.awardModeSetManual}
+          </button>
+        </div>
+      )}
+
+      <Result state={state} />
     </div>
   );
 }

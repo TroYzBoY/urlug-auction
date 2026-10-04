@@ -179,6 +179,23 @@ ALTER TABLE auctions ADD COLUMN IF NOT EXISTS awarded_at TIMESTAMPTZ;
 ALTER TABLE auctions ADD COLUMN IF NOT EXISTS awarded_by BIGINT
   REFERENCES users (id) ON DELETE SET NULL;
 
+-- Who names the winner of this lot.
+--
+-- false (the default): nobody has to. The moment bidding stops the lot goes to
+-- the standing leader at the standing price, in the same transaction that
+-- closed it — `awardAutomatically` in src/lib/repo/award.ts — and `review` is
+-- passed through rather than waited in. `awarded_by` stays NULL, which is how
+-- the record tells a clock's decision from a person's.
+--
+-- true: an admin switched this lot to deciding by hand, from its page on the
+-- dashboard, before it closed. It then waits in `review` until `awardLot`.
+-- An operator's emergency close sets it too: stopping a sale early and handing
+-- it to whoever happened to be leading are separate decisions.
+--
+-- Server-side only. Nothing a bidder can read carries it, so a lot decided by
+-- hand reaches the room exactly as one decided by the clock does.
+ALTER TABLE auctions ADD COLUMN IF NOT EXISTS manual_award BOOLEAN NOT NULL DEFAULT false;
+
 -- ── Bids — APPEND ONLY ───────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS bids (

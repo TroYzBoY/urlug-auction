@@ -107,8 +107,5 @@ services:
       - key: QPAY_CALLBACK_SECRET
         sync: false
 
-      - key: TERMS_VERSION
-        value: "2026-08-21"
-
       # ENABLE_HSTS is deliberately left unset. Turn it on (value "1") ONLY once
       # the domain and every subdomain are HTTPS — it has a two-year no-undo.

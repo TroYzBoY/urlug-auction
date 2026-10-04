@@ -37,16 +37,19 @@ function standings(bids: readonly Bid[]): Bid[] {
  *   closing — the final clock reached zero on THIS screen and the server's
  *             answer has not landed yet. Usually under a second. The button is
  *             already gone because the server refuses a late bid regardless.
- *   review  — the server has closed the lot and the house is choosing the
- *             winner (`awardLot`). Open-ended.
+ *   review  — the server has closed the lot and the winner is being named.
+ *             For most lots that already happened in the closing transaction
+ *             and the room holds this screen for a few seconds before showing
+ *             the result (AuctionRoom's DECISION_HOLD_MS); for a lot an admin
+ *             decides by hand it lasts until `awardLot`. The two look the same
+ *             on purpose — see /terms, which tells bidders both can happen.
  *
  * What it shows is the leading bids being gone over: a sweeping bar, a band
  * passing down the list, each row lighting in turn. That is decoration, and it
  * is decoration over the REAL standing bids — the room already shows every one
- * of them in the feed — under a headline that says a winner is being decided
- * and a line that says who decides it. It does not pretend to a progress figure
- * or to steps being ticked off, because there are none to report: the wait ends
- * when a person presses a button, and the screen does not know when that is.
+ * of them in the feed — under a headline that says a winner is being decided,
+ * which is true in both cases. It does not pretend to a progress figure or to
+ * steps being ticked off, because there are none to report.
  *
  * `role="status"` because it replaces a panel somebody may have had focus in;
  * the motion is aria-hidden and stops for prefers-reduced-motion (globals.css),

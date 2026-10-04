@@ -16,6 +16,7 @@ import {
   grantBonus,
   markContactHandled,
   rescheduleAuction,
+  setManualAward,
   setUserRole,
   setUserStatus,
   updateLot,
@@ -24,6 +25,7 @@ import {
 import { clientIpFrom, requireAdmin } from "@/lib/session";
 import {
   adjustSchema,
+  awardModeSchema,
   awardSchema,
   bonusSchema,
   firstError,
@@ -161,6 +163,46 @@ export async function closeAuctionAction(
   await publish(parsed.data.lotId);
   refresh();
   return { status: "ok", message: t.admin.closedToReview };
+}
+
+/**
+ * Hands one lot's winner to an admin, or back to the clock.
+ *
+ * Deliberately NOT published. Nothing in the room changes — the room cannot
+ * tell the two kinds of lot apart, and a push here would be the one moment it
+ * could.
+ */
+export async function setAwardModeAction(
+  _prev: AdminState,
+  formData: FormData,
+): Promise<AdminState> {
+  const who = await actor();
+  const parsed = awardModeSchema.safeParse({
+    lotId: formData.get("lotId"),
+    manual: formData.get("manual"),
+    reason: formData.get("reason") ?? undefined,
+  });
+  if (!parsed.success) {
+    return { status: "error", message: firstError(parsed.error) };
+  }
+
+  const { lotId, manual, reason } = parsed.data;
+  const result = await setManualAward(lotId, manual, reason ?? null, who);
+  if (!result.ok) {
+    return {
+      status: "error",
+      message:
+        result.reason === "already-closed"
+          ? t.admin.awardModeClosed
+          : "Лот олдсонгүй.",
+    };
+  }
+
+  refresh();
+  return {
+    status: "ok",
+    message: manual ? t.admin.awardModeManualDone : t.admin.awardModeAutoDone,
+  };
 }
 
 export async function cancelAuctionAction(

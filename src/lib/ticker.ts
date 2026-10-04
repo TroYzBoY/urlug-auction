@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { getPool, transaction, tryAdvisoryLock } from "./db";
 import { settle, type EngineState } from "./auction-engine";
 import { persistSettlement } from "./repo/bids";
+import { awardAutomatically } from "./repo/award";
 import { publish } from "./realtime";
 import { recordDetached } from "./audit";
 import { sweep as sweepRateLimits } from "./rate-limit";
@@ -163,14 +164,26 @@ export async function settleDueAuctions(now = Date.now()): Promise<string[]> {
         /*
          * Bidding is over.
          *
-         * ⚠ No settlement is opened here any more, and no lot is marked sold.
-         * The clock's authority ends at "no more bids"; who takes the lot is a
-         * decision the house makes from the dashboard, and it is
-         * `awardLot` in src/lib/repo/admin-write.ts that opens the obligation.
+         * Most lots are decided right here: `awardAutomatically` hands the lot
+         * to the standing leader in this same transaction, so it goes from
+         * running to sold in one commit and one push. A lot an admin has
+         * marked for deciding by hand is left in `review` for `awardLot`.
+         *
+         * Nobody is messaged at this point, in either case. The winner's text
+         * and everyone else's "decided" line are sent by the handover itself
+         * (`grantLot`), whenever it happens — so bidders on a hand-decided lot
+         * hear the same things, in the same order, as on any other, only
+         * later. A "bidding closed, we are checking" message sent only for the
+         * lots that wait would mark those lots out.
+         *
          * A lot with no bids at all skips review — there is nothing to choose
          * between — and goes straight to unsold.
          */
-        if (live.outcome === "review" || live.outcome === "unsold") {
+        const awarded =
+          live.outcome === "review" &&
+          (await awardAutomatically(client, r.lot_id));
+
+        if ((live.outcome === "review" && !awarded) || live.outcome === "unsold") {
           recordDetached({
             action: `auction.${live.outcome}`,
             targetType: "lot",
@@ -182,33 +195,6 @@ export async function settleDueAuctions(now = Date.now()): Promise<string[]> {
               settledAt: live.settledAt,
             },
           });
-        }
-
-        /*
-         * Everyone who bid is told the bidding has closed and a decision is
-         * coming. Without it the room simply stops, and a bidder who watched a
-         * clock reach zero is left to guess whether they won.
-         */
-        if (live.outcome === "review") {
-          const meta = await client.query<{ code: string }>(
-            "SELECT code FROM lots WHERE id = $1",
-            [r.lot_id],
-          );
-          const code = meta.rows[0]?.code ?? r.lot_id;
-          const bidders = await client.query<{ user_id: number }>(
-            "SELECT DISTINCT user_id FROM bids WHERE lot_id = $1",
-            [r.lot_id],
-          );
-          for (const bidder of bidders.rows) {
-            await enqueue(client, {
-              userId: bidder.user_id,
-              channel: "inapp",
-              kind: "lot.review",
-              body: `${t.brand.name}: ${code} лотын хаялт хаагдлаа. Ялагчийг шалгаж байна.`,
-              href: `/auction/${r.lot_id}`,
-              dedupeKey: `review:${r.lot_id}`,
-            });
-          }
         }
         return true;
       });

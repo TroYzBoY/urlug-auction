@@ -2,8 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { env } from "@/lib/env";
-import { REGISTRATION_CONSENTS } from "@/lib/legal";
+import { REGISTRATION_CONSENTS, TERMS_VERSION } from "@/lib/legal";
 import { LIMITS, consume } from "@/lib/rate-limit";
 import { recordDetached } from "@/lib/audit";
 import { reportError } from "@/lib/observability";
@@ -127,7 +126,7 @@ export async function register(
     phone: parsed.data.phone,
     passwordHash,
     dateOfBirth: parsed.data.dateOfBirth,
-    termsVersion: env.termsVersion,
+    termsVersion: TERMS_VERSION,
     consents: REGISTRATION_CONSENTS,
     ip,
     userAgent,

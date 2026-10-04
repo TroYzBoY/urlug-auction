@@ -240,8 +240,7 @@ Railway auto-detects the `Dockerfile`; no config file needed.
 2. **Add → Database → PostgreSQL.** Use the `DATABASE_URL` it exposes
    (Railway's is a direct connection — good for `LISTEN/NOTIFY`).
 3. Service → **Variables**: set `DATABASE_URL` (reference the DB),
-   `SMS_API_URL`, `SMS_API_KEY`, `SMS_SENDER=URLUG`, `QPAY_*`,
-   `TERMS_VERSION=2026-08-21`.
+   `SMS_API_URL`, `SMS_API_KEY`, `SMS_SENDER=URLUG`, `QPAY_*`.
    ⚠ `NEXT_PUBLIC_SITE_URL` and `NEXT_PUBLIC_ROUND_TIME_SCALE` must reach the
    **Docker build**, not the runtime — pass them as build args (see the
    build-time trap above), or robots.txt ships pointing at localhost.

@@ -8,6 +8,7 @@ import {
   UserControls,
   WinnerPicker,
 } from "@/components/admin/AdminForms";
+import { OUTCOME_LABEL } from "@/components/admin/outcome";
 import {
   contactMessages,
   lots,
@@ -26,13 +27,6 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const OUTCOME_LABEL: Record<string, string> = {
-  scheduled: t.lots.filterUpcoming,
-  running: t.room.live,
-  review: t.admin.reviewStatus,
-  sold: t.lot.statusSold,
-  unsold: t.lot.statusUnsold,
-};
 
 export default async function AdminPage() {
   /*
@@ -169,7 +163,7 @@ export default async function AdminPage() {
               <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
                 <p className="min-w-0">
                   <Link
-                    href={`/auction/${lot.lotId}`}
+                    href={`/admin/lots/${encodeURIComponent(lot.lotId)}`}
                     className="hover:text-accent transition-colors"
                   >
                     <span data-numerals className="text-muted">
@@ -247,8 +241,10 @@ export default async function AdminPage() {
               {lotRows.map((lot) => (
                 <tr key={lot.lotId} className="border-line border-b">
                   <td className="py-3 pr-4">
+                    {/* Into the lot's own page: its award switch, and its
+                        decision when it is waiting on one. */}
                     <Link
-                      href={`/auction/${lot.lotId}`}
+                      href={`/admin/lots/${encodeURIComponent(lot.lotId)}`}
                       className="hover:text-accent transition-colors"
                     >
                       <span data-numerals className="text-muted">
@@ -265,6 +261,11 @@ export default async function AdminPage() {
                     >
                       {OUTCOME_LABEL[lot.outcome] ?? lot.outcome}
                     </span>
+                    {lot.manualAward && (
+                      <span className="eyebrow text-flare ml-2 text-[0.625rem]">
+                        {t.admin.manualBadge}
+                      </span>
+                    )}
                   </td>
                   <td data-numerals className="text-muted py-3 pr-4">
                     {lot.round}

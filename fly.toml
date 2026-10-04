@@ -62,7 +62,6 @@ primary_region = "nrt"
   NODE_ENV = "production"
   PORT = "3000"
   SMS_SENDER = "URLUG"
-  TERMS_VERSION = "2026-08-21"
   # ENABLE_HSTS is deliberately absent. Turn it on only once the domain and
   # every subdomain are HTTPS — it has a two-year no-undo, and never on staging.
 

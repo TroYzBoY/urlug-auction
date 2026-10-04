@@ -24,6 +24,90 @@ async function withDatabase<T>(
 
 test.beforeEach(reset);
 
+/**
+ * Round 6 of LOT with two real bids on it — Т-293 leading at 1 300 over Т-292
+ * at 1 250 — and the bid clock ending at `now() + clock`.
+ */
+async function seedFinalRound(clock: string): Promise<void> {
+  await withDatabase(async (client) => {
+    for (const [phone, name, points] of [
+      ["99110092", "Доод хаялттай оролцогч", 1250],
+      ["99110093", "Тэргүүлсэн оролцогч", 1300],
+    ] as const) {
+      await client.query("UPDATE users SET name = $2 WHERE phone = $1", [
+        phone,
+        name,
+      ]);
+      await client.query(
+        `INSERT INTO bids (lot_id, user_id, paddle, points, round, idempotency_key)
+         SELECT $1, id, paddle, $3, 6, $2 FROM users WHERE phone = $2`,
+        [LOT, phone, points],
+      );
+    }
+    await client.query(
+      `UPDATE auctions SET round = 6, current_pts = 1300,
+         leader_user_id = (SELECT id FROM users WHERE phone = '99110093'),
+         leader_paddle = 'Т-293', bid_count = 2,
+         bid_clock_ends_at = now() + $2::interval
+       WHERE lot_id = $1`,
+      [LOT, clock],
+    );
+  });
+}
+
+test("a lot left to the clock goes to the standing leader, after the same wait", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await makeBidder("99110092", "Т-292");
+  await makeBidder("99110093", "Т-293");
+  await makeLiveLot(LOT);
+  // Far enough out that the room is open and live before it runs down.
+  await seedFinalRound("5 seconds");
+
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  expect((await page.goto(`/auction/${LOT}`))?.status()).toBe(200);
+  await expect(page.getByRole("timer")).toHaveCount(2);
+
+  /*
+   * The server sells it in the same transaction that closes it, so the result
+   * is in the room within a moment of the clock — and the room still shows the
+   * same wait a hand-decided lot does, then the result. A bidder cannot tell
+   * the two apart, which is the requirement.
+   */
+  await expect(page.getByText("ШАЛГАЖ БАЙНА", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByText("Ялагчийг тодруулж байна")).toBeVisible();
+  await expect(page.getByText("ЦОХИВ", { exact: true })).toHaveCount(0);
+
+  await expect(page.getByText("ЦОХИВ", { exact: true }).first()).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.locator('dt:has-text("Хүлээн авагч") + dd')).toHaveText(
+    "Тэргүүлсэн оролцогч",
+  );
+
+  const result = await withDatabase(async (client) => {
+    const rows = await client.query(
+      `SELECT a.outcome, a.current_pts, a.awarded_by, u.phone, s.hammer_pts
+         FROM auctions a JOIN users u ON u.id = a.leader_user_id
+         JOIN settlements s ON s.lot_id = a.lot_id WHERE a.lot_id = $1`,
+      [LOT],
+    );
+    return rows.rows[0];
+  });
+  expect(result).toEqual({
+    outcome: "sold",
+    current_pts: 1300,
+    awarded_by: null,
+    phone: "99110093",
+    hammer_pts: 1300,
+  });
+  expect(errors).toEqual([]);
+});
+
 for (const override of [false, true]) {
   test(`an admin awards an expired lot to ${override ? "another bidder at their own price" : "the highest bidder"} and the room updates`, async ({
     page,
@@ -35,32 +119,28 @@ for (const override of [false, true]) {
     await makeBidder("99110093", "Т-293");
     await makeLiveLot(LOT);
 
+    /*
+     * Take the decision before the lot closes, from the lot's own page — the
+     * only way in. Left alone, the ticker would sell it to the standing leader
+     * the moment the clock below runs out.
+     */
+    await signIn(page, admin);
+    expect((await page.goto(`/admin/lots/${LOT}`))?.status()).toBe(200);
+    await expect(page.getByText("Автомат", { exact: true })).toBeVisible();
+    await page
+      .getByRole("button", { name: "Ялагчийг админ тодруулна", exact: true })
+      .click();
+    await page
+      .getByPlaceholder("Шалтгаан (аудитад үлдэнэ)")
+      .fill("Браузерын шалгалт");
+    await page
+      .getByRole("button", { name: "Тийм, би тодруулна", exact: true })
+      .click();
+    await expect(page.getByText("Админ тодруулна", { exact: true })).toBeVisible();
+
     // Expire the final round with two real bid records. The ticker and the
     // decision action must turn this running row into review themselves.
-    await withDatabase(async (client) => {
-      for (const [phone, name, points] of [
-        ["99110092", "Доод хаялттай оролцогч", 1250],
-        ["99110093", "Тэргүүлсэн оролцогч", 1300],
-      ] as const) {
-        await client.query("UPDATE users SET name = $2 WHERE phone = $1", [
-          phone,
-          name,
-        ]);
-        await client.query(
-          `INSERT INTO bids (lot_id, user_id, paddle, points, round, idempotency_key)
-           SELECT $1, id, paddle, $3, 6, $2 FROM users WHERE phone = $2`,
-          [LOT, phone, points],
-        );
-      }
-      await client.query(
-        `UPDATE auctions SET round = 6, current_pts = 1300,
-           leader_user_id = (SELECT id FROM users WHERE phone = '99110093'),
-           leader_paddle = 'Т-293', bid_count = 2,
-           bid_clock_ends_at = now() - interval '1 second'
-         WHERE lot_id = $1`,
-        [LOT],
-      );
-    });
+    await seedFinalRound("-1 second");
 
     const viewer = await browser.newContext();
     const room = await viewer.newPage();
@@ -73,7 +153,6 @@ for (const override of [false, true]) {
         room.getByText("ШАЛГАЖ БАЙНА", { exact: true }),
       ).toBeVisible();
 
-      await signIn(page, admin);
       expect((await page.goto("/admin"))?.status()).toBe(200);
       const picker = page.getByRole("combobox", { name: "Ялагчийг сонгох" });
       await expect(picker.locator("option:checked")).toContainText("Т-293");

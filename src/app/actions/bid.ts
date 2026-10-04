@@ -109,6 +109,14 @@ export async function placeBid(
         ip,
         userAgent,
       });
+      /*
+       * A late bid can be what closes the lot: placeBid settles the clocks
+       * before refusing it, and may have just written the close — and the sale
+       * to the leader — before the ticker got there. The ticker only announces
+       * what IT changed, so without this the room would sit on the closing
+       * screen until somebody reloaded.
+       */
+      if (result.reason === "round-closed") await publish(parsed.data.lotId);
       return { ok: false, reason: result.reason };
     }
 

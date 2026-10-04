@@ -6,7 +6,7 @@ import { bidClockMs, roundEndOffsetMs } from "../auction";
 import { settle, type Outcome } from "../auction-engine";
 import { persistSettlement } from "./bids";
 import { enqueue } from "./notifications";
-import { openSettlement } from "./settlements";
+import { announceDecision, grantLot } from "./award";
 import { MAX_BONUS_PTS } from "../validation";
 import { t } from "../copy";
 
@@ -313,8 +313,14 @@ export async function closeAuction(
     // A lot nobody bid on has nothing to review; it is simply unsold.
     const outcome = auction.leader_paddle ? "review" : "unsold";
 
+    /*
+     * `manual_award` is set whatever the lot was set to. An automatic lot would
+     * otherwise be handed to whoever led at the moment of the emergency, which
+     * is exactly the silent decision this function exists to avoid.
+     */
     await client.query(
       `UPDATE auctions SET outcome = $2::auction_outcome,
+                           manual_award = true,
                            settled_at = COALESCE(settled_at, now()),
                            hammer_round = round, version = version + 1,
                            updated_at = now()
@@ -334,6 +340,67 @@ export async function closeAuction(
         standingLeader: auction.leader_paddle,
         round: auction.round,
       },
+      ip: actor.ip,
+      userAgent: actor.userAgent,
+    });
+
+    return { ok: true };
+  });
+}
+
+/* ── Who names the winner ───────────────────────────────────────────────── */
+
+export type AwardModeResult =
+  | { ok: true }
+  | { ok: false; reason: "not-found" | "already-closed" };
+
+/**
+ * Switches one lot between the clock naming its winner (the default) and an
+ * admin doing it after the last round.
+ *
+ * Only before the lot closes. Once bidding has stopped an automatic lot is
+ * already sold — there is nothing left to take over — and a manual one is in
+ * the review queue, where the dropdown already defaults to the standing leader
+ * for the admin who wants the ordinary answer.
+ *
+ * Switching TO manual requires a reason, like every other control that lets a
+ * person override what the bidding produced; switching back does not, because
+ * it hands the decision back to the rule everybody bid under.
+ */
+export async function setManualAward(
+  lotId: string,
+  manual: boolean,
+  reason: string | null,
+  actor: Actor,
+): Promise<AwardModeResult> {
+  return transaction(async (client) => {
+    const res = await client.query<{ outcome: string; manual_award: boolean }>(
+      "SELECT outcome, manual_award FROM auctions WHERE lot_id = $1 FOR UPDATE",
+      [lotId],
+    );
+    const auction = res.rows[0];
+    if (!auction) return { ok: false, reason: "not-found" };
+    if (auction.outcome !== "scheduled" && auction.outcome !== "running") {
+      return { ok: false, reason: "already-closed" };
+    }
+    if (auction.manual_award === manual) return { ok: true };
+
+    /*
+     * `version` is left alone: it counts changes to the SALE — price, round,
+     * outcome — and this changes none of them. Nothing is published either, so
+     * an open room never hears about it.
+     */
+    await client.query(
+      "UPDATE auctions SET manual_award = $2, updated_at = now() WHERE lot_id = $1",
+      [lotId, manual],
+    );
+
+    await record(client, {
+      actorUserId: actor.id,
+      action: manual ? "admin.award_manual" : "admin.award_automatic",
+      targetType: "lot",
+      targetId: lotId,
+      detail: { reason, outcome: auction.outcome },
       ip: actor.ip,
       userAgent: actor.userAgent,
     });
@@ -425,42 +492,13 @@ async function lockForDecision(
 }
 
 /**
- * Tells everyone who bid on a lot, except the winner, that it has been decided.
- *
- * In-app rather than SMS. The winner gets a text because they now owe money on
- * a deadline; everybody else gets a line in the bell, because "you did not win"
- * is worth knowing and is not worth a message charge per bidder per lot.
- */
-async function announceDecision(
-  client: PoolClient,
-  lotId: string,
-  code: string,
-  exceptUserId: number | null,
-  body: string,
-): Promise<void> {
-  const bidders = await client.query<{ user_id: number }>(
-    "SELECT DISTINCT user_id FROM bids WHERE lot_id = $1",
-    [lotId],
-  );
-  for (const bidder of bidders.rows) {
-    if (bidder.user_id === exceptUserId) continue;
-    await enqueue(client, {
-      userId: bidder.user_id,
-      channel: "inapp",
-      kind: "lot.decided",
-      body: `${t.brand.name}: ${code} — ${body}`,
-      href: `/auction/${lotId}`,
-      dedupeKey: `decided:${lotId}`,
-    });
-  }
-}
-
-/**
  * Awards a lot in review to one of its bidders, at that bidder's own top bid.
  *
  * The settlement is opened in the same transaction, so the sale and the
  * obligation it creates come into existence together — a hammer with no invoice
- * is a lot nobody is chasing.
+ * is a lot nobody is chasing. The handover itself is `grantLot`, shared with
+ * the automatic path, so a lot decided here produces exactly the rows and the
+ * messages one decided by the clock does.
  */
 export async function awardLot(
   lotId: string,
@@ -478,59 +516,14 @@ export async function awardLot(
     }
     if (outcome !== "review") return { ok: false, reason: "not-in-review" };
 
-    /*
-     * Their highest bid on THIS lot. `bids` is append-only and prices strictly
-     * increase, so this row is a fact nobody — this function included — can
-     * have edited into existence.
-     */
-    const bid = await client.query<{
-      points: number;
-      round: number;
-      paddle: string;
-      name: string;
-    }>(
-      `SELECT b.points, b.round, b.paddle, u.name
-         FROM bids b JOIN users u ON u.id = b.user_id
-        WHERE b.lot_id = $1 AND b.user_id = $2
-        ORDER BY b.points DESC
-        LIMIT 1`,
-      [lotId, winnerUserId],
-    );
-    const winning = bid.rows[0];
-    if (!winning) return { ok: false, reason: "not-a-bidder" };
-
-    await client.query(
-      `UPDATE auctions
-          SET outcome        = 'sold',
-              leader_user_id = $2,
-              leader_paddle  = $3,
-              current_pts    = $4,
-              hammer_round   = $5,
-              settled_at     = COALESCE(settled_at, now()),
-              awarded_at     = now(),
-              awarded_by     = $6,
-              version        = version + 1,
-              updated_at     = now()
-        WHERE lot_id = $1`,
-      [
-        lotId,
-        winnerUserId,
-        winning.paddle,
-        winning.points,
-        winning.round,
-        actor.id,
-      ],
-    );
-
-    await openSettlement(client, lotId, winnerUserId, winning.points, row.code);
-
-    await announceDecision(
+    const winning = await grantLot(
       client,
       lotId,
       row.code,
       winnerUserId,
-      "лотын ялагч тодорлоо. Энэ удаад та биш байна.",
+      actor.id,
     );
+    if (!winning) return { ok: false, reason: "not-a-bidder" };
 
     /*
      * The standing leader goes into the audit row whether or not they won.
@@ -547,8 +540,8 @@ export async function awardLot(
         note,
         winnerUserId,
         winnerPaddle: winning.paddle,
-        hammerPts: winning.points,
-        hammerRound: winning.round,
+        hammerPts: winning.hammerPts,
+        hammerRound: winning.hammerRound,
         standingLeader: row.leader_paddle,
         standingPts: row.current_pts,
         overrodeStandingLeader: row.leader_paddle !== winning.paddle,
@@ -559,7 +552,7 @@ export async function awardLot(
 
     return {
       ok: true,
-      hammerPts: winning.points,
+      hammerPts: winning.hammerPts,
       paddle: winning.paddle,
       name: winning.name,
     };
