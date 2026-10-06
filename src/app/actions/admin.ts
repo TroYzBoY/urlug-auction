@@ -168,9 +168,8 @@ export async function closeAuctionAction(
 /**
  * Hands one lot's winner to an admin, or back to the clock.
  *
- * Deliberately NOT published. Nothing in the room changes — the room cannot
- * tell the two kinds of lot apart, and a push here would be the one moment it
- * could.
+ * Not published: nothing a bidder sees changes until the lot closes, so there
+ * is nothing to push.
  */
 export async function setAwardModeAction(
   _prev: AdminState,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { Header } from "@/components/site/Header";
 import { RollingNumber } from "@/components/site/RollingNumber";
 import { LiveDot } from "@/components/lot/LotCard";
@@ -18,23 +18,10 @@ import { BidClock } from "./BidClock";
 import { BidFeed } from "./BidFeed";
 import { BidPanel } from "./BidPanel";
 import { DecisionPanel } from "./DecisionPanel";
+import { FinalLog, finalCloseOf } from "./FinalLog";
 import { RoundTimer } from "./RoundTimer";
 import { useAuctionRoom } from "./useAuctionRoom";
 import { useFocusMode } from "./useFocusMode";
-
-/**
- * How long the room keeps "Ялагчийг тодруулж байна" up after a lot closes,
- * when the answer has already arrived.
- *
- * Most lots are sold in the same transaction that closes them, so the result
- * lands a fraction of a second after the last clock — and a lot an admin
- * decides by hand shows the same screen until they do. Without a floor the
- * two would differ in the one way every bidder notices: one answers at once,
- * the other makes you wait. With it, both are a short wait and then a result;
- * the hand-decided one is just sometimes longer. Long enough to read the
- * standing bids once, short enough not to feel like stalling.
- */
-const DECISION_HOLD_MS = 4_000;
 
 /** What the bidder is told when the server turns a bid down. */
 const REJECTION_COPY: Record<string, string> = {
@@ -69,7 +56,6 @@ export function AuctionRoom({
     spec,
     isYourLead,
     leaderName,
-    closedAt,
     applyOptimistic,
     rollback,
     refetch,
@@ -161,26 +147,12 @@ export function AuctionRoom({
     (expiredBidClock === state.bidClockEndsAt ||
       expiredRound === state.roundEndsAt);
   /*
-   * The result is in, and the room is still showing the wait — see
-   * DECISION_HOLD_MS. Released by a timer rather than by reading the clock
-   * during render, so the same state always renders the same way.
+   * The result is shown the moment it arrives. An automatic lot is sold in the
+   * same transaction that closes it, so after the last clock the room goes
+   * straight to the winner; only a lot an admin decides waits here, and only
+   * until they do.
    */
-  const holdUntil = closedAt === null ? null : closedAt + DECISION_HOLD_MS;
-  const [releasedFor, setReleasedFor] = useState<number | null>(null);
-  useEffect(() => {
-    if (holdUntil === null) return;
-    const timer = setTimeout(
-      () => setReleasedFor(holdUntil),
-      Math.max(0, holdUntil - Date.now()),
-    );
-    return () => clearTimeout(timer);
-  }, [holdUntil]);
-  const holding =
-    state.outcome === "sold" &&
-    holdUntil !== null &&
-    releasedFor !== holdUntil;
-
-  const deciding = underReview || closing || holding;
+  const deciding = underReview || closing;
 
   /*
    * Focus mode is for BIDDING. Once there is nothing left to bid on, the room
@@ -194,6 +166,11 @@ export function AuctionRoom({
   /* With no bid panel to show, the wait or the result takes the rest of a
      phone screen rather than sitting at the foot of an empty one. */
   const panelFills = deciding || frozen;
+
+  /* The final round's millisecond log, from the round it starts in until the
+     result has been read. */
+  const finalRound = state.round >= TOTAL_ROUNDS;
+  const finalClose = finalCloseOf(state, frozen || closing);
 
   /*
    * The join fee, and whether this bidder can cover it.
@@ -327,7 +304,7 @@ export function AuctionRoom({
             */}
             {!frozen && !closing &&
               (focused ? (
-                <div className="flex min-h-48 flex-1 flex-col gap-2.5 lg:min-h-80">
+                <div className="flex min-h-48 flex-1 flex-col gap-2.5 short:min-h-28 lg:min-h-80">
                   <div className="min-h-0 flex-1">
                     <BidClock
                       endsAt={state.bidClockEndsAt}
@@ -427,6 +404,37 @@ export function AuctionRoom({
                 )}
               </div>
             </div>
+
+            {/*
+              Round 6 to the millisecond: each bid with the bid clock it was
+              accepted on, and the close. Whole rows only — a list clipped
+              through the middle of a line reads as broken — so it gives up
+              rows by count: three normally, two in focus mode where the clock
+              takes the height, and on a short phone during bidding just the
+              newest line with no heading, which is the one that matters with
+              five seconds on the clock. After the close there is room again.
+            */}
+            {finalRound && (
+              <FinalLog
+                state={state}
+                close={finalClose}
+                winnerName={
+                  state.outcome === "sold"
+                    ? isYourLead
+                      ? t.room.you
+                      : leaderName
+                    : null
+                }
+                rows={frozen || closing ? 4 : 3}
+                className={`shrink-0 ${
+                  frozen || closing
+                    ? "short:[&_li:nth-child(n+3)]:hidden"
+                    : `short:border-b-0 short:pb-0 short:[&>p]:hidden short:[&_li:nth-child(n+2)]:hidden ${
+                        focused ? "[&_li:nth-child(n+3)]:hidden" : ""
+                      }`
+                }`}
+              />
+            )}
 
             {/* The feed is richness, not a control — kept on the desktop where
                 there is room beneath the fold, dropped on phones and in focus

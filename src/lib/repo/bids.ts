@@ -102,8 +102,9 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
       round: number;
       paddle: string;
       placed_at: Date;
+      clock_left_ms: number | null;
     }>(
-      `SELECT id, points, round, paddle, placed_at
+      `SELECT id, points, round, paddle, placed_at, clock_left_ms
          FROM bids WHERE lot_id = $1 AND idempotency_key = $2`,
       [args.lotId, args.idempotencyKey],
     );
@@ -121,6 +122,7 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
           points: prior.points,
           round: prior.round,
           at: prior.placed_at.getTime(),
+          clockLeftMs: prior.clock_left_ms,
           isYou: true,
         },
       };
@@ -230,9 +232,17 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
     }
 
     /* ── 6. Record ──────────────────────────────────────────────────────── */
+    /*
+     * What was left on the bid clock at `now` — the instant settle() judged
+     * this bid in time. Rounded to whole ms; the log shows three decimals of a
+     * second and a sub-ms figure would claim a precision the server does not
+     * have.
+     */
+    const clockLeftMs = Math.max(0, Math.round(live.bidClockEndsAt - now));
     const inserted = await client.query<{ id: number; placed_at: Date }>(
-      `INSERT INTO bids (lot_id, user_id, paddle, points, round, idempotency_key, ip)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO bids (lot_id, user_id, paddle, points, round, idempotency_key,
+                         ip, clock_left_ms)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, placed_at`,
       [
         args.lotId,
@@ -242,6 +252,7 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
         live.round,
         args.idempotencyKey,
         args.ip,
+        clockLeftMs,
       ],
     );
     const bidRow = inserted.rows[0]!;
@@ -335,6 +346,7 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
         points: args.points,
         round: live.round,
         at: bidRow.placed_at.getTime(),
+        clockLeftMs,
         isYou: true,
       },
     };

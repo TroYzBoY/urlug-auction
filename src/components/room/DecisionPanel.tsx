@@ -37,12 +37,10 @@ function standings(bids: readonly Bid[]): Bid[] {
  *   closing — the final clock reached zero on THIS screen and the server's
  *             answer has not landed yet. Usually under a second. The button is
  *             already gone because the server refuses a late bid regardless.
- *   review  — the server has closed the lot and the winner is being named.
- *             For most lots that already happened in the closing transaction
- *             and the room holds this screen for a few seconds before showing
- *             the result (AuctionRoom's DECISION_HOLD_MS); for a lot an admin
- *             decides by hand it lasts until `awardLot`. The two look the same
- *             on purpose — see /terms, which tells bidders both can happen.
+ *   review  — an admin has taken this lot's decision and has not made it
+ *             yet (`awardLot`). An automatic lot never shows this: it is sold
+ *             in the transaction that closes it, and the room goes straight
+ *             from the last clock to the result.
  *
  * What it shows is the leading bids being gone over: a sweeping bar, a band
  * passing down the list, each row lighting in turn. That is decoration, and it

@@ -192,8 +192,9 @@ ALTER TABLE auctions ADD COLUMN IF NOT EXISTS awarded_by BIGINT
 -- An operator's emergency close sets it too: stopping a sale early and handing
 -- it to whoever happened to be leading are separate decisions.
 --
--- Server-side only. Nothing a bidder can read carries it, so a lot decided by
--- hand reaches the room exactly as one decided by the clock does.
+-- Server-side only: no state a bidder can read carries the flag itself. What
+-- they do see is the consequence — an automatic lot shows its winner the moment
+-- it closes, a hand-decided one shows the wait until the admin decides.
 ALTER TABLE auctions ADD COLUMN IF NOT EXISTS manual_award BOOLEAN NOT NULL DEFAULT false;
 
 -- ── Bids — APPEND ONLY ───────────────────────────────────────────────────────
@@ -227,6 +228,16 @@ END $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS bids_no_update ON bids;
 CREATE TRIGGER bids_no_update BEFORE UPDATE OR DELETE ON bids
   FOR EACH ROW EXECUTE FUNCTION bids_are_immutable();
+
+-- How much of the bid clock was left when the server accepted this bid, in ms.
+--
+-- Measured by `placeBid` under the auction row lock, from the same instant it
+-- used to decide the bid was in time — so it is the server's answer to "how
+-- close to the wire was it", not the bidder's screen's. The room's final-round
+-- log shows it to three decimals. Written once with the row like everything
+-- else here; NULL for bids placed before it was recorded.
+ALTER TABLE bids ADD COLUMN IF NOT EXISTS clock_left_ms INT
+  CHECK (clock_left_ms IS NULL OR clock_left_ms >= 0);
 
 -- ── Participation ────────────────────────────────────────────────────────────
 --

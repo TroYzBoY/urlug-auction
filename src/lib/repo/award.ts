@@ -19,9 +19,9 @@ import { t } from "../copy";
  *               It waits in `review` until `awardLot` in admin-write.ts.
  *
  * Both end in `grantLot`, so the sale, the settlement and the messages to the
- * bidders are the same rows whichever way it went. That sameness is the point:
- * what a bidder sees and receives does not depend on who made the call. The
- * difference lives where it belongs — `awarded_by` and the audit log.
+ * bidders are the same rows whichever way it went — only the timing differs,
+ * at the close or when the admin decides. Who made the call lives in
+ * `awarded_by` and the audit log.
  *
  * Every function here expects the caller to hold the auction row lock.
  * ─────────────────────────────────────────────────────────────────────────────

@@ -104,6 +104,30 @@ describe("the happy path", () => {
     // never from a timestamp the client supplied.
     expect(Number(auction!.ms_left)).toBeGreaterThan(290_000);
   });
+
+  it("records how much of the bid clock was left when the bid was accepted", async () => {
+    await seedRunningLot(url, { lotId: LOT, bidClockMsFromNow: 3_000 });
+    const user = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
+
+    const res = await placeBid(
+      args({ userId: user.id, paddle: user.paddle, points: 1201 }),
+    );
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    /*
+     * The clock had three seconds when seeded; the bid lands a few ms later.
+     * What is stored is the clock BEFORE this bid reset it — the figure the
+     * final-round log shows — and the same number travels back on the result.
+     */
+    const [bid] = await query<{ clock_left_ms: number }>(
+      "SELECT clock_left_ms FROM bids WHERE lot_id = $1",
+      [LOT],
+    );
+    expect(bid!.clock_left_ms).toBeGreaterThan(2_000);
+    expect(bid!.clock_left_ms).toBeLessThanOrEqual(3_000);
+    expect(res.bid.clockLeftMs).toBe(bid!.clock_left_ms);
+  });
 });
 
 describe("the rules, re-enforced server-side", () => {

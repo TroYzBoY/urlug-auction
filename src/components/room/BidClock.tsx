@@ -31,8 +31,11 @@ export function BidClock({
   onExpire: () => void;
   /**
    * Focus mode: the clock is the screen. It fills whatever height the room
-   * gives it and the numerals grow to match — the one figure a bidder in round
-   * 6 is watching should not be the size of a footnote beside the price.
+   * gives it and the numerals are sized to that card — a size container, so
+   * they shrink with it when a join-fee notice or the final-round log takes
+   * some of the screen, instead of overflowing it and cutting off the label.
+   * The one figure a bidder in round 6 is watching should not be the size of
+   * a footnote beside the price, nor be clipped.
    */
   focus?: boolean;
 }) {
@@ -48,7 +51,7 @@ export function BidClock({
     <div
       className={`border-line bg-surface relative isolate flex flex-col overflow-hidden border px-4 transition-all duration-300 md:px-6 ${
         focus
-          ? "h-full justify-center py-5 short:py-3.5"
+          ? "h-full justify-center py-3 [container-type:size]"
           : "justify-between py-3.5 short:py-3 md:py-6"
       }`}
     >
@@ -83,7 +86,7 @@ export function BidClock({
         transition={{ repeat: Infinity, duration: 0.6 }}
         className={`display leading-none tracking-tight transition-colors duration-300 ${
           focus
-            ? "mt-3 text-[clamp(3.5rem,min(28vw,17dvh),9rem)] short:mt-2"
+            ? "mt-2 text-[clamp(2.25rem,min(28cqw,42cqh),9rem)]"
             : "mt-2.5 text-[clamp(2.75rem,10vw,4.5rem)] short:mt-2 short:text-[2.75rem]"
         } ${URGENCY_TEXT[urgency]}`}
       >
@@ -91,7 +94,7 @@ export function BidClock({
       </motion.p>
 
       {/* Hairline progress bar */}
-      <div className={`bg-line-strong/30 h-1 w-full overflow-hidden rounded-full ${focus ? "mt-5 short:mt-3" : "mt-3 short:mt-2.5"}`}>
+      <div className={`bg-line-strong/30 h-1 w-full overflow-hidden rounded-full ${focus ? "mt-3" : "mt-3 short:mt-2.5"}`}>
         <motion.div
           initial={false}
           animate={{ scaleX: frac }}

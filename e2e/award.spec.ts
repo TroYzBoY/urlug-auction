@@ -55,7 +55,7 @@ async function seedFinalRound(clock: string): Promise<void> {
   });
 }
 
-test("a lot left to the clock goes to the standing leader, after the same wait", async ({
+test("a lot left to the clock shows the standing leader as winner the moment it closes", async ({
   page,
 }) => {
   test.setTimeout(60_000);
@@ -71,23 +71,25 @@ test("a lot left to the clock goes to the standing leader, after the same wait",
   await expect(page.getByRole("timer")).toHaveCount(2);
 
   /*
-   * The server sells it in the same transaction that closes it, so the result
-   * is in the room within a moment of the clock — and the room still shows the
-   * same wait a hand-decided lot does, then the result. A bidder cannot tell
-   * the two apart, which is the requirement.
+   * The server sells it in the same transaction that closes it, and the room
+   * shows that straight away: no admin, no wait. Two seconds of slack past the
+   * clock covers the ticker's quarter-second cadence and the push.
    */
-  await expect(page.getByText("ШАЛГАЖ БАЙНА", { exact: true })).toBeVisible({
-    timeout: 15_000,
-  });
-  await expect(page.getByText("Ялагчийг тодруулж байна")).toBeVisible();
-  await expect(page.getByText("ЦОХИВ", { exact: true })).toHaveCount(0);
-
+  await expect(page.getByRole("timer")).toHaveCount(0, { timeout: 10_000 });
   await expect(page.getByText("ЦОХИВ", { exact: true }).first()).toBeVisible({
-    timeout: 15_000,
+    timeout: 2_000,
   });
+  await expect(page.getByText("Ялагчийг тодруулж байна")).toHaveCount(0);
   await expect(page.locator('dt:has-text("Хүлээн авагч") + dd')).toHaveText(
     "Тэргүүлсэн оролцогч",
   );
+
+  // The final-round log records the close where it happened: the bid clock
+  // at zero, and who it went to.
+  const log = page.getByRole("region", { name: "Сүүлийн тойргийн бүртгэл" });
+  await expect(log.getByText("Хаялт хаагдлаа")).toBeVisible();
+  await expect(log.getByText("0.000", { exact: false })).toBeVisible();
+  await expect(log.getByText("Ялагч: Тэргүүлсэн оролцогч")).toBeVisible();
 
   const result = await withDatabase(async (client) => {
     const rows = await client.query(

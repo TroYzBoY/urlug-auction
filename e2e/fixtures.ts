@@ -163,6 +163,17 @@ export async function finalRoundEndingIn(
   );
 }
 
+/** The newest bid's recorded bid-clock remainder on a lot, in ms. */
+export async function clockLeftOf(lotId: string): Promise<number> {
+  return withClient(async (c) => {
+    const res = await c.query<{ clock_left_ms: number }>(
+      "SELECT clock_left_ms FROM bids WHERE lot_id = $1 ORDER BY id DESC LIMIT 1",
+      [lotId],
+    );
+    return res.rows[0]!.clock_left_ms;
+  });
+}
+
 /** Signs in through the real form, so the session cookie is a real one. */
 export async function signIn(page: Page, bidder: TestBidder): Promise<void> {
   await page.goto("/login");

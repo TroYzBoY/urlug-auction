@@ -49,6 +49,17 @@ export function clockText(remainingMs: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
+/**
+ * Bid-clock time to the millisecond, for the final-round log: "1.009", "0.000".
+ *
+ * Always three decimals, so a column of them lines up and 0.300 never reads as
+ * three tenths of something else. Negative input — a clock already past zero —
+ * is shown as zero rather than as a time that never existed.
+ */
+export function msClock(ms: number): string {
+  return (Math.max(0, Math.round(ms)) / 1000).toFixed(3);
+}
+
 /** Coarse clock for the round timer: "18 мин" / "42 сек". */
 export function coarseClock(remainingMs: number): string {
   const sec = Math.max(0, Math.floor(remainingMs / 1000));

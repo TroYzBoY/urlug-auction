@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  clockLeftOf,
   finalRoundEndingIn,
   makeBidder,
   makeLiveLot,
@@ -130,4 +131,33 @@ test("the last clock reaching zero takes the bid button away before the server a
   });
   await expect(page.getByRole("button", { name: /Үнэ хаях/ })).toHaveCount(0);
   await expect(page.getByRole("timer")).toHaveCount(0);
+});
+
+test("the final round's log shows the bid clock a real bid was accepted on, to the millisecond", async ({
+  page,
+}) => {
+  await makeLiveLot("F04");
+  const bidder = await makeBidder("99110304", "Т-304");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, bidder);
+  await finalRoundEndingIn("F04", 60_000);
+  await page.goto("/auction/F04");
+
+  const log = page.getByRole("region", { name: "Сүүлийн тойргийн бүртгэл" });
+  await expect(log).toBeVisible();
+  await expect(log.getByText("Энэ тойрогт хаялт хараахан алга")).toBeVisible();
+
+  await page.getByRole("button", { name: /Үнэ хаях/ }).click();
+
+  /*
+   * The row appears when the server's push brings the measurement — never
+   * from this screen's clock — and it says what the database says.
+   */
+  const row = log.getByRole("listitem").filter({ hasText: "Та" });
+  await expect(row).toBeVisible();
+  const shown = (await row.textContent())!.match(/(\d+\.\d{3})/)![1]!;
+  const stored = await clockLeftOf("F04");
+  expect(Number(shown)).toBe(stored / 1000);
+  expect(stored).toBeGreaterThan(50_000);
+  expect(stored).toBeLessThanOrEqual(60_000);
 });

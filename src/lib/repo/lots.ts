@@ -41,7 +41,7 @@ const LOT_COLUMNS = `
     '{}'
   ) AS images,
   a.opens_at, a.round, a.current_pts, a.leader_paddle, a.leader_user_id,
-  a.bid_clock_ends_at, a.outcome, a.hammer_round, a.bid_count
+  a.bid_clock_ends_at, a.outcome, a.hammer_round, a.bid_count, a.settled_at
 `;
 
 interface LotRow {
@@ -69,6 +69,16 @@ interface LotRow {
   outcome: EngineState["outcome"];
   hammer_round: number | null;
   bid_count: number;
+  settled_at: Date | null;
+}
+
+/**
+ * When bidding stopped, epoch ms — the stored stamp, or the engine's when this
+ * read is the first to notice. null while it is still running.
+ */
+function closedAtOf(row: LotRow, live: SettledState): number | null {
+  if (live.outcome === "running" || live.outcome === "scheduled") return null;
+  return row.settled_at?.getTime() ?? live.settledAt ?? null;
 }
 
 function engineStateOf(row: LotRow): EngineState {
@@ -223,8 +233,10 @@ export async function recentBids(
     round: number;
     placed_at: Date;
     user_id: number;
+    clock_left_ms: number | null;
   }>(
-    `SELECT b.id, b.paddle, u.name, b.points, b.round, b.placed_at, b.user_id
+    `SELECT b.id, b.paddle, u.name, b.points, b.round, b.placed_at, b.user_id,
+            b.clock_left_ms
        FROM bids b JOIN users u ON u.id = b.user_id
        WHERE b.lot_id = $1 ORDER BY b.id DESC LIMIT ${FEED_SIZE}`,
     [lotId],
@@ -237,6 +249,7 @@ export async function recentBids(
     points: b.points,
     round: b.round,
     at: b.placed_at.getTime(),
+    clockLeftMs: b.clock_left_ms,
     isYou: viewerUserId !== null && b.user_id === viewerUserId,
   }));
 }
@@ -267,6 +280,7 @@ export interface RoomSnapshot {
   leader: string | null;
   bidClockEndsAt: number;
   roundEndsAt: number;
+  closedAt: number | null;
   outcome: RoomState["outcome"];
   /** Bids with their author, so `isYou` can be decided without another query. */
   bids: (Omit<Bid, "isYou"> & { userId: number })[];
@@ -292,8 +306,10 @@ export async function getRoomSnapshot(
     round: number;
     placed_at: Date;
     user_id: number;
+    clock_left_ms: number | null;
   }>(
-    `SELECT b.id, b.paddle, u.name, b.points, b.round, b.placed_at, b.user_id
+    `SELECT b.id, b.paddle, u.name, b.points, b.round, b.placed_at, b.user_id,
+            b.clock_left_ms
        FROM bids b JOIN users u ON u.id = b.user_id
        WHERE b.lot_id = $1 ORDER BY b.id DESC LIMIT ${FEED_SIZE}`,
     [lotId],
@@ -306,6 +322,7 @@ export async function getRoomSnapshot(
     leader: live.leaderPaddle,
     bidClockEndsAt: live.bidClockEndsAt,
     roundEndsAt: live.roundEndsAt,
+    closedAt: closedAtOf(row, live),
     outcome: live.outcome,
     bids: rows.map((b) => ({
       id: String(b.id),
@@ -314,6 +331,7 @@ export async function getRoomSnapshot(
       points: b.points,
       round: b.round,
       at: b.placed_at.getTime(),
+      clockLeftMs: b.clock_left_ms,
       userId: b.user_id,
     })),
   };
@@ -341,6 +359,7 @@ export function projectForViewer(
     leader: snapshot.leader,
     bidClockEndsAt: snapshot.bidClockEndsAt,
     roundEndsAt: snapshot.roundEndsAt,
+    closedAt: snapshot.closedAt,
     bids: snapshot.bids.map(({ userId, ...bid }) => ({
       ...bid,
       isYou: viewerUserId !== null && userId === viewerUserId,
@@ -412,6 +431,7 @@ export async function getRoomState(
     leader: live.leaderPaddle,
     bidClockEndsAt: live.bidClockEndsAt,
     roundEndsAt: live.roundEndsAt,
+    closedAt: closedAtOf(row, live),
     bids,
     hasBid: participant?.first_bid_at != null,
     outcome: live.outcome,
