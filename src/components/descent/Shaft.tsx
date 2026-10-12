@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { descent, type DescentState } from "./useDescent";
+import { descent, clamp, type DescentState } from "./useDescent";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -137,14 +137,45 @@ void main(){
    because the shader needs to interpolate them per frame; globals.css stays
    the source of truth for everything CSS can express. */
 const C = {
-  /* Match the navy ground and surface, keeping the shaft geometry subtle. */
-  shaftLo: [8, 11, 22],
-  shaftHi: [16, 21, 38],
-  ink: [243, 245, 255],
-  muted: [160, 172, 200],
+  bone: [250, 246, 239],
+  boneInset: [233, 226, 212],
+  dusk: [150, 133, 113],
+  duskInset: [122, 106, 89],
+  roast: [25, 19, 16],
+  roastInset: [50, 40, 32],
+
+  /*
+   * The shaft's two tones.
+   *
+   * ⚠ `shaftLo` IS the descent's `--color-ground` (#191310), exactly — set on
+   * `.root` in Descent.module.css, since the rest of the site is navy. `.tail`
+   * fades the last scene into `--color-ground`, so when the two differ the end
+   * of the descent shows a band of a different colour. If the palette moves,
+   * both move together.
+   *
+   * `shaftHi` is the lit tone, twenty-five code values up. The shader mixes
+   * between the two by a noise-driven luminance, so that distance IS how much
+   * texture the ground has — enough for the haze and the passing floors to
+   * read as light moving in the shaft. It was cut to four on 22 August for a
+   * flatter ground; this is the original figure.
+   */
+  shaftLo: [25, 19, 16],
+  shaftHi: [50, 40, 32],
+  umberInk: [28, 23, 20],
+  umberMute: [116, 106, 93],
+  creamInk: [246, 241, 232],
+  creamMute: [168, 158, 144],
+  chestnut: [140, 90, 56],
+  amber: [196, 139, 72],
+  rust: [217, 85, 56],
 } as const;
 
 type RGB = readonly number[];
+const mix = (a: RGB, b: RGB, t: number): number[] => [
+  a[0] + (b[0] - a[0]) * t,
+  a[1] + (b[1] - a[1]) * t,
+  a[2] + (b[2] - a[2]) * t,
+];
 const css = (c: RGB) => `rgb(${c[0] | 0} ${c[1] | 0} ${c[2] | 0})`;
 
 type Renderer = {
@@ -250,28 +281,29 @@ function draw(r: Renderer, mode: number, hi: RGB, lo: RGB, s: DescentState) {
  * ─────────────────────────────────────────────────────────────────────────────
  * DEPTH → COLOUR
  *
- * One palette, top to bottom. `hi` is the lit tone and `lo` the shadow; the
- * shader mixes between them by luminance, which is what gives the shaft its
- * air. Neither changes as you scroll.
+ * `hi` is the lit tone and `lo` the shadow, and the shader mixes between them
+ * by luminance. `heat` pushes both toward chestnut, rust or amber — one number,
+ * and it is the whole drama control: the scene dissolves, a fast scroll, the
+ * hammer (rust) and the hall's door (amber) all warm the shaft.
  *
- * ── What was here before ─────────────────────────────────────────────────────
- *
- * A colour journey: bone at the top, dimming through dusk to roast, with a
- * `heat` term pushing the lit tone toward chestnut, rust and amber at the
- * dramatic moments. It was doing a great deal — and it was the thing that read
- * as restless rather than as depth, because the page's own colour kept moving
- * underneath text that was trying to be read.
- *
- * The geometry, the parallax and the burn are all still driven by scroll. Only
- * the palette is now fixed, so the eye has one thing changing instead of two.
- *
- * ⚠ `hi` and `lo` are deliberately CLOSE together. A wide gap reintroduces the
- * same problem in miniature — the ground visibly lightening and darkening as
- * geometry drifts past.
+ * The original journey also started at bone and dimmed through dusk before
+ * reaching roast. That half is left out: the descent stays dark brown from the
+ * top, and only the heat moves.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-function depthColors() {
-  return { hi: C.shaftHi, lo: C.shaftLo };
+function depthColors(s: DescentState) {
+  const heat = clamp(
+    s.burn * 0.35 + s.climax + s.door * 0.55 + s.vel * 0.12,
+    0,
+    1,
+  );
+  let hot = mix(C.chestnut, C.rust, s.climax);
+  hot = mix(hot, C.amber, s.door * 0.8);
+
+  return {
+    hi: mix(C.shaftHi, hot, heat * 0.8),
+    lo: mix(C.shaftLo, hot, heat * 0.22),
+  };
 }
 
 export function Shaft() {
@@ -324,34 +356,43 @@ export function Shaft() {
 
     const root = document.documentElement.style;
     let published = false;
+    let burnOn = false;
 
     const unsub = descent.subscribe((s) => {
-      const { hi, lo } = depthColors();
+      const { hi, lo } = depthColors(s);
 
       if (field) draw(field, 0, hi, lo, s);
 
       /*
-       * The burn layer is held off.
-       *
-       * It composited a full-screen alpha pass over the page at the dramatic
-       * moments — the second of the two colour washes the redesign set out to
-       * remove, and the more expensive one: a viewport-sized WebGL surface
-       * blended over everything, on a phone.
-       *
-       * The canvas and its renderer are still created rather than deleted.
-       * Bringing it back is this one branch, and a shader that has been
-       * compiled and proven is worth keeping compiled.
+       * The dissolve between scenes: an organic front sweeps across the screen
+       * in the shaft's own shadow tone, covers the moment one stage unsticks
+       * and the next takes over, and sweeps back off. Drawn only while
+       * `burn` is above zero, so between boundaries there is no full-screen
+       * alpha layer composited over the page.
        */
-      void burn;
+      if (burn) {
+        if (s.burn > 0.004) {
+          if (!burnOn) {
+            burnOn = true;
+            burnCv.style.opacity = "1";
+          }
+          draw(burn, 1, hi, lo, s);
+        } else if (burnOn) {
+          burnOn = false;
+          burnCv.style.opacity = "0";
+          burn.gl.clearColor(0, 0, 0, 0);
+          burn.gl.clear(burn.gl.COLOR_BUFFER_BIT);
+        }
+      }
 
       /*
        * Hand the descent's colour to CSS once.
        *
-       * It used to be rewritten as the scroll moved, throttled by perceptible
-       * change — and rewriting a custom property on <html> invalidates style
-       * for the whole subtree, so that was a full restyle several times a
-       * second while somebody was reading. With a fixed palette it is one
-       * write for the life of the page.
+       * The shaft's colour moves with the heat, but CSS only needs the resting
+       * palette: the descent stays dark from top to bottom, so ink and muted
+       * never change. Rewriting a custom property on <html> invalidates style
+       * for the whole subtree, so this is one write for the life of the page
+       * rather than a restyle several times a second.
        */
       if (published) return;
       published = true;
@@ -362,12 +403,12 @@ export function Shaft() {
        * fallback path (`html[data-no-gl]`) reads the same names, so one place
        * still defines the descent's colour.
        */
-      root.setProperty("--descent-ground", css(lo));
-      root.setProperty("--descent-ground-hi", css(hi));
-      root.setProperty("--descent-ink", css(C.ink));
-      root.setProperty("--descent-muted", css(C.muted));
-      root.setProperty("--descent-line", "rgba(71,234,255,0.15)");
-      root.setProperty("--descent-glow", "rgba(71,234,255,.24)");
+      root.setProperty("--descent-ground", css(C.shaftLo));
+      root.setProperty("--descent-ground-hi", css(C.shaftHi));
+      root.setProperty("--descent-ink", css(C.creamInk));
+      root.setProperty("--descent-muted", css(C.creamMute));
+      root.setProperty("--descent-line", "rgba(246,236,222,0.19)");
+      root.setProperty("--descent-glow", "rgba(196,139,72,.55)");
     });
 
     return () => {
