@@ -38,6 +38,7 @@ let declareUnsold: typeof import("./admin-write").declareUnsold;
 let closeAuction: typeof import("./admin-write").closeAuction;
 let reviewQueue: typeof import("./admin").reviewQueue;
 let settleDueAuctions: typeof import("../ticker").settleDueAuctions;
+let placeBid: typeof import("./bids").placeBid;
 let db: typeof import("../db") | null = null;
 let query: typeof import("../db").query;
 
@@ -45,11 +46,10 @@ const LOT = "900";
 
 beforeAll(async () => {
   await applySchema(url);
-  ({ awardLot, declareUnsold, closeAuction } = await import(
-    "./admin-write"
-  ));
+  ({ awardLot, declareUnsold, closeAuction } = await import("./admin-write"));
   ({ reviewQueue } = await import("./admin"));
   ({ settleDueAuctions } = await import("../ticker"));
+  ({ placeBid } = await import("./bids"));
   db = await import("../db");
   ({ query } = db);
 });
@@ -99,10 +99,10 @@ async function seedClosedLot({
     bidClockMsFromNow,
     leaderPaddle: top.paddle,
   });
-  await query(
-    "UPDATE auctions SET leader_user_id = $2 WHERE lot_id = $1",
-    [LOT, top.id],
-  );
+  await query("UPDATE auctions SET leader_user_id = $2 WHERE lot_id = $1", [
+    LOT,
+    top.id,
+  ]);
 
   for (const [userId, paddle, points] of [
     [second.id, second.paddle, 1250],
@@ -210,10 +210,12 @@ describe("awarding a lot", () => {
      */
     expect(result.hammerPts).toBe(1250);
 
-    const [auction] = await query<{ current_pts: number; leader_paddle: string }>(
-      "SELECT current_pts, leader_paddle FROM auctions WHERE lot_id = $1",
-      [LOT],
-    );
+    const [auction] = await query<{
+      current_pts: number;
+      leader_paddle: string;
+    }>("SELECT current_pts, leader_paddle FROM auctions WHERE lot_id = $1", [
+      LOT,
+    ]);
     expect(auction!.current_pts).toBe(1250);
     expect(auction!.leader_paddle).toBe("Т-100");
 
@@ -237,9 +239,10 @@ describe("awarding a lot", () => {
       user_id: number;
       hammer_pts: number;
       status: string;
-    }>("SELECT user_id, hammer_pts, status FROM settlements WHERE lot_id = $1", [
-      LOT,
-    ]);
+    }>(
+      "SELECT user_id, hammer_pts, status FROM settlements WHERE lot_id = $1",
+      [LOT],
+    );
     expect(settlement!.user_id).toBe(second);
     expect(settlement!.hammer_pts).toBe(1250);
     expect(settlement!.status).toBe("due");
@@ -248,7 +251,10 @@ describe("awarding a lot", () => {
   it("refuses a user who never bid on the lot", async () => {
     await seedClosedLot();
     const actor = await seedAdmin();
-    const stranger = await seedUser(url, { phone: "99110009", paddle: "Т-900" });
+    const stranger = await seedUser(url, {
+      phone: "99110009",
+      paddle: "Т-900",
+    });
 
     const result = await awardLot(LOT, stranger.id, "Гараар оруулав", actor);
     expect(result.ok).toBe(false);
@@ -281,17 +287,51 @@ describe("awarding a lot", () => {
     expect(auction!.leader_user_id).toBe(top);
   });
 
-  it("refuses a lot that is still taking bids", async () => {
-    const bidder = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
-    await seedRunningLot(url, {
+  it("awards a lot still taking bids, and ends its bidding", async () => {
+    const { second } = await seedClosedLot({ bidClockMsFromNow: 60_000 });
+    const actor = await seedAdmin();
+
+    const result = await awardLot(LOT, second, "Эрт зарлав", actor);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Their own top bid, as after the close.
+    expect(result.hammerPts).toBe(1250);
+
+    const [auction] = await query<{ outcome: string; settled_at: Date | null }>(
+      "SELECT outcome, settled_at FROM auctions WHERE lot_id = $1",
+      [LOT],
+    );
+    expect(auction!.outcome).toBe("sold");
+    expect(auction!.settled_at).not.toBeNull();
+
+    // The clock running out later changes nothing, and nobody can bid.
+    await settleDueAuctions(Date.now() + 120_000);
+    const late = await placeBid({
       lotId: LOT,
-      currentPts: 1300,
-      leaderPaddle: bidder.paddle,
+      userId: second,
+      paddle: "Т-100",
+      name: "Тест хэрэглэгч",
+      points: 1400,
+      idempotencyKey: "late",
+      ip: null,
+      userAgent: null,
     });
+    expect(late.ok).toBe(false);
+
+    const [audit] = await query<{ detail: Record<string, unknown> }>(
+      `SELECT detail FROM audit_log
+        WHERE action = 'admin.winner_declared' AND target_id = $1`,
+      [LOT],
+    );
+    expect(audit!.detail.closedEarly).toBe(true);
+  });
+
+  it("refuses a lot that has not opened", async () => {
+    const bidder = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
+    await seedRunningLot(url, { lotId: LOT, currentPts: 1300 });
     await query(
-      `INSERT INTO bids (lot_id, user_id, paddle, points, round, idempotency_key)
-       VALUES ($1, $2, $3, 1300, 1, 'seed')`,
-      [LOT, bidder.id, bidder.paddle],
+      "UPDATE auctions SET outcome = 'scheduled', opens_at = now() + interval '1 hour' WHERE lot_id = $1",
+      [LOT],
     );
     const actor = await seedAdmin();
 
@@ -387,7 +427,9 @@ describe("when bidding stops", () => {
     const admin = await seedAdmin();
     await seedClosedLot({ bidClockMsFromNow: 60_000 });
 
-    expect((await closeAuction(LOT, "Техникийн доголдол", admin)).ok).toBe(true);
+    expect((await closeAuction(LOT, "Техникийн доголдол", admin)).ok).toBe(
+      true,
+    );
     await settleDueAuctions();
 
     const [auction] = await query<{ outcome: string }>(

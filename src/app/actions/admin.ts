@@ -209,13 +209,14 @@ export async function cancelAuctionAction(
  */
 const DECISION_ERROR: Record<string, string> = {
   "not-found": "Лот олдсонгүй.",
-  "not-in-review": "Энэ лот хараахан шалгах шатанд ороогүй байна.",
+  "not-in-review": "Энэ лотын хаялт хараахан эхлээгүй байна.",
   "not-a-bidder": "Сонгосон хэрэглэгч энэ лотод хаялт хийгээгүй байна.",
   "already-decided": "Энэ лотын шийдвэр аль хэдийн гарсан байна.",
 };
 
 /**
- * Names the winner of a lot in review.
+ * Names the winner of a lot in review, or of one still running — which ends
+ * its bidding.
  *
  * `publish` matters as much as the write. Everyone who was in the room is
  * looking at a "being checked" screen with an open stream; this is what turns

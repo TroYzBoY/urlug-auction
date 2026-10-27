@@ -426,7 +426,8 @@ async function lockForDecision(
 }
 
 /**
- * Awards a lot in review to one of its bidders, at that bidder's own top bid.
+ * Awards a lot to one of its bidders, at that bidder's own top bid — in review,
+ * or still taking bids, when the admin is calling it early.
  *
  * The settlement is opened in the same transaction, so the sale and the
  * obligation it creates come into existence together — a hammer with no invoice
@@ -446,7 +447,15 @@ export async function awardLot(
     if (outcome === "sold" || outcome === "unsold") {
       return { ok: false, reason: "already-decided" };
     }
-    if (outcome !== "review") return { ok: false, reason: "not-in-review" };
+    /*
+     * A running lot is decided the same way. `grantLot`'s UPDATE ends the
+     * bidding in the statement that sells it, under the row lock every bid
+     * takes, so no bid can land between the two; the next one finds it sold.
+     */
+    if (outcome !== "review" && outcome !== "running") {
+      return { ok: false, reason: "not-in-review" };
+    }
+    const closedEarly = outcome === "running";
 
     const winning = await grantLot(
       client,
@@ -477,6 +486,8 @@ export async function awardLot(
         standingLeader: row.leader_paddle,
         standingPts: row.current_pts,
         overrodeStandingLeader: row.leader_paddle !== winning.paddle,
+        closedEarly,
+        roundAtClose: row.round,
       },
       ip: actor.ip,
       userAgent: actor.userAgent,

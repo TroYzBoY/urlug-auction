@@ -11,7 +11,7 @@ import {
 import { OUTCOME_LABEL } from "@/components/admin/outcome";
 import { getLot } from "@/lib/api";
 import { toHouseInput } from "@/lib/house-time";
-import { lot as adminLot, reviewQueue } from "@/lib/repo/admin";
+import { lot as adminLot, lotCandidates, reviewQueue } from "@/lib/repo/admin";
 import type { Lot } from "@/lib/types";
 import { requireAdmin } from "@/lib/session";
 import { lotDate, pts } from "@/lib/format";
@@ -25,9 +25,10 @@ export const metadata: Metadata = {
 /**
  * One lot, from the house's side.
  *
- * What the sale currently is, its details and controls, and — once bidding
- * has stopped — the decision itself: an admin names the winner of every lot,
- * here or from the dashboard's queue.
+ * What the sale currently is, its details and controls, and the decision
+ * itself: an admin names the winner of every lot — here at any time once it
+ * has bids, ending the bidding if it is still running, or from the
+ * dashboard's queue once its clocks have stopped.
  */
 export default async function AdminLotPage(
   props: PageProps<"/admin/lots/[id]">,
@@ -36,13 +37,16 @@ export default async function AdminLotPage(
   await requireAdmin();
   const { id } = await props.params;
 
-  const [row, queue, full] = await Promise.all([
+  const [row, queue, full, bidders] = await Promise.all([
     adminLot(id),
     reviewQueue(),
     getLot(id),
+    lotCandidates(id),
   ]);
   if (!row || !full) notFound();
   const pending = queue.find((l) => l.lotId === id) ?? null;
+  /* Still taking bids, by the stored row and not yet closed by its clocks. */
+  const live = !pending && row.outcome === "running";
 
   return (
     <AccountShell
@@ -90,14 +94,21 @@ export default async function AdminLotPage(
         </p>
       )}
 
-      {!pending &&
-        (row.outcome === "scheduled" || row.outcome === "running") && (
-          <Panel heading={t.admin.reviewQueue} empty="—" isEmpty={false}>
+      {/*
+        Before bidding stops the admin can call the lot early: the same
+        picker, over the same bidders, and awarding it ends the bidding.
+      */}
+      {(live || (!pending && row.outcome === "scheduled")) && (
+        <Panel heading={t.admin.reviewQueue} empty="—" isEmpty={false}>
+          {live && bidders.length > 0 ? (
+            <WinnerPicker lotId={row.lotId} candidates={bidders} live />
+          ) : (
             <p className="text-muted max-w-prose text-sm leading-relaxed">
               {t.admin.reviewLater}
             </p>
-          </Panel>
-        )}
+          )}
+        </Panel>
+      )}
 
       {pending && (
         <Panel heading={t.admin.reviewQueue} empty="—" isEmpty={false}>

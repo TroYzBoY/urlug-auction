@@ -61,8 +61,13 @@ async function awardStandingLeader(page: Page): Promise<void> {
   await page
     .getByPlaceholder("Тайлбар (аудитад үлдэнэ)")
     .fill("Браузерын шалгалтын шийдвэр");
-  await page.getByRole("button", { name: "Ялагчийг зарлах", exact: true }).click();
-  await expect(page.getByText("Шалгах хүлээгдэж буй лот алга.")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Ялагчийг зарлах", exact: true })
+    .click();
+  // Long enough for the dev server to compile the action on first use.
+  await expect(page.getByText("Шалгах хүлээгдэж буй лот алга.")).toBeVisible({
+    timeout: 15_000,
+  });
 }
 
 test("a closed lot waits for an admin instead of selling itself", async ({
@@ -72,8 +77,9 @@ test("a closed lot waits for an admin instead of selling itself", async ({
   await makeBidder("99110092", "Т-292");
   await makeBidder("99110093", "Т-293");
   await makeLiveLot(LOT);
-  // Far enough out that the room is open and live before it runs down.
-  await seedFinalRound("5 seconds");
+  // Far enough out that the room is open and live before it runs down, even
+  // when this is the first page the dev server compiles.
+  await seedFinalRound("15 seconds");
 
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -85,10 +91,12 @@ test("a closed lot waits for an admin instead of selling itself", async ({
    * seconds past the close is long enough for the ticker to have sold it, if
    * anything still did.
    */
-  await expect(page.getByRole("timer")).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.getByRole("timer")).toHaveCount(0, { timeout: 20_000 });
   await expect(page.getByText("LOADING", { exact: true })).toBeVisible();
   await page.waitForTimeout(2_000);
-  await expect(page.getByText("ЯЛАГЧ ТОДОРЛОО", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("ЯЛАГЧ ТОДОРЛОО", { exact: true })).toHaveCount(
+    0,
+  );
 
   const result = await withDatabase(async (client) => {
     const rows = await client.query(
@@ -99,7 +107,11 @@ test("a closed lot waits for an admin instead of selling itself", async ({
     );
     return rows.rows[0];
   });
-  expect(result).toEqual({ outcome: "review", awarded_by: null, settlements: 0 });
+  expect(result).toEqual({
+    outcome: "review",
+    awarded_by: null,
+    settlements: 0,
+  });
   expect(errors).toEqual([]);
 });
 
@@ -112,7 +124,7 @@ test("on a phone, the bid history appears once the lot is sold, winner first", a
   await makeBidder("99110092", "Т-292");
   await makeBidder("99110093", "Т-293");
   await makeLiveLot(LOT);
-  await seedFinalRound("5 seconds");
+  await seedFinalRound("15 seconds");
   await page.setViewportSize({ width: 390, height: 844 });
   expect((await page.goto(`/auction/${LOT}`))?.status()).toBe(200);
 
@@ -120,7 +132,7 @@ test("on a phone, the bid history appears once the lot is sold, winner first", a
   const feed = page.getByRole("region", { name: "Хаялтын урсгал" });
   await expect(page.getByRole("timer")).toHaveCount(2);
   await expect(feed).toBeHidden();
-  await expect(page.getByRole("timer")).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.getByRole("timer")).toHaveCount(0, { timeout: 20_000 });
 
   const desk = await browser.newContext();
   try {
@@ -236,3 +248,64 @@ for (const override of [false, true]) {
     }
   });
 }
+
+test("an admin awards a lot that is still running, from its page, and the room ends", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const admin = await makeAdmin("99110091", "Т-291");
+  await makeBidder("99110092", "Т-292");
+  await makeBidder("99110093", "Т-293");
+  await makeLiveLot(LOT);
+  await seedFinalRound("10 minutes");
+
+  const viewer = await browser.newContext();
+  const room = await viewer.newPage();
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  room.on("pageerror", (error) => errors.push(error.message));
+  try {
+    expect((await room.goto(`/auction/${LOT}`))?.status()).toBe(200);
+    await expect(room.getByRole("timer")).toHaveCount(2);
+
+    await signIn(page, admin);
+    expect((await page.goto(`/admin/lots/${LOT}`))?.status()).toBe(200);
+    await expect(page.getByText(/Лот одоо явагдаж байна/)).toBeVisible();
+    // Nobody to give it to is not a choice here — that is «Хаах».
+    await expect(
+      page.getByRole("button", { name: "Хэн ч аваагүй" }),
+    ).toHaveCount(0);
+
+    const picker = page.getByRole("combobox", { name: "Ялагчийг сонгох" });
+    await expect(picker.locator("option:checked")).toContainText("Т-293");
+    await page
+      .getByPlaceholder("Тайлбар (аудитад үлдэнэ)")
+      .fill("Браузерын шалгалт — эрт зарлав");
+    await page
+      .getByRole("button", { name: "Ялагчийг зарлах", exact: true })
+      .click();
+
+    // Through SSE: no reload on the room.
+    await expect(
+      room.getByText("ЯЛАГЧ ТОДОРЛОО", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(room.getByRole("timer")).toHaveCount(0);
+    await expect(room.locator('dt:has-text("Ялагч") + dd')).toHaveText(
+      "Тэргүүлсэн оролцогч",
+    );
+
+    const result = await withDatabase(async (client) => {
+      const rows = await client.query(
+        `SELECT a.outcome, s.hammer_pts FROM auctions a
+           JOIN settlements s ON s.lot_id = a.lot_id WHERE a.lot_id = $1`,
+        [LOT],
+      );
+      return rows.rows[0];
+    });
+    expect(result).toEqual({ outcome: "sold", hammer_pts: 1300 });
+    expect(errors).toEqual([]);
+  } finally {
+    await viewer.close();
+  }
+});

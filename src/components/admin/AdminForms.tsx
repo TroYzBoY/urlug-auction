@@ -732,9 +732,15 @@ export interface WinnerCandidate {
 export function WinnerPicker({
   lotId,
   candidates,
+  live = false,
 }: {
   lotId: string;
   candidates: WinnerCandidate[];
+  /**
+   * The lot is still taking bids: awarding it ends them. There is no "unsold"
+   * here — that is «Хаах» in the lot's controls, then a decision.
+   */
+  live?: boolean;
 }) {
   const [awardState, awardFormAction] = useActionState<AdminState, FormData>(
     awardWinnerAction,
@@ -760,6 +766,11 @@ export function WinnerPicker({
     <div className="flex flex-col gap-4">
       <form action={awardFormAction} className="flex flex-col gap-2.5">
         <input type="hidden" name="lotId" value={lotId} />
+        {live && (
+          <p className="border-flare text-flare border-l-2 pl-2.5 text-xs leading-relaxed">
+            {t.admin.awardEarlyWarning}
+          </p>
+        )}
 
         <label className="block">
           <span className="eyebrow">{t.admin.reviewPickWinner}</span>
@@ -801,13 +812,15 @@ export function WinnerPicker({
         />
         <div className="flex flex-wrap items-center gap-3">
           <Submit label={t.admin.declareWinner} />
-          <button
-            type="button"
-            onClick={() => setConfirmingUnsold((o) => !o)}
-            className="eyebrow text-muted hover:text-rust h-10 px-1 transition-colors"
-          >
-            {t.admin.declareUnsold}
-          </button>
+          {!live && (
+            <button
+              type="button"
+              onClick={() => setConfirmingUnsold((o) => !o)}
+              className="eyebrow text-muted hover:text-rust h-10 px-1 transition-colors"
+            >
+              {t.admin.declareUnsold}
+            </button>
+          )}
         </div>
         <Result state={awardState} />
       </form>

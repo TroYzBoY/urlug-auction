@@ -238,49 +238,7 @@ export async function reviewQueue(): Promise<ReviewLotRow[]> {
 
   if (pending.length === 0) return [];
 
-  /*
-   * One query for every candidate across every pending lot, not one per lot.
-   * The queue is short in normal operation, but it is longest exactly when the
-   * house has fallen behind — which is the moment this page must still load.
-   */
-  const candidates = await query<{
-    lot_id: string;
-    user_id: number;
-    name: string;
-    paddle: string;
-    top_pts: number;
-    top_round: number;
-    bid_count: number;
-    status: ReviewCandidate["status"];
-  }>(
-    `SELECT DISTINCT ON (b.lot_id, b.user_id)
-            b.lot_id, b.user_id, u.name, b.paddle, u.status,
-            b.points AS top_pts, b.round AS top_round,
-            (SELECT count(*)::int FROM bids x
-              WHERE x.lot_id = b.lot_id AND x.user_id = b.user_id) AS bid_count
-       FROM bids b JOIN users u ON u.id = b.user_id
-      WHERE b.lot_id = ANY($1::text[])
-      ORDER BY b.lot_id, b.user_id, b.points DESC`,
-    [pending.map(({ row }) => row.lot_id)],
-  );
-
-  const byLot = new Map<string, ReviewCandidate[]>();
-  for (const c of candidates) {
-    const list = byLot.get(c.lot_id) ?? [];
-    list.push({
-      userId: c.user_id,
-      name: c.name,
-      paddle: c.paddle,
-      topPts: c.top_pts,
-      topRound: c.top_round,
-      bidCount: c.bid_count,
-      status: c.status,
-    });
-    byLot.set(c.lot_id, list);
-  }
-  // Highest bid first: the standing leader heads every list, so the ordinary
-  // decision is the top of the dropdown.
-  for (const list of byLot.values()) list.sort((a, b) => b.topPts - a.topPts);
+  const byLot = await candidatesFor(pending.map(({ row }) => row.lot_id));
 
   return pending.map(({ row, live }) => {
     /*
@@ -303,6 +261,65 @@ export async function reviewQueue(): Promise<ReviewLotRow[]> {
       candidates: byLot.get(row.lot_id) ?? [],
     };
   });
+}
+
+/**
+ * Every bidder on each of these lots, highest bid first.
+ *
+ * One query for every lot, not one per lot. The queue is short in normal
+ * operation, but it is longest exactly when the house has fallen behind —
+ * which is the moment this page must still load.
+ */
+async function candidatesFor(
+  lotIds: string[],
+): Promise<Map<string, ReviewCandidate[]>> {
+  const candidates = await query<{
+    lot_id: string;
+    user_id: number;
+    name: string;
+    paddle: string;
+    top_pts: number;
+    top_round: number;
+    bid_count: number;
+    status: ReviewCandidate["status"];
+  }>(
+    `SELECT DISTINCT ON (b.lot_id, b.user_id)
+            b.lot_id, b.user_id, u.name, b.paddle, u.status,
+            b.points AS top_pts, b.round AS top_round,
+            (SELECT count(*)::int FROM bids x
+              WHERE x.lot_id = b.lot_id AND x.user_id = b.user_id) AS bid_count
+       FROM bids b JOIN users u ON u.id = b.user_id
+      WHERE b.lot_id = ANY($1::text[])
+      ORDER BY b.lot_id, b.user_id, b.points DESC`,
+    [lotIds],
+  );
+
+  const byLot = new Map<string, ReviewCandidate[]>();
+  for (const c of candidates) {
+    const list = byLot.get(c.lot_id) ?? [];
+    list.push({
+      userId: c.user_id,
+      name: c.name,
+      paddle: c.paddle,
+      topPts: c.top_pts,
+      topRound: c.top_round,
+      bidCount: c.bid_count,
+      status: c.status,
+    });
+    byLot.set(c.lot_id, list);
+  }
+  // Highest bid first: the standing leader heads every list, so the ordinary
+  // decision is the top of the dropdown.
+  for (const list of byLot.values()) list.sort((a, b) => b.topPts - a.topPts);
+  return byLot;
+}
+
+/**
+ * The bidders on one lot, for deciding it before bidding has stopped — the
+ * same list the queue offers once it has.
+ */
+export async function lotCandidates(lotId: string): Promise<ReviewCandidate[]> {
+  return (await candidatesFor([lotId])).get(lotId) ?? [];
 }
 
 export interface AdminUserRow {
