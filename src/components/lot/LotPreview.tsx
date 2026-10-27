@@ -194,16 +194,6 @@ export function LotPreview({
 
             {!isDone && (
               <div className="mt-9 flex flex-wrap items-center gap-3">
-                {/*
-                  A link, not a button. It used to be a `<button>` with no
-                  handler — it looked like the primary action and did nothing.
-                */}
-                <Link
-                  href="/register"
-                  className="flex h-13 items-center bg-accent px-6 text-[0.8125rem] font-bold tracking-[0.14em] text-accent-ink uppercase transition-[transform,opacity] duration-150 active:scale-[0.99]"
-                >
-                  {t.nav.register}
-                </Link>
                 <Link
                   href="/rules"
                   className="flex h-13 items-center border border-line-strong px-6 text-[0.8125rem] font-bold tracking-[0.14em] text-ink uppercase transition-colors hover:border-accent hover:text-accent"
