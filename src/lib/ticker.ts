@@ -3,7 +3,7 @@ import type { PoolClient } from "pg";
 import { getPool, transaction, tryAdvisoryLock } from "./db";
 import { settle, type EngineState } from "./auction-engine";
 import { persistSettlement } from "./repo/bids";
-import { awaitDecision } from "./repo/award";
+import { closeBidding } from "./repo/award";
 import { publish } from "./realtime";
 import { recordDetached } from "./audit";
 import { sweep as sweepRateLimits } from "./rate-limit";
@@ -162,19 +162,21 @@ export async function settleDueAuctions(now = Date.now()): Promise<string[]> {
         }
 
         /*
-         * Bidding is over. The lot waits in `review` until an admin names its
-         * winner (`awardLot`); `awaitDecision` puts it in front of them.
+         * Bidding is over. `closeBidding` hands the lot to the winner an
+         * admin chose in advance, in this same transaction; otherwise it
+         * waits in `review` and the admins are told.
          *
-         * No bidder is messaged at this point. The winner's text and
-         * everyone else's "decided" line are sent by the handover itself
-         * (`grantLot`), once there is a result to tell them.
+         * No bidder is messaged by the wait. The winner's text and everyone
+         * else's "decided" line are sent by the handover itself (`grantLot`),
+         * once there is a result to tell them.
          *
          * A lot with no bids at all skips review — there is nothing to choose
          * between — and goes straight to unsold.
          */
-        if (live.outcome === "review") await awaitDecision(client, r.lot_id);
+        const sold =
+          live.outcome === "review" && (await closeBidding(client, r.lot_id));
 
-        if (live.outcome === "review" || live.outcome === "unsold") {
+        if ((live.outcome === "review" && !sold) || live.outcome === "unsold") {
           recordDetached({
             action: `auction.${live.outcome}`,
             targetType: "lot",

@@ -1,5 +1,6 @@
 import "server-only";
 import type { PoolClient } from "pg";
+import { record } from "../audit";
 import { enqueue } from "./notifications";
 import { openSettlement } from "./settlements";
 import { t } from "../copy";
@@ -8,10 +9,15 @@ import { t } from "../copy";
  * ─────────────────────────────────────────────────────────────────────────────
  * HANDING A LOT TO ITS WINNER
  *
- * An admin names the winner of every lot. When bidding stops the lot waits in
- * `review` — `awaitDecision` puts it in front of the admins — until `awardLot`
- * or `declareUnsold` in admin-write.ts. A lot nobody bid on skips the wait and
- * is simply unsold.
+ * An admin names the winner of every lot, in one of two ways:
+ *
+ *   in advance — while the lot is still taking bids (`designateWinner` in
+ *                admin-write.ts). Bidding carries on; when it stops,
+ *                `closeBidding` hands the lot to that bidder at once.
+ *   afterwards — nobody was chosen, so the lot waits in `review`, in front of
+ *                the admins, until `awardLot` or `declareUnsold`.
+ *
+ * A lot nobody bid on skips both and is simply unsold.
  *
  * The handover itself is `grantLot`: the sale, the settlement and the messages
  * to the bidders. Who made the call lives in `awarded_by` and the audit log.
@@ -140,26 +146,69 @@ export async function grantLot(
 }
 
 /**
- * Tells every admin that a lot has stopped taking bids and is waiting for them
- * to name its winner.
+ * What happens the moment a lot stops taking bids and lands in `review`.
  *
- * Call it straight after persisting a settlement into `review`, inside the same
- * transaction — whichever of the ticker and the bid path settles the lot first.
- * In-app, in the bell: the dashboard's queue is where the decision is made,
- * and this is what sends an admin there without them refreshing it.
+ * Call it straight after persisting that settlement, inside the same
+ * transaction — whichever of the ticker and the bid path settles the lot
+ * first. True when it sold the lot.
  *
- * Bidders hear nothing at this point. Their messages are sent by the handover
- * (`grantLot`, `declareUnsold`), once there is a result to tell them.
+ *   • An admin chose a winner in advance: the lot goes to them now, at their
+ *     own top bid, recorded as that admin's decision.
+ *   • Nobody did: every admin is told in the bell, and the lot waits in the
+ *     dashboard's queue.
+ *
+ * Bidders hear nothing from the second case. Their messages are sent by the
+ * handover (`grantLot`, `declareUnsold`), once there is a result to tell them.
  */
-export async function awaitDecision(
+export async function closeBidding(
   client: PoolClient,
   lotId: string,
-): Promise<void> {
-  const res = await client.query<{ code: string }>(
-    "SELECT code FROM lots WHERE id = $1",
+): Promise<boolean> {
+  const res = await client.query<{
+    code: string;
+    designated_user_id: number | null;
+    designated_by: number | null;
+    leader_paddle: string | null;
+    current_pts: number;
+  }>(
+    `SELECT l.code, a.designated_user_id, a.designated_by, a.leader_paddle,
+            a.current_pts
+       FROM auctions a JOIN lots l ON l.id = a.lot_id
+      WHERE a.lot_id = $1`,
     [lotId],
   );
-  const code = res.rows[0]?.code ?? lotId;
+  const lot = res.rows[0];
+  if (!lot) return false;
+
+  if (lot.designated_user_id !== null) {
+    const granted = await grantLot(
+      client,
+      lotId,
+      lot.code,
+      lot.designated_user_id,
+      lot.designated_by,
+    );
+    if (granted) {
+      await record(client, {
+        actorUserId: lot.designated_by,
+        action: "auction.sold",
+        targetType: "lot",
+        targetId: lotId,
+        detail: {
+          designated: true,
+          winnerUserId: lot.designated_user_id,
+          winnerPaddle: granted.paddle,
+          hammerPts: granted.hammerPts,
+          hammerRound: granted.hammerRound,
+          standingLeader: lot.leader_paddle,
+          standingPts: lot.current_pts,
+        },
+      });
+      return true;
+    }
+    // Not a bidder after all — cannot happen through designateWinner, but if
+    // it does the lot must not vanish: it waits for a person like any other.
+  }
 
   const admins = await client.query<{ id: number }>(
     "SELECT id FROM users WHERE role = 'admin' AND status = 'active'",
@@ -169,9 +218,10 @@ export async function awaitDecision(
       userId: admin.id,
       channel: "inapp",
       kind: "lot.review",
-      body: `${t.brand.name}: ${code} — лотын хаялт хаагдлаа. Ялагчийг тодруулна уу.`,
+      body: `${t.brand.name}: ${lot.code} — лотын хаялт хаагдлаа. Ялагчийг тодруулна уу.`,
       href: `/admin/lots/${encodeURIComponent(lotId)}`,
       dedupeKey: `review:${lotId}`,
     });
   }
+  return false;
 }

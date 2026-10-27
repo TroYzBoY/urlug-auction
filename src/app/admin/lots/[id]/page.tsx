@@ -25,9 +25,9 @@ export const metadata: Metadata = {
 /**
  * One lot, from the house's side.
  *
- * What the sale currently is, its details and controls, and the decision
- * itself: an admin names the winner of every lot — here at any time once it
- * has bids, ending the bidding if it is still running, or from the
+ * What the sale currently is — its bidders, details and controls — and the
+ * decision itself: an admin names the winner of every lot, here in advance
+ * while it still runs (it is handed over when it ends), or here or from the
  * dashboard's queue once its clocks have stopped.
  */
 export default async function AdminLotPage(
@@ -95,13 +95,19 @@ export default async function AdminLotPage(
       )}
 
       {/*
-        Before bidding stops the admin can call the lot early: the same
-        picker, over the same bidders, and awarding it ends the bidding.
+        Before bidding stops the admin can choose the winner in advance: the
+        same picker, over the same bidders. The lot keeps running and goes to
+        them when it ends.
       */}
       {(live || (!pending && row.outcome === "scheduled")) && (
         <Panel heading={t.admin.reviewQueue} empty="—" isEmpty={false}>
           {live && bidders.length > 0 ? (
-            <WinnerPicker lotId={row.lotId} candidates={bidders} live />
+            <WinnerPicker
+              key={row.designatedUserId ?? "none"}
+              lotId={row.lotId}
+              candidates={bidders}
+              designate={{ current: row.designatedUserId }}
+            />
           ) : (
             <p className="text-muted max-w-prose text-sm leading-relaxed">
               {t.admin.reviewLater}
@@ -119,7 +125,77 @@ export default async function AdminLotPage(
               {t.common.point}
             </span>
           </p>
-          <WinnerPicker lotId={pending.lotId} candidates={pending.candidates} />
+          <WinnerPicker
+            lotId={pending.lotId}
+            candidates={pending.candidates}
+            defaultUserId={pending.designatedUserId}
+          />
+        </Panel>
+      )}
+
+      {/*
+        Every bidder, at a glance and not only inside a dropdown: how many
+        times each bid, their best, and what they hold to pay with.
+      */}
+      {bidders.length > 0 && (
+        <Panel heading={t.admin.biddersHeading} empty="—" isEmpty={false}>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[36rem] border-collapse text-sm">
+              <thead>
+                <tr className="border-line border-y text-left">
+                  <th className="eyebrow py-3 pr-4 font-normal">
+                    {t.admin.biddersColName}
+                  </th>
+                  <th className="eyebrow py-3 pr-4 font-normal">
+                    {t.admin.biddersColBids}
+                  </th>
+                  <th className="eyebrow py-3 pr-4 font-normal">
+                    {t.admin.biddersColTop}
+                  </th>
+                  <th className="eyebrow py-3 pr-4 font-normal">
+                    {t.admin.biddersColRound}
+                  </th>
+                  <th className="eyebrow py-3 font-normal">
+                    {t.admin.biddersColBalance}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {bidders.map((b) => (
+                  <tr key={b.userId} className="border-line border-b">
+                    <td className="py-3 pr-4">
+                      <span className="text-ink">{b.name}</span>{" "}
+                      <span data-numerals className="text-muted text-xs">
+                        {b.paddle}
+                      </span>
+                      {b.userId === row.designatedUserId && (
+                        <span className="eyebrow text-flare ml-2 text-[0.625rem]">
+                          {t.admin.designatedBadge}
+                        </span>
+                      )}
+                      {b.status !== "active" && (
+                        <span className="text-rust ml-2 text-xs">
+                          {t.admin.reviewSuspendedMark}
+                        </span>
+                      )}
+                    </td>
+                    <td data-numerals className="text-ink py-3 pr-4">
+                      {b.bidCount}
+                    </td>
+                    <td data-numerals className="text-ink py-3 pr-4">
+                      {pts(b.topPts)}
+                    </td>
+                    <td data-numerals className="text-muted py-3 pr-4">
+                      {b.topRound}
+                    </td>
+                    <td data-numerals className="text-muted py-3">
+                      {pts(b.balancePts)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Panel>
       )}
 

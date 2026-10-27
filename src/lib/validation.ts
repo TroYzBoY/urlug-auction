@@ -355,6 +355,22 @@ export const awardSchema = z.object({
     .max(500),
 });
 
+/*
+ * Choosing a running lot's winner in advance, or with no winner, taking that
+ * back. The note is required for a choice — like an award, it can pass over
+ * the highest bidder — and not for withdrawing one.
+ */
+export const designateSchema = z
+  .object({
+    lotId: z.string().trim().min(1).max(32),
+    winnerUserId: z.number().int().positive().nullable(),
+    note: z.string().trim().max(500).optional(),
+  })
+  .refine((v) => v.winnerUserId === null || (v.note?.length ?? 0) >= 4, {
+    message: "Тайлбар бичнэ үү — аудитын бүртгэлд үлдэнэ.",
+    path: ["note"],
+  });
+
 export const rescheduleSchema = z.object({
   lotId: z.string().trim().min(1).max(32),
   opensAt: houseTimeSchema("Хугацаа буруу байна."),

@@ -199,7 +199,11 @@ export default async function AdminPage() {
               </p>
 
               <div className="border-line mt-4 border-t pt-4">
-                <WinnerPicker lotId={lot.lotId} candidates={lot.candidates} />
+                <WinnerPicker
+                  lotId={lot.lotId}
+                  candidates={lot.candidates}
+                  defaultUserId={lot.designatedUserId}
+                />
               </div>
             </li>
           ))}
@@ -242,8 +246,8 @@ export default async function AdminPage() {
               {lotRows.map((lot) => (
                 <tr key={lot.lotId} className="border-line border-b">
                   <td className="py-3 pr-4">
-                    {/* Into the lot's own page: its details, and its
-                        decision when it is waiting on one. */}
+                    {/* Into the lot's own page: its bidders, and its
+                        decision — in advance, or when it is waiting. */}
                     <Link
                       href={`/admin/lots/${encodeURIComponent(lot.lotId)}`}
                       className="hover:text-accent transition-colors"
@@ -262,6 +266,11 @@ export default async function AdminPage() {
                     >
                       {OUTCOME_LABEL[lot.outcome] ?? lot.outcome}
                     </span>
+                    {lot.outcome === "running" && lot.designatedPaddle && (
+                      <span className="eyebrow text-flare ml-2 text-[0.625rem]">
+                        {t.admin.designatedBadge}: {lot.designatedPaddle}
+                      </span>
+                    )}
                   </td>
                   <td data-numerals className="text-muted py-3 pr-4">
                     {lot.round}

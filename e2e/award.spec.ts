@@ -249,7 +249,7 @@ for (const override of [false, true]) {
   });
 }
 
-test("an admin awards a lot that is still running, from its page, and the room ends", async ({
+test("an admin chooses the winner while the lot runs, and it is announced when it ends", async ({
   page,
   browser,
 }) => {
@@ -271,39 +271,71 @@ test("an admin awards a lot that is still running, from its page, and the room e
 
     await signIn(page, admin);
     expect((await page.goto(`/admin/lots/${LOT}`))?.status()).toBe(200);
-    await expect(page.getByText(/Лот одоо явагдаж байна/)).toBeVisible();
-    // Nobody to give it to is not a choice here — that is «Хаах».
+
+    // Every bidder, with how many times they bid and their best.
+    const bidders = page.getByRole("table").last();
+    await expect(bidders.getByRole("row")).toHaveCount(3);
+    await expect(
+      bidders.getByRole("row").filter({ hasText: "Т-293" }),
+    ).toContainText("1 300");
+    await expect(
+      bidders.getByRole("row").filter({ hasText: "Т-292" }),
+    ).toContainText("1 250");
+
+    // No "unsold" here — that is «Хаах».
     await expect(
       page.getByRole("button", { name: "Хэн ч аваагүй" }),
     ).toHaveCount(0);
 
     const picker = page.getByRole("combobox", { name: "Ялагчийг сонгох" });
-    await expect(picker.locator("option:checked")).toContainText("Т-293");
+    const second = picker.locator("option").filter({ hasText: "Т-292" });
+    await picker.selectOption((await second.getAttribute("value"))!);
     await page
       .getByPlaceholder("Тайлбар (аудитад үлдэнэ)")
-      .fill("Браузерын шалгалт — эрт зарлав");
+      .fill("Браузерын шалгалт — урьдчилан");
     await page
-      .getByRole("button", { name: "Ялагчийг зарлах", exact: true })
+      .getByRole("button", { name: "Ялагчаар товлох", exact: true })
       .click();
+    // The page re-renders on the saved choice, which it now states.
+    await expect(
+      page.getByText(/Товлосон ялагч: Доод хаялттай оролцогч · Т-292/),
+    ).toBeVisible({ timeout: 15_000 });
 
-    // Through SSE: no reload on the room.
+    // The lot carries on: the room is still bidding.
+    await page.waitForTimeout(1_500);
+    await expect(room.getByRole("timer")).toHaveCount(2);
+
+    // Its clock runs out, and the chosen bidder is announced through SSE.
+    await withDatabase((client) =>
+      client.query(
+        `UPDATE auctions SET bid_clock_ends_at = now() - interval '1 second'
+          WHERE lot_id = $1`,
+        [LOT],
+      ),
+    );
     await expect(
       room.getByText("ЯЛАГЧ ТОДОРЛОО", { exact: true }).first(),
-    ).toBeVisible();
-    await expect(room.getByRole("timer")).toHaveCount(0);
+    ).toBeVisible({ timeout: 10_000 });
     await expect(room.locator('dt:has-text("Ялагч") + dd')).toHaveText(
-      "Тэргүүлсэн оролцогч",
+      "Доод хаялттай оролцогч",
     );
 
     const result = await withDatabase(async (client) => {
       const rows = await client.query(
-        `SELECT a.outcome, s.hammer_pts FROM auctions a
+        `SELECT a.outcome, s.hammer_pts, u.phone,
+                a.awarded_by = (SELECT id FROM users WHERE phone = '99110091') AS admin_matches
+           FROM auctions a JOIN users u ON u.id = a.leader_user_id
            JOIN settlements s ON s.lot_id = a.lot_id WHERE a.lot_id = $1`,
         [LOT],
       );
       return rows.rows[0];
     });
-    expect(result).toEqual({ outcome: "sold", hammer_pts: 1300 });
+    expect(result).toEqual({
+      outcome: "sold",
+      hammer_pts: 1250,
+      phone: "99110092",
+      admin_matches: true,
+    });
     expect(errors).toEqual([]);
   } finally {
     await viewer.close();

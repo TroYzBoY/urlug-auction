@@ -16,6 +16,7 @@ import {
   closeAuction,
   createLot,
   declareUnsold,
+  designateWinner,
   grantBonus,
   markContactHandled,
   recordPayment,
@@ -32,6 +33,7 @@ import {
   adminCreateUserSchema,
   awardSchema,
   bonusSchema,
+  designateSchema,
   firstError,
   lotSchema,
   lotControlSchema,
@@ -209,14 +211,13 @@ export async function cancelAuctionAction(
  */
 const DECISION_ERROR: Record<string, string> = {
   "not-found": "Лот олдсонгүй.",
-  "not-in-review": "Энэ лотын хаялт хараахан эхлээгүй байна.",
+  "not-in-review": "Энэ лот хараахан шалгах шатанд ороогүй байна.",
   "not-a-bidder": "Сонгосон хэрэглэгч энэ лотод хаялт хийгээгүй байна.",
   "already-decided": "Энэ лотын шийдвэр аль хэдийн гарсан байна.",
 };
 
 /**
- * Names the winner of a lot in review, or of one still running — which ends
- * its bidding.
+ * Names the winner of a lot in review.
  *
  * `publish` matters as much as the write. Everyone who was in the room is
  * looking at a "being checked" screen with an open stream; this is what turns
@@ -262,6 +263,53 @@ export async function awardWinnerAction(
   return {
     status: "ok",
     message: t.admin.winnerDeclared(result.name, result.hammerPts),
+  };
+}
+
+const DESIGNATE_ERROR: Record<string, string> = {
+  "not-found": "Лот олдсонгүй.",
+  "not-running": "Лот хараахан эхлээгүй байна.",
+  "not-a-bidder": "Сонгосон хэрэглэгч энэ лотод хаялт хийгээгүй байна.",
+  closed: "Лотын хаялт хаагдсан байна. Хуудсыг дахин ачаалж ялагчийг зарлана уу.",
+};
+
+/**
+ * Chooses a running lot's winner in advance, or takes the choice back. The
+ * lot keeps running; nothing is published, because nothing a bidder sees has
+ * changed until it closes.
+ */
+export async function designateWinnerAction(
+  _prev: AdminState,
+  formData: FormData,
+): Promise<AdminState> {
+  const who = await actor();
+  const raw = formData.get("winnerUserId");
+  const parsed = designateSchema.safeParse({
+    lotId: formData.get("lotId"),
+    winnerUserId: raw === null || raw === "" ? null : Number(raw),
+    note: formData.get("note") ?? undefined,
+  });
+  if (!parsed.success) {
+    return { status: "error", message: firstError(parsed.error) };
+  }
+
+  const { lotId, winnerUserId, note } = parsed.data;
+  const result = await designateWinner(lotId, winnerUserId, note ?? null, who);
+  if (!result.ok) {
+    refresh();
+    return {
+      status: "error",
+      message: DESIGNATE_ERROR[result.reason] ?? "Хадгалагдсангүй.",
+    };
+  }
+
+  refresh();
+  return {
+    status: "ok",
+    message:
+      result.paddle === null
+        ? t.admin.designationCleared
+        : t.admin.designated(result.paddle),
   };
 }
 

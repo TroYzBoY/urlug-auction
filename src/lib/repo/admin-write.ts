@@ -6,7 +6,7 @@ import { POINT_MNT, bidClockMs, roundEndOffsetMs } from "../auction";
 import { settle, type Outcome } from "../auction-engine";
 import { persistSettlement } from "./bids";
 import { enqueue } from "./notifications";
-import { announceDecision, grantLot } from "./award";
+import { announceDecision, closeBidding, grantLot } from "./award";
 import { MAX_BONUS_PTS, MAX_PAYMENT_MNT } from "../validation";
 import { groupNumber } from "../format";
 import { t } from "../copy";
@@ -117,6 +117,8 @@ async function writeSchedule(
        outcome = 'scheduled',
        hammer_round = NULL,
        settled_at = NULL,
+       designated_user_id = NULL,
+       designated_by = NULL,
        version = auctions.version + 1,
        updated_at = now()`,
     [
@@ -426,8 +428,7 @@ async function lockForDecision(
 }
 
 /**
- * Awards a lot to one of its bidders, at that bidder's own top bid — in review,
- * or still taking bids, when the admin is calling it early.
+ * Awards a lot in review to one of its bidders, at that bidder's own top bid.
  *
  * The settlement is opened in the same transaction, so the sale and the
  * obligation it creates come into existence together — a hammer with no invoice
@@ -447,15 +448,7 @@ export async function awardLot(
     if (outcome === "sold" || outcome === "unsold") {
       return { ok: false, reason: "already-decided" };
     }
-    /*
-     * A running lot is decided the same way. `grantLot`'s UPDATE ends the
-     * bidding in the statement that sells it, under the row lock every bid
-     * takes, so no bid can land between the two; the next one finds it sold.
-     */
-    if (outcome !== "review" && outcome !== "running") {
-      return { ok: false, reason: "not-in-review" };
-    }
-    const closedEarly = outcome === "running";
+    if (outcome !== "review") return { ok: false, reason: "not-in-review" };
 
     const winning = await grantLot(
       client,
@@ -486,8 +479,6 @@ export async function awardLot(
         standingLeader: row.leader_paddle,
         standingPts: row.current_pts,
         overrodeStandingLeader: row.leader_paddle !== winning.paddle,
-        closedEarly,
-        roundAtClose: row.round,
       },
       ip: actor.ip,
       userAgent: actor.userAgent,
@@ -499,6 +490,93 @@ export async function awardLot(
       paddle: winning.paddle,
       name: winning.name,
     };
+  });
+}
+
+export type DesignateResult =
+  | { ok: true; paddle: string | null }
+  | {
+      ok: false;
+      reason: "not-found" | "not-running" | "not-a-bidder" | "closed";
+    };
+
+/**
+ * Chooses — or with `winnerUserId` null, un-chooses — the winner of a lot that
+ * is still taking bids, without stopping it.
+ *
+ * Nothing changes for the bidders: the lot runs to its end as normal, and only
+ * then does `closeBidding` hand it to this bidder at their own top bid at that
+ * moment. `version` is left alone and nothing is published, because nothing a
+ * bidder can see has changed.
+ *
+ * Only while running. Once the clocks have stopped the lot is in the review
+ * queue, where `awardLot` decides it directly — "closed" tells the admin so.
+ */
+export async function designateWinner(
+  lotId: string,
+  winnerUserId: number | null,
+  note: string | null,
+  actor: Actor,
+): Promise<DesignateResult> {
+  return transaction(async (client) => {
+    const found = await lockForDecision(client, lotId);
+    if (!found) return { ok: false, reason: "not-found" };
+    const { row, outcome } = found;
+
+    if (outcome !== "running") {
+      /*
+       * The clocks ran out after the ticker's last look, and the lock above
+       * has just closed the lot. Finish that close as the ticker would have —
+       * an earlier choice still stands, or the admins are told.
+       */
+      if (outcome === "review" && row.outcome === "running") {
+        await closeBidding(client, lotId);
+      }
+      return {
+        ok: false,
+        reason: outcome === "scheduled" ? "not-running" : "closed",
+      };
+    }
+
+    let paddle: string | null = null;
+    if (winnerUserId !== null) {
+      // The same rule as awardLot: only somebody who bid can be given it.
+      const bid = await client.query<{ paddle: string }>(
+        "SELECT paddle FROM bids WHERE lot_id = $1 AND user_id = $2 LIMIT 1",
+        [lotId, winnerUserId],
+      );
+      if (!bid.rows[0]) return { ok: false, reason: "not-a-bidder" };
+      paddle = bid.rows[0].paddle;
+    }
+
+    await client.query(
+      `UPDATE auctions SET designated_user_id = $2, designated_by = $3,
+                           updated_at = now()
+        WHERE lot_id = $1`,
+      [lotId, winnerUserId, winnerUserId === null ? null : actor.id],
+    );
+
+    await record(client, {
+      actorUserId: actor.id,
+      action:
+        winnerUserId === null
+          ? "admin.winner_undesignated"
+          : "admin.winner_designated",
+      targetType: "lot",
+      targetId: lotId,
+      detail: {
+        note,
+        winnerUserId,
+        winnerPaddle: paddle,
+        standingLeader: row.leader_paddle,
+        standingPts: row.current_pts,
+        round: row.round,
+      },
+      ip: actor.ip,
+      userAgent: actor.userAgent,
+    });
+
+    return { ok: true, paddle };
   });
 }
 

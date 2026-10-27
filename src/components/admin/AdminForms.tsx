@@ -10,6 +10,7 @@ import {
   createLotAction,
   createUserAction,
   declareUnsoldAction,
+  designateWinnerAction,
   grantBonusAction,
   markContactHandledAction,
   recordPaymentAction,
@@ -732,18 +733,27 @@ export interface WinnerCandidate {
 export function WinnerPicker({
   lotId,
   candidates,
-  live = false,
+  defaultUserId = null,
+  designate,
 }: {
   lotId: string;
   candidates: WinnerCandidate[];
+  /** Who the dropdown starts on, when not the standing leader. */
+  defaultUserId?: number | null;
   /**
-   * The lot is still taking bids: awarding it ends them. There is no "unsold"
-   * here — that is «Хаах» in the lot's controls, then a decision.
+   * The lot is still taking bids, so the choice is made in advance: the lot
+   * keeps running and goes to this bidder when it ends (`designateWinner`).
+   * `current` is whoever is chosen now. There is no "unsold" here — that is
+   * «Хаах» in the lot's controls, then a decision.
    */
-  live?: boolean;
+  designate?: { current: number | null };
 }) {
   const [awardState, awardFormAction] = useActionState<AdminState, FormData>(
-    awardWinnerAction,
+    designate ? designateWinnerAction : awardWinnerAction,
+    IDLE,
+  );
+  const [clearState, clearFormAction] = useActionState<AdminState, FormData>(
+    designateWinnerAction,
     IDLE,
   );
   const [unsoldState, unsoldFormAction] = useActionState<AdminState, FormData>(
@@ -753,22 +763,34 @@ export function WinnerPicker({
 
   /* Candidates arrive highest bid first, so the standing leader is [0]. */
   const standing = candidates[0] ?? null;
-  const [chosen, setChosen] = useState<number | null>(standing?.userId ?? null);
+  const start =
+    candidates.find(
+      (c) => c.userId === (designate?.current ?? defaultUserId),
+    ) ?? standing;
+  const [chosen, setChosen] = useState<number | null>(start?.userId ?? null);
   const [confirmingUnsold, setConfirmingUnsold] = useState(false);
 
   if (candidates.length === 0) {
     return <p className="text-muted text-sm">{t.admin.reviewNoCandidates}</p>;
   }
 
+  const current = designate
+    ? (candidates.find((c) => c.userId === designate.current) ?? null)
+    : null;
   const overriding = standing !== null && chosen !== standing.userId;
 
   return (
     <div className="flex flex-col gap-4">
       <form action={awardFormAction} className="flex flex-col gap-2.5">
         <input type="hidden" name="lotId" value={lotId} />
-        {live && (
-          <p className="border-flare text-flare border-l-2 pl-2.5 text-xs leading-relaxed">
-            {t.admin.awardEarlyWarning}
+        {designate && (
+          <p className="text-muted max-w-prose text-xs leading-relaxed">
+            {t.admin.designateHint}
+          </p>
+        )}
+        {current && (
+          <p data-numerals className="text-ink text-sm font-medium">
+            {t.admin.designatedNow(`${current.name} · ${current.paddle}`)}
           </p>
         )}
 
@@ -811,8 +833,16 @@ export function WinnerPicker({
           className={field}
         />
         <div className="flex flex-wrap items-center gap-3">
-          <Submit label={t.admin.declareWinner} />
-          {!live && (
+          <Submit
+            label={
+              !designate
+                ? t.admin.declareWinner
+                : current
+                  ? t.admin.designateChange
+                  : t.admin.designateSubmit
+            }
+          />
+          {!designate && (
             <button
               type="button"
               onClick={() => setConfirmingUnsold((o) => !o)}
@@ -824,6 +854,22 @@ export function WinnerPicker({
         </div>
         <Result state={awardState} />
       </form>
+
+      {current && (
+        <form action={clearFormAction} className="flex flex-col gap-2">
+          <input type="hidden" name="lotId" value={lotId} />
+          <input type="hidden" name="winnerUserId" value="" />
+          <div>
+            <button
+              type="submit"
+              className="eyebrow text-muted hover:text-rust h-10 px-1 transition-colors"
+            >
+              {t.admin.designateClear}
+            </button>
+          </div>
+          <Result state={clearState} />
+        </form>
+      )}
 
       {confirmingUnsold && (
         <form

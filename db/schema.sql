@@ -188,6 +188,18 @@ ALTER TABLE auctions ADD COLUMN IF NOT EXISTS awarded_by BIGINT
 -- which is how the record still tells them apart.
 ALTER TABLE auctions DROP COLUMN IF EXISTS manual_award;
 
+-- A winner chosen while the lot is still taking bids. Bidding carries on as
+-- normal; when it stops, the lot goes straight to this bidder at their own top
+-- bid (`closeBidding` in src/lib/repo/award.ts), and `designated_by` becomes
+-- `awarded_by`. NULL: nobody chose, and the lot waits in `review`.
+--
+-- Server-side only, like every decision: no state a bidder can read carries
+-- it, so the room looks the same until the result is announced.
+ALTER TABLE auctions ADD COLUMN IF NOT EXISTS designated_user_id BIGINT
+  REFERENCES users (id) ON DELETE SET NULL;
+ALTER TABLE auctions ADD COLUMN IF NOT EXISTS designated_by BIGINT
+  REFERENCES users (id) ON DELETE SET NULL;
+
 -- ── Bids — APPEND ONLY ───────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS bids (

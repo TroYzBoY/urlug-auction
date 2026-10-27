@@ -85,6 +85,9 @@ export interface AdminLotRow {
   round: number;
   /** Who named the winner of a sold lot; null for lots the clock sold. */
   awardedByPaddle: string | null;
+  /** The winner an admin chose while it runs, handed the lot when it ends. */
+  designatedUserId: number | null;
+  designatedPaddle: string | null;
 }
 
 interface AdminLotDbRow {
@@ -98,15 +101,19 @@ interface AdminLotDbRow {
   leader_paddle: string | null;
   round: number;
   awarded_by_paddle: string | null;
+  designated_user_id: number | null;
+  designated_paddle: string | null;
 }
 
 const ADMIN_LOT_SELECT = `
   SELECT a.lot_id, l.code, l.title, a.outcome, a.opens_at, a.current_pts,
          a.bid_count, a.leader_paddle, a.round,
-         awarder.paddle AS awarded_by_paddle
+         awarder.paddle AS awarded_by_paddle,
+         a.designated_user_id, designee.paddle AS designated_paddle
     FROM auctions a
     JOIN lots l ON l.id = a.lot_id
     LEFT JOIN users awarder ON awarder.id = a.awarded_by
+    LEFT JOIN users designee ON designee.id = a.designated_user_id
 `;
 
 function toAdminLot(r: AdminLotDbRow): AdminLotRow {
@@ -121,6 +128,8 @@ function toAdminLot(r: AdminLotDbRow): AdminLotRow {
     leaderPaddle: r.leader_paddle,
     round: r.round,
     awardedByPaddle: r.awarded_by_paddle,
+    designatedUserId: r.designated_user_id,
+    designatedPaddle: r.designated_paddle,
   };
 }
 
@@ -168,6 +177,8 @@ export interface ReviewCandidate {
   topRound: number;
   bidCount: number;
   status: "active" | "suspended" | "closed";
+  /** Their wallet balance now — whether they can pay for what they bid. */
+  balancePts: number;
 }
 
 export interface ReviewLotRow {
@@ -182,6 +193,11 @@ export interface ReviewLotRow {
   standingPts: number;
   standingPaddle: string | null;
   standingUserId: number | null;
+  /**
+   * Chosen while it ran, when it still waits here — an emergency close leaves
+   * the decision to a person. The picker starts on them.
+   */
+  designatedUserId: number | null;
   bidCount: number;
   candidates: ReviewCandidate[];
 }
@@ -205,13 +221,15 @@ export async function reviewQueue(): Promise<ReviewLotRow[]> {
     current_pts: number;
     leader_paddle: string | null;
     leader_user_id: number | null;
+    designated_user_id: number | null;
     bid_clock_ends_at: Date;
     outcome: EngineState["outcome"];
     settled_at: Date | null;
     bid_count: number;
   }>(
     `SELECT a.lot_id, l.code, l.title, a.opens_at, a.round, a.current_pts,
-            a.leader_paddle, a.leader_user_id, a.bid_clock_ends_at, a.outcome,
+            a.leader_paddle, a.leader_user_id, a.designated_user_id,
+            a.bid_clock_ends_at, a.outcome,
             a.settled_at, a.bid_count
        FROM auctions a JOIN lots l ON l.id = a.lot_id
       WHERE a.outcome IN ('running', 'review')
@@ -257,6 +275,7 @@ export async function reviewQueue(): Promise<ReviewLotRow[]> {
       standingPts: live.currentPts,
       standingPaddle: live.leaderPaddle,
       standingUserId: row.leader_user_id,
+      designatedUserId: row.designated_user_id,
       bidCount: row.bid_count,
       candidates: byLot.get(row.lot_id) ?? [],
     };
@@ -282,12 +301,15 @@ async function candidatesFor(
     top_round: number;
     bid_count: number;
     status: ReviewCandidate["status"];
+    balance_pts: number;
   }>(
     `SELECT DISTINCT ON (b.lot_id, b.user_id)
             b.lot_id, b.user_id, u.name, b.paddle, u.status,
             b.points AS top_pts, b.round AS top_round,
             (SELECT count(*)::int FROM bids x
-              WHERE x.lot_id = b.lot_id AND x.user_id = b.user_id) AS bid_count
+              WHERE x.lot_id = b.lot_id AND x.user_id = b.user_id) AS bid_count,
+            COALESCE((SELECT pts FROM balances WHERE user_id = b.user_id), 0)
+              AS balance_pts
        FROM bids b JOIN users u ON u.id = b.user_id
       WHERE b.lot_id = ANY($1::text[])
       ORDER BY b.lot_id, b.user_id, b.points DESC`,
@@ -305,6 +327,7 @@ async function candidatesFor(
       topRound: c.top_round,
       bidCount: c.bid_count,
       status: c.status,
+      balancePts: c.balance_pts,
     });
     byLot.set(c.lot_id, list);
   }

@@ -35,6 +35,7 @@ process.env.DATABASE_URL = url;
 /* Imported after DATABASE_URL is set — see the note in bids.integration.test.ts. */
 let awardLot: typeof import("./admin-write").awardLot;
 let declareUnsold: typeof import("./admin-write").declareUnsold;
+let designateWinner: typeof import("./admin-write").designateWinner;
 let closeAuction: typeof import("./admin-write").closeAuction;
 let reviewQueue: typeof import("./admin").reviewQueue;
 let settleDueAuctions: typeof import("../ticker").settleDueAuctions;
@@ -46,7 +47,8 @@ const LOT = "900";
 
 beforeAll(async () => {
   await applySchema(url);
-  ({ awardLot, declareUnsold, closeAuction } = await import("./admin-write"));
+  ({ awardLot, declareUnsold, designateWinner, closeAuction } =
+    await import("./admin-write"));
   ({ reviewQueue } = await import("./admin"));
   ({ settleDueAuctions } = await import("../ticker"));
   ({ placeBid } = await import("./bids"));
@@ -287,43 +289,14 @@ describe("awarding a lot", () => {
     expect(auction!.leader_user_id).toBe(top);
   });
 
-  it("awards a lot still taking bids, and ends its bidding", async () => {
-    const { second } = await seedClosedLot({ bidClockMsFromNow: 60_000 });
+  it("refuses a lot that is still taking bids", async () => {
+    const { top } = await seedClosedLot({ bidClockMsFromNow: 60_000 });
     const actor = await seedAdmin();
 
-    const result = await awardLot(LOT, second, "Эрт зарлав", actor);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    // Their own top bid, as after the close.
-    expect(result.hammerPts).toBe(1250);
-
-    const [auction] = await query<{ outcome: string; settled_at: Date | null }>(
-      "SELECT outcome, settled_at FROM auctions WHERE lot_id = $1",
-      [LOT],
-    );
-    expect(auction!.outcome).toBe("sold");
-    expect(auction!.settled_at).not.toBeNull();
-
-    // The clock running out later changes nothing, and nobody can bid.
-    await settleDueAuctions(Date.now() + 120_000);
-    const late = await placeBid({
-      lotId: LOT,
-      userId: second,
-      paddle: "Т-100",
-      name: "Тест хэрэглэгч",
-      points: 1400,
-      idempotencyKey: "late",
-      ip: null,
-      userAgent: null,
-    });
-    expect(late.ok).toBe(false);
-
-    const [audit] = await query<{ detail: Record<string, unknown> }>(
-      `SELECT detail FROM audit_log
-        WHERE action = 'admin.winner_declared' AND target_id = $1`,
-      [LOT],
-    );
-    expect(audit!.detail.closedEarly).toBe(true);
+    const result = await awardLot(LOT, top, "Эрт зарлав", actor);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe("not-in-review");
   });
 
   it("refuses a lot that has not opened", async () => {
@@ -339,6 +312,140 @@ describe("awarding a lot", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toBe("not-in-review");
+  });
+});
+
+describe("choosing the winner in advance", () => {
+  /** The bid clock runs out, as far as the ticker's scan can tell. */
+  async function expireClock() {
+    await query(
+      "UPDATE auctions SET bid_clock_ends_at = now() - interval '1 second' WHERE lot_id = $1",
+      [LOT],
+    );
+  }
+
+  async function outcomeOf() {
+    const [row] = await query<{
+      outcome: string;
+      leader_user_id: number | null;
+      current_pts: number;
+      awarded_by: number | null;
+    }>(
+      `SELECT outcome, leader_user_id, current_pts, awarded_by
+         FROM auctions WHERE lot_id = $1`,
+      [LOT],
+    );
+    return row!;
+  }
+
+  it("leaves the lot running, then hands it over the moment it ends", async () => {
+    const { second, top } = await seedClosedLot({ bidClockMsFromNow: 60_000 });
+    const actor = await seedAdmin();
+
+    expect(
+      await designateWinner(LOT, second, "Тэргүүлэгч шалгагдаж байна", actor),
+    ).toEqual({ ok: true, paddle: "Т-100" });
+
+    // Nothing a bidder sees has moved.
+    expect((await outcomeOf()).outcome).toBe("running");
+    expect(await query("SELECT 1 FROM settlements")).toHaveLength(0);
+
+    // The clock runs out: sold to the chosen bidder, at their own top bid.
+    await expireClock();
+    await settleDueAuctions();
+    expect(await outcomeOf()).toEqual({
+      outcome: "sold",
+      leader_user_id: second,
+      current_pts: 1250,
+      awarded_by: actor.id,
+    });
+
+    const sent = await query<{ user_id: number; kind: string }>(
+      "SELECT user_id, kind FROM notifications ORDER BY user_id",
+    );
+    // The bidders hear the result; the admins have nothing to decide.
+    expect(sent).toEqual(
+      [
+        { user_id: second, kind: "lot.won" },
+        { user_id: top, kind: "lot.decided" },
+      ].sort((a, b) => a.user_id - b.user_id),
+    );
+    expect(await reviewQueue()).toHaveLength(0);
+  });
+
+  it("hands it over when a late bid is what closes it, too", async () => {
+    const { second } = await seedClosedLot({ bidClockMsFromNow: 60_000 });
+    const actor = await seedAdmin();
+    await designateWinner(LOT, second, "Урьдчилан сонгов", actor);
+    await expireClock();
+
+    const late = await placeBid({
+      lotId: LOT,
+      userId: second,
+      paddle: "Т-100",
+      name: "Тест хэрэглэгч",
+      points: 1400,
+      idempotencyKey: "late",
+      ip: null,
+      userAgent: null,
+    });
+    expect(late.ok).toBe(false);
+    expect((await outcomeOf()).leader_user_id).toBe(second);
+    expect((await outcomeOf()).outcome).toBe("sold");
+  });
+
+  it("takes the choice back, and the lot waits for a person again", async () => {
+    const { second } = await seedClosedLot({ bidClockMsFromNow: 60_000 });
+    const actor = await seedAdmin();
+    await designateWinner(LOT, second, "Урьдчилан сонгов", actor);
+    expect(await designateWinner(LOT, null, null, actor)).toEqual({
+      ok: true,
+      paddle: null,
+    });
+
+    await expireClock();
+    await settleDueAuctions();
+    expect((await outcomeOf()).outcome).toBe("review");
+    expect(await reviewQueue()).toHaveLength(1);
+  });
+
+  it("refuses somebody who never bid, and a lot whose bidding has stopped", async () => {
+    await seedClosedLot({ bidClockMsFromNow: 60_000 });
+    const actor = await seedAdmin();
+    const stranger = await seedUser(url, {
+      phone: "99110009",
+      paddle: "Т-900",
+    });
+
+    expect(await designateWinner(LOT, stranger.id, "Гараар", actor)).toEqual({
+      ok: false,
+      reason: "not-a-bidder",
+    });
+
+    await expireClock();
+    expect(await designateWinner(LOT, null, null, actor)).toEqual({
+      ok: false,
+      reason: "closed",
+    });
+    // The lock closed it, so the admins were told, as the ticker would have.
+    const told = await query<{ kind: string }>(
+      "SELECT kind FROM notifications WHERE user_id = $1",
+      [actor.id],
+    );
+    expect(told).toEqual([{ kind: "lot.review" }]);
+  });
+
+  it("an emergency close leaves the decision to a person, starting on the choice", async () => {
+    const { second } = await seedClosedLot({ bidClockMsFromNow: 60_000 });
+    const actor = await seedAdmin();
+    await designateWinner(LOT, second, "Урьдчилан сонгов", actor);
+
+    expect((await closeAuction(LOT, "Техникийн доголдол", actor)).ok).toBe(
+      true,
+    );
+    expect((await outcomeOf()).outcome).toBe("review");
+    const [pending] = await reviewQueue();
+    expect(pending!.designatedUserId).toBe(second);
   });
 });
 
