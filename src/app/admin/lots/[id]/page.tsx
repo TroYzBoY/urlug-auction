@@ -90,6 +90,15 @@ export default async function AdminLotPage(
         </p>
       )}
 
+      {!pending &&
+        (row.outcome === "scheduled" || row.outcome === "running") && (
+          <Panel heading={t.admin.reviewQueue} empty="—" isEmpty={false}>
+            <p className="text-muted max-w-prose text-sm leading-relaxed">
+              {t.admin.reviewLater}
+            </p>
+          </Panel>
+        )}
+
       {pending && (
         <Panel heading={t.admin.reviewQueue} empty="—" isEmpty={false}>
           <p className="text-ink-soft mb-4 text-sm">
