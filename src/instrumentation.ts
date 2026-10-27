@@ -11,7 +11,7 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
-  const { assertRuntimeEnv } = await import("./lib/env");
+  const { assertRuntimeEnv, ON_VERCEL } = await import("./lib/env");
   assertRuntimeEnv();
 
   /*
@@ -31,6 +31,14 @@ export async function register() {
   on a number they do not own.
 `);
   }
+
+  /*
+   * No ticker on Vercel. An instance there is frozen between requests, so its
+   * timers stop — and one frozen while holding the advisory lock keeps every
+   * other instance from taking over, leaving no ticker at all. Supabase's
+   * pg_cron calls /api/cron/tick instead; see DEPLOY-VERCEL.md.
+   */
+  if (ON_VERCEL) return;
 
   const { startTicker, bindShutdown } = await import("./lib/ticker");
 

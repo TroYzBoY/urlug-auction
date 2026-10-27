@@ -377,3 +377,145 @@ export async function stopTicker(): Promise<void> {
     handle.lockClient = null;
   }
 }
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE TICKER, DRIVEN FROM OUTSIDE
+ *
+ * For a host with no process to keep the loop in. On Vercel an instance is
+ * frozen between requests, so Supabase's pg_cron calls /api/cron/tick in every
+ * second that a clock is close to due (db/supabase.sql), and this runs the same
+ * work as `startTicker`, at the same 250ms, for as long as it is needed.
+ *
+ * The same advisory lock, held for the length of the call. Overlapping calls
+ * from pg_cron return at once rather than doubling the scan, and a server
+ * running `startTicker` against the same database keeps the job.
+ *
+ * It lets go once nothing is due within LOOKAHEAD_MS. A clock minutes away
+ * needs nobody watching it, the function is billed for every second it runs,
+ * and pg_cron starts another as the next deadline comes into view.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/**
+ * The same five seconds as the guard in db/supabase.sql. Shorter, and a call
+ * pg_cron made for a deadline would find it not yet near and leave at once —
+ * to be called again a second later, and again, until it was.
+ */
+const LOOKAHEAD_MS = 5_000;
+
+export interface TickReport {
+  /** False when another call, or a running `startTicker`, holds the lock. */
+  leader: boolean;
+  /** Lot transitions persisted, counted per pass. */
+  settled: number;
+  /** Notifications delivered. */
+  sent: number;
+}
+
+export async function tickFor(
+  budgetMs: number,
+  opts: { sweep?: boolean } = {},
+): Promise<TickReport> {
+  const report: TickReport = { leader: false, settled: 0, sent: 0 };
+
+  /*
+   * Before the election, not after it. The sweeps are housekeeping and safe to
+   * run twice, and behind the lock pg_cron's hourly call would be skipped
+   * whenever it landed during a call for the clocks — which in a sale is always.
+   */
+  if (opts.sweep) await sweepAll();
+
+  const client = await getPool().connect();
+  /*
+   * As in `startTicker`: a checked-out client emits its own errors, and one
+   * with no listener is an uncaught exception. The lock went with the
+   * connection, so the loop stops; pg_cron's next call holds a new election.
+   */
+  let lost = false;
+  const onError = (err: Error) => {
+    lost = true;
+    console.error("[ticker] lock connection lost", err);
+  };
+  client.on("error", onError);
+
+  try {
+    if (!(await tryAdvisoryLock(client, LOCK_KEY))) return report;
+    report.leader = true;
+
+    const deadline = Date.now() + budgetMs;
+    let outbox: Promise<void> | null = null;
+    let outboxAt = 0;
+
+    for (;;) {
+      try {
+        report.settled += (await settleDueAuctions()).length;
+      } catch (err) {
+        console.error("[ticker] tick failed", err);
+      }
+
+      /*
+       * Beside the clock work rather than in front of it, as in `startTicker`:
+       * a batch of texts can take seconds, and a hammer must not wait behind
+       * them.
+       */
+      if (!outbox && Date.now() - outboxAt >= OUTBOX_INTERVAL_MS) {
+        outboxAt = Date.now();
+        outbox = deliverPending()
+          .then((n) => {
+            report.sent += n;
+          })
+          .catch((err) => console.error("[ticker] outbox failed", err))
+          .finally(() => {
+            outbox = null;
+          });
+      }
+
+      if (lost || Date.now() + INTERVAL_MS >= deadline) break;
+      if (!(await dueSoon(client))) break;
+      await new Promise((resolve) => setTimeout(resolve, INTERVAL_MS));
+    }
+
+    /*
+     * Waited for here, not left running behind the response: a frozen function
+     * finishes nothing, and a batch half-sent is texted again by the next one.
+     */
+    await outbox;
+
+    /*
+     * One more pass on the way out, so the texts a hammer just queued leave
+     * with the call that hammered it rather than with the next one.
+     */
+    report.sent += await deliverPending().catch((err) => {
+      console.error("[ticker] outbox failed", err);
+      return 0;
+    });
+  } finally {
+    if (report.leader && !lost) {
+      await client
+        .query("SELECT pg_advisory_unlock($1)", [LOCK_KEY])
+        .catch(() => {});
+    }
+    client.off("error", onError);
+    // An error tells the pool to destroy the client rather than reuse it.
+    client.release(lost ? new Error("lock connection lost") : undefined);
+  }
+
+  return report;
+}
+
+/** Is any clock due within LOOKAHEAD_MS? The ticker scan's WHERE, moved forward. */
+async function dueSoon(client: PoolClient): Promise<boolean> {
+  const res = await client.query<{ due: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM auctions
+        WHERE (outcome = 'scheduled'
+               AND opens_at <= now() + $1::int * interval '1 millisecond')
+           OR (outcome = 'running'
+               AND (bid_clock_ends_at <= now() + $1::int * interval '1 millisecond'
+                    OR round_ends_at <= now() + $1::int * interval '1 millisecond'))
+     ) AS due`,
+    [LOOKAHEAD_MS],
+  );
+  return res.rows[0]?.due === true;
+}

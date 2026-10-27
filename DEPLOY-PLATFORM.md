@@ -3,7 +3,9 @@
 The app needs a **long-running Node process** with a **direct (not
 transaction-pooled) Postgres connection** — see [`DEPLOY.md`](DEPLOY.md) for why.
 All three platforms below satisfy that. Render is the most turnkey and ships a
-blueprint in this repo; Railway and Fly.io are one `Dockerfile` away.
+blueprint in this repo; Railway and Fly.io are one `Dockerfile` away. Vercel
+does not, and has its own guide with the trade-offs:
+[`DEPLOY-VERCEL.md`](DEPLOY-VERCEL.md).
 
 Whatever the platform, four rules are non-negotiable:
 

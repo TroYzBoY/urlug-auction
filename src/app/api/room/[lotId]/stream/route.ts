@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { ON_VERCEL } from "@/lib/env";
 import { hasBidOnLot, projectForViewer } from "@/lib/repo/lots";
 import { subscribe } from "@/lib/realtime";
 import { readRoom } from "@/lib/room-cache";
@@ -19,8 +20,27 @@ import { currentUser } from "@/lib/session";
  * function will be killed at the platform's execution limit; EventSource will
  * reconnect, but every bidder will reconnect every few minutes for hours. Run
  * this on a container or a VPS, or move the stream to a dedicated service.
+ *
+ * Vercel is such a platform. There the stream ends itself just short of
+ * `maxDuration` and asks for a reconnect within a second — see
+ * VERCEL_LIFETIME_MS below and DEPLOY-VERCEL.md.
  * ─────────────────────────────────────────────────────────────────────────────
  */
+
+/*
+ * Vercel's ceiling on Hobby, and its default on every plan. A long-running
+ * server ignores it.
+ */
+export const maxDuration = 300;
+
+/*
+ * Ended by us rather than cut off by the platform: a stream that is cut off
+ * reconnects after the browser's own delay, a few seconds of a dead clock; one
+ * we end sends `retry` first and is back in one. The reconnect's first message
+ * is a full state, so nothing in between is missed.
+ */
+const VERCEL_LIFETIME_MS = (maxDuration - 10) * 1000;
+const VERCEL_RETRY_MS = 1_000;
 
 /** Below any proxy idle timeout worth worrying about (nginx defaults to 60s). */
 const HEARTBEAT_MS = 20_000;
@@ -87,6 +107,7 @@ export async function GET(
   let unsubscribe: (() => void) | null = null;
   let heartbeat: ReturnType<typeof setInterval> | null = null;
   let coalesce: ReturnType<typeof setTimeout> | null = null;
+  let lifetime: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
 
   const stream = new ReadableStream<Uint8Array>({
@@ -109,6 +130,7 @@ export async function GET(
         unsubscribe?.();
         if (heartbeat) clearInterval(heartbeat);
         if (coalesce) clearTimeout(coalesce);
+        if (lifetime) clearTimeout(lifetime);
         try {
           controller.close();
         } catch {
@@ -170,6 +192,18 @@ export async function GET(
        * being torn down from our side; this covers the browser's.
        */
       request.signal.addEventListener("abort", cleanup);
+
+      if (ON_VERCEL) {
+        lifetime = setTimeout(() => {
+          if (closed) return;
+          try {
+            controller.enqueue(encoder.encode(`retry: ${VERCEL_RETRY_MS}\n\n`));
+          } catch {
+            // Gone already; cleanup below is all that is left.
+          }
+          cleanup();
+        }, VERCEL_LIFETIME_MS);
+      }
     },
 
     cancel() {
@@ -177,6 +211,7 @@ export async function GET(
       unsubscribe?.();
       if (heartbeat) clearInterval(heartbeat);
       if (coalesce) clearTimeout(coalesce);
+      if (lifetime) clearTimeout(lifetime);
     },
   });
 

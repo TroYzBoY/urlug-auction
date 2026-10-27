@@ -16,6 +16,11 @@ limit; `EventSource` reconnects, so it degrades rather than breaks — but every
 bidder reconnects every few minutes for hours, and the ticker has no process to
 live in. A container platform or a VPS is the shape this wants.
 
+The one exception is **Vercel + Supabase**, adapted for both problems: the
+ticker is driven by Supabase's pg_cron, and the stream recycles itself before
+the limit. It works, at a stated cost —
+[`DEPLOY-VERCEL.md`](DEPLOY-VERCEL.md).
+
 ## Environment
 
 Everything is in [`.env.example`](.env.example). The ones a deploy will not

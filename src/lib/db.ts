@@ -53,10 +53,23 @@ export function getPool(): Pool {
     // runs down. Fail fast and let the caller show a rejection.
     connectionTimeoutMillis: 5_000,
     idleTimeoutMillis: 30_000,
-    // Postgres kills a statement that overruns this. Without it, one runaway
-    // query can hold the `FOR UPDATE` lock on an auction row indefinitely and
-    // freeze every bidder in that room.
-    statement_timeout: 10_000,
+    /*
+     * Postgres kills a statement that overruns this. Without it, one runaway
+     * query can hold the `FOR UPDATE` lock on an auction row indefinitely and
+     * freeze every bidder in that room.
+     *
+     * A SET on each new connection rather than pg's `statement_timeout`
+     * option. That option travels as a startup parameter, and a pooler decides
+     * what to do with those: PgBouncer refuses them and the server never boots,
+     * and Supabase's Supavisor makes no promise to pass them on — so the
+     * timeout could be silently gone. A SET is an ordinary statement on the
+     * session itself, which every supported setup (direct, or a session-mode
+     * pooler) keeps. The pool awaits it before handing the connection out, and
+     * a connection it fails on is closed and the checkout fails with it.
+     */
+    onConnect: async (client) => {
+      await client.query("SET statement_timeout = 10000");
+    },
   });
 
   /*

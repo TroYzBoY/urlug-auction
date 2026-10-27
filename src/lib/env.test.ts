@@ -135,3 +135,37 @@ describe("ALLOW_UNVERIFIED_SIGNUP", () => {
     expect(() => env.assertRuntimeEnv()).not.toThrow();
   });
 });
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * CRON_SECRET, ON VERCEL
+ *
+ * There the ticker runs only when /api/cron/tick is called, and the route
+ * refuses every call without the secret — so a deploy missing it takes bids
+ * and never hands a lot to anybody. Nothing errors until a sale ends, which is
+ * why it is a boot failure.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+describe("CRON_SECRET", () => {
+  async function production(vercel: string, secret: string) {
+    vi.stubEnv("VERCEL", vercel);
+    vi.stubEnv("CRON_SECRET", secret);
+    return (await load("production", undefined)).env;
+  }
+
+  it("refuses to boot on Vercel without it", async () => {
+    const env = await production("1", "");
+    expect(() => env.assertRuntimeEnv()).toThrow(/CRON_SECRET/);
+  });
+
+  it("boots on Vercel with it", async () => {
+    const env = await production("1", "s3cret");
+    expect(() => env.assertRuntimeEnv()).not.toThrow();
+  });
+
+  /* A long-running server keeps its ticker in-process and never calls the route. */
+  it("is not needed anywhere else", async () => {
+    const env = await production("", "");
+    expect(() => env.assertRuntimeEnv()).not.toThrow();
+  });
+});

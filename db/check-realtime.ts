@@ -7,6 +7,9 @@
  *   fly ssh console --app <app> -C "node --experimental-strip-types db/check-realtime.ts"
  *   docker compose exec app node --experimental-strip-types db/check-realtime.ts
  *
+ * On Vercel there is nothing to run it inside; run it from your own machine,
+ * against the same Supabase session-pooler URL Vercel uses (DEPLOY-VERCEL.md).
+ *
  * ── Why this needs its own tool ──────────────────────────────────────────────
  *
  * The auction room is fed by Postgres LISTEN/NOTIFY: one listener connection

@@ -49,6 +49,13 @@ function optionalInt(name: string, fallback: number): number {
 
 export const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
+/**
+ * Set by Vercel on every build and every function. There is no process there
+ * to keep the ticker in, so it is driven from outside through /api/cron/tick —
+ * see DEPLOY-VERCEL.md.
+ */
+export const ON_VERCEL = process.env.VERCEL === "1";
+
 export const env = {
   get databaseUrl(): string {
     return required("DATABASE_URL");
@@ -121,6 +128,16 @@ export const env = {
     return process.env.ALLOW_UNVERIFIED_SIGNUP === "1";
   },
 
+  /**
+   * The bearer token /api/cron/tick requires. Without it the route refuses
+   * everything, which is the right default for an endpoint that hammers lots —
+   * and on Vercel it is a boot failure below, because there nothing else
+   * advances the clocks.
+   */
+  get cronSecret(): string | null {
+    return process.env.CRON_SECRET || null;
+  },
+
   /*
    * No `termsVersion`. It used to come from TERMS_VERSION here while the
    * consent rows and /terms read the constant in src/lib/legal.ts, so bumping
@@ -168,6 +185,18 @@ export function assertRuntimeEnv(): void {
     problems.push(
       "DEV_SKIP_OTP is set in a production environment. It disables phone " +
         "verification and must never be set outside development — remove it.",
+    );
+  }
+
+  /*
+   * On Vercel the ticker lives behind /api/cron/tick, and a deploy without the
+   * secret boots, serves pages and takes bids — but no lot is ever handed to its
+   * winner and no text is ever sent. Nothing looks wrong until a sale ends.
+   */
+  if (IS_PRODUCTION && ON_VERCEL && !env.cronSecret) {
+    problems.push(
+      "CRON_SECRET is required on Vercel — /api/cron/tick refuses every call " +
+        "without it, and nothing else settles lots there. See DEPLOY-VERCEL.md.",
     );
   }
 
