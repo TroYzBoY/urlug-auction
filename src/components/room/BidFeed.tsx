@@ -1,30 +1,87 @@
 "use client";
 
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { t } from "@/lib/copy";
 import { pts, ptsToMnt } from "@/lib/format";
 import type { Bid } from "@/lib/types";
 
-export function BidFeed({ bids }: { bids: Bid[] }) {
+/** Who the lot was sold to, and at what: their own top bid. */
+export interface FeedWinner {
+  paddle: string;
+  /** Display name, already "Та" for the viewer. */
+  name: string;
+  isYou: boolean;
+  points: number;
+}
+
+/**
+ * The bids, newest first, exactly as the server accepted them.
+ *
+ * Once the lot is sold the winner goes on a line of its own above the list,
+ * and their winning bid is tagged where it actually is. The list itself is
+ * never reordered: when an admin names someone other than the last bidder,
+ * the feed must still say who bid when.
+ */
+export function BidFeed({
+  bids,
+  winner = null,
+}: {
+  bids: Bid[];
+  winner?: FeedWinner | null;
+}) {
+  /* The bid at the top when the feed opened. Only bids that arrive after it
+     get the shine, so the feed does not greet a page load with one. */
+  const [firstId] = useState(bids[0]?.id);
+
+  /* The winner's top bid — the price they were sold at. */
+  const winningId = winner
+    ? bids.find((b) => b.paddle === winner.paddle && b.points === winner.points)
+        ?.id
+    : undefined;
+
   return (
     <section aria-label={t.room.feed}>
-      <div className="flex items-baseline justify-between gap-4 border-b border-line pb-2.5">
+      <div className="border-line flex items-baseline justify-between gap-4 border-b pb-2.5">
         <p className="eyebrow">{t.room.feed}</p>
         <p className="eyebrow flex items-center gap-1.5">
           <span
             aria-hidden
-            className="size-1.5 rounded-full bg-olive animate-pulse"
+            className="bg-olive size-1.5 animate-pulse rounded-full"
           />
           {t.room.connected}
         </p>
       </div>
 
+      {winner && (
+        <div className="bg-flare/10 border-flare/30 mt-2 flex items-center justify-between gap-3 rounded-sm border px-2 py-2.5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="eyebrow text-flare shrink-0">
+              {t.room.feedWinner}
+            </span>
+            <span
+              className={`truncate text-sm font-bold ${
+                winner.isYou ? "text-flare" : "text-ink"
+              }`}
+            >
+              {winner.name}
+            </span>
+          </div>
+          <p data-numerals className="text-ink shrink-0 text-sm font-semibold">
+            {pts(winner.points)}
+            <span className="text-muted ml-1 text-xs font-normal">
+              {t.common.point}
+            </span>
+          </p>
+        </div>
+      )}
+
       {bids.length === 0 ? (
-        <p className="py-6 text-sm text-faint">{t.room.feedEmpty}</p>
+        <p className="text-faint py-6 text-sm">{t.room.feedEmpty}</p>
       ) : (
         <ol
           aria-live="polite"
-          className="max-h-72 overflow-y-auto scroll-quiet lg:max-h-96 pr-1"
+          className="scroll-quiet max-h-72 overflow-y-auto pr-1 lg:max-h-96"
         >
           <AnimatePresence initial={false}>
             {bids.map((bid, i) => (
@@ -34,12 +91,15 @@ export function BidFeed({ bids }: { bids: Bid[] }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ type: "spring", stiffness: 450, damping: 30 }}
-                className={`flex items-center justify-between gap-3 border-b border-line py-2.5 transition-colors ${
-                  i === 0
-                    ? "bg-flare/10 px-2 rounded-sm border-flare/30"
+                className={`border-line relative flex items-center justify-between gap-3 overflow-hidden border-b py-2.5 transition-colors ${
+                  i === 0 && !winner
+                    ? "bg-flare/10 border-flare/30 rounded-sm px-2"
                     : ""
                 }`}
               >
+                {i === 0 && bid.id !== firstId && (
+                  <span aria-hidden className="feed-shine" />
+                )}
                 <div className="flex min-w-0 items-center gap-2.5">
                   <span
                     data-numerals
@@ -49,19 +109,24 @@ export function BidFeed({ bids }: { bids: Bid[] }) {
                   >
                     {bid.isYou ? t.room.you : bid.name}
                   </span>
-                  <span className="eyebrow shrink-0 border border-line px-1.5 py-0.5 text-[0.5625rem]">
+                  <span className="eyebrow border-line shrink-0 border px-1.5 py-0.5 text-[0.5625rem]">
                     {bid.round} {t.room.round.toLowerCase()}
                   </span>
+                  {bid.id === winningId && (
+                    <span className="eyebrow text-flare border-flare/40 shrink-0 border px-1.5 py-0.5 text-[0.5625rem]">
+                      {t.room.feedWinner}
+                    </span>
+                  )}
                 </div>
 
                 <div className="text-right">
-                  <p data-numerals className="text-sm font-medium text-ink">
+                  <p data-numerals className="text-ink text-sm font-medium">
                     {pts(bid.points)}
-                    <span className="ml-1 text-xs font-normal text-muted">
+                    <span className="text-muted ml-1 text-xs font-normal">
                       {t.common.point}
                     </span>
                   </p>
-                  <p data-numerals className="text-[0.6875rem] text-faint">
+                  <p data-numerals className="text-faint text-[0.6875rem]">
                     {ptsToMnt(bid.points)}
                   </p>
                 </div>
@@ -73,4 +138,3 @@ export function BidFeed({ bids }: { bids: Bid[] }) {
     </section>
   );
 }
-

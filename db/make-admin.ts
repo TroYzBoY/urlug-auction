@@ -47,7 +47,12 @@ const email = args.get("email") ?? null;
 const name = args.get("name") ?? "Админ";
 const create = args.get("create") === "true";
 const password = args.get("password");
-const role = (args.get("role") ?? "admin") as "admin" | "staff" | "bidder";
+const role = (args.get("role") ?? "admin") as "admin" | "bidder";
+
+if (role !== "admin" && role !== "bidder") {
+  console.error("--role must be admin or bidder.");
+  process.exit(1);
+}
 
 if (!phone || !/^[89]\d{7}$/.test(phone)) {
   console.error(

@@ -52,7 +52,13 @@ export type BidRejection =
   | "suspended";
 
 export type PlaceBidOutcome =
-  | { ok: true; acceptedPts: number; round: number; bid: Bid; duplicate: boolean }
+  | {
+      ok: true;
+      acceptedPts: number;
+      round: number;
+      bid: Bid;
+      duplicate: boolean;
+    }
   | { ok: false; reason: BidRejection; minNextPts?: number };
 
 interface AuctionRow {
@@ -102,9 +108,8 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
       round: number;
       paddle: string;
       placed_at: Date;
-      clock_left_ms: number | null;
     }>(
-      `SELECT id, points, round, paddle, placed_at, clock_left_ms
+      `SELECT id, points, round, paddle, placed_at
          FROM bids WHERE lot_id = $1 AND idempotency_key = $2`,
       [args.lotId, args.idempotencyKey],
     );
@@ -122,7 +127,6 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
           points: prior.points,
           round: prior.round,
           at: prior.placed_at.getTime(),
-          clockLeftMs: prior.clock_left_ms,
           isYou: true,
         },
       };
@@ -169,7 +173,9 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
     const userRes = await client.query<{
       status: string;
       phone_verified_at: Date | null;
-    }>("SELECT status, phone_verified_at FROM users WHERE id = $1", [args.userId]);
+    }>("SELECT status, phone_verified_at FROM users WHERE id = $1", [
+      args.userId,
+    ]);
     const user = userRes.rows[0];
     if (!user) return { ok: false, reason: "not-registered" };
     if (user.status !== "active") return { ok: false, reason: "suspended" };
@@ -234,9 +240,9 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
     /* ── 6. Record ──────────────────────────────────────────────────────── */
     /*
      * What was left on the bid clock at `now` — the instant settle() judged
-     * this bid in time. Rounded to whole ms; the log shows three decimals of a
-     * second and a sub-ms figure would claim a precision the server does not
-     * have.
+     * this bid in time — kept on the row for disputes and never sent to the
+     * room. Rounded to whole ms; a sub-ms figure would claim a precision the
+     * server does not have.
      */
     const clockLeftMs = Math.max(0, Math.round(live.bidClockEndsAt - now));
     const inserted = await client.query<{ id: number; placed_at: Date }>(
@@ -328,7 +334,8 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
         previousPts: live.currentPts,
         round: live.round,
         hasBid,
-        joinFeeCharged: isFirstEntry && live.round >= 2 ? LATE_JOIN_PENALTY_PTS : 0,
+        joinFeeCharged:
+          isFirstEntry && live.round >= 2 ? LATE_JOIN_PENALTY_PTS : 0,
       },
       ip: args.ip,
       userAgent: args.userAgent,
@@ -346,7 +353,6 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
         points: args.points,
         round: live.round,
         at: bidRow.placed_at.getTime(),
-        clockLeftMs,
         isYou: true,
       },
     };

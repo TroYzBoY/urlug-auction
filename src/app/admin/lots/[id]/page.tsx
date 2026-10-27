@@ -5,10 +5,15 @@ import { AccountShell, Panel, Stat } from "@/components/account/AccountShell";
 import {
   AuctionControls,
   AwardModeControl,
+  EditLotForm,
   WinnerPicker,
+  type LotFormValues,
 } from "@/components/admin/AdminForms";
 import { OUTCOME_LABEL } from "@/components/admin/outcome";
+import { getLot } from "@/lib/api";
+import { toHouseInput } from "@/lib/house-time";
 import { lot as adminLot, reviewQueue } from "@/lib/repo/admin";
+import type { Lot } from "@/lib/types";
 import { requireAdmin } from "@/lib/session";
 import { lotDate, pts } from "@/lib/format";
 import { t } from "@/lib/copy";
@@ -30,12 +35,16 @@ export const metadata: Metadata = {
 export default async function AdminLotPage(
   props: PageProps<"/admin/lots/[id]">,
 ) {
-  // The gate, as on the dashboard: notFound() for anyone who is not staff.
+  // The gate, as on the dashboard: notFound() for anyone who is not an admin.
   await requireAdmin();
   const { id } = await props.params;
 
-  const [row, queue] = await Promise.all([adminLot(id), reviewQueue()]);
-  if (!row) notFound();
+  const [row, queue, full] = await Promise.all([
+    adminLot(id),
+    reviewQueue(),
+    getLot(id),
+  ]);
+  if (!row || !full) notFound();
   const pending = queue.find((l) => l.lotId === id) ?? null;
 
   return (
@@ -104,6 +113,18 @@ export default async function AdminLotPage(
         </Panel>
       )}
 
+      {/*
+        Keyed on the saved values, so a save that changes them remounts the
+        form with what is now stored rather than with what was typed.
+      */}
+      <Panel heading={t.admin.editLot} empty="—" isEmpty={false}>
+        <EditLotForm
+          key={JSON.stringify(formValues(full))}
+          lot={formValues(full)}
+          scheduleLocked={row.outcome !== "scheduled"}
+        />
+      </Panel>
+
       <Panel heading={t.admin.manage} empty="—" isEmpty={false}>
         <AuctionControls
           lotId={row.lotId}
@@ -113,4 +134,32 @@ export default async function AdminLotPage(
       </Panel>
     </AccountShell>
   );
+}
+
+/** A stored lot as the edit form shows it. */
+function formValues(lot: Lot): LotFormValues {
+  return {
+    id: lot.id,
+    code: lot.code,
+    title: lot.title,
+    maker: lot.maker,
+    year: lot.year,
+    category: lot.category,
+    estimateLowPts: lot.estimateLowPts,
+    estimateHighPts: lot.estimateHighPts,
+    openingPts: lot.openingPts,
+    dimensions: lot.dimensions,
+    condition: lot.condition,
+    provenance: lot.provenance,
+    opensAt: toHouseInput(lot.startsAt),
+    note: lot.note,
+    images: lot.images
+      .map((i) => {
+        // Empty trailing fields dropped: "path | caption", not "path | caption | ".
+        const parts = [i.url, i.alt, i.credit ?? ""];
+        while (parts.length > 1 && !parts[parts.length - 1]) parts.pop();
+        return parts.join(" | ");
+      })
+      .join("\n"),
+  };
 }

@@ -73,8 +73,11 @@
     line-height: 1.12;
     color: var(--color-ink);
   }
-  .catalogue-heading > span {
+  /* Lines of HeroTitle. The second line carries the accent. */
+  .catalogue-heading .hero-line {
     display: block;
+  }
+  .catalogue-heading .hero-line-accent {
     color: var(--color-signal);
   }
   .house-primary,
@@ -572,5 +575,594 @@
     .catalogue-filter {
       padding-inline: 0.65rem;
     }
+  }
+}
+
+/*
+ * ── The front page's moving parts ─────────────────────────────────────────
+ *
+ * Hero headline, featured carousel, stage depth, live marquee, the card's
+ * actions and clocks, quick view, recently sold, how it works and the house's
+ * figures. Every animation here either ends at rest (so the reduced-motion
+ * block in globals.css, which cuts each one to a single 0.01ms pass, leaves a
+ * still picture) or is switched off explicitly below.
+ */
+@layer components {
+  /* ── Headline: each letter lifts and sharpens in turn (HeroTitle). ── */
+  .hero-word {
+    display: inline-block;
+    white-space: nowrap;
+  }
+  .hero-ch {
+    display: inline-block;
+    animation: hero-ch-in 0.8s var(--ease-out-soft)
+      calc(120ms + var(--i, 0) * 32ms) both;
+  }
+
+  /* ── The stage: orbits turning, and depth under the mouse. ── */
+  .stage-orbit {
+    animation: orbit-spin 80s linear infinite;
+  }
+  .stage-orbit-inner {
+    animation-duration: 110s;
+    animation-direction: reverse;
+  }
+
+  /* ── Featured carousel ──
+     Every grid here has one column pinned to the space available. Left as
+     `auto`, a column sizes itself to the card's own 19–23rem width, and the
+     card's `max-width: 94%` then resolves against that rather than the screen:
+     at 280px the card ran 35px off the right edge. */
+  .featured-carousel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    width: 100%;
+  }
+  .featured-track {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+  .featured-slide {
+    grid-area: 1 / 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    opacity: 0;
+    transform: translateX(28px) scale(0.97);
+    transition:
+      opacity 0.7s var(--ease-out-soft),
+      transform 0.8s var(--ease-out-soft);
+    pointer-events: none;
+  }
+  .featured-slide[data-active] {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+  .featured-dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.35rem;
+    margin-top: 1.1rem;
+  }
+  .featured-dots button {
+    position: relative;
+    width: 1.75rem;
+    height: 1.25rem;
+  }
+  .featured-dots button::before,
+  .featured-dots button::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 3px;
+    margin-top: -1.5px;
+    border-radius: 2px;
+    background: var(--color-line-strong);
+  }
+  /* The active dot fills over the six seconds it is on screen. */
+  .featured-dots button[aria-current]::after {
+    background: var(--color-signal);
+    transform-origin: left;
+    animation: dot-fill 6s linear both;
+  }
+  .featured-carousel[data-paused] .featured-dots button[aria-current]::after {
+    animation-play-state: paused;
+  }
+
+  /* ── Live marquee ── */
+  .live-marquee {
+    display: flex;
+    align-items: stretch;
+    margin-top: 1rem;
+    border-block: 1px solid var(--color-line);
+    background: color-mix(in oklab, var(--color-surface) 70%, transparent);
+  }
+  .marquee-label {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0 1.25rem;
+    border-right: 1px solid var(--color-line);
+    color: var(--color-rust);
+  }
+  .marquee-window {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    mask-image: linear-gradient(
+      90deg,
+      transparent,
+      black 3rem,
+      black calc(100% - 3rem),
+      transparent
+    );
+  }
+  .marquee-track {
+    display: flex;
+    width: max-content;
+    animation: marquee-slide 40s linear infinite;
+  }
+  .live-marquee:hover .marquee-track,
+  .live-marquee:focus-within .marquee-track {
+    animation-play-state: paused;
+  }
+  .marquee-copy {
+    display: flex;
+  }
+  .marquee-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding: 0.95rem 1.75rem;
+    border-right: 1px solid var(--color-line);
+    white-space: nowrap;
+    font-size: 0.8125rem;
+  }
+  .marquee-title {
+    max-width: 15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--color-ink);
+    font-weight: 600;
+    transition: color 0.2s;
+  }
+  .marquee-item:hover .marquee-title {
+    color: var(--color-accent);
+  }
+  .marquee-price {
+    color: var(--color-signal);
+    font-weight: 600;
+  }
+  .marquee-meta {
+    color: var(--color-muted);
+    font-size: 0.6875rem;
+  }
+
+  /* ── Card: heart and quick view over the photograph, and the bid clock. ── */
+  .card-actions {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 2;
+    display: flex;
+    gap: 0.35rem;
+  }
+  .card-action {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--color-line-strong);
+    border-radius: 999px;
+    background: rgb(8 11 22 / 0.72);
+    color: var(--color-ink-soft);
+    backdrop-filter: blur(6px);
+    transition:
+      color 0.2s,
+      border-color 0.2s;
+  }
+  .card-action:hover,
+  .card-action:focus-visible {
+    border-color: var(--color-signal);
+    color: var(--color-ink);
+  }
+  .card-action[data-on] {
+    border-color: rgb(255 133 158 / 0.55);
+    color: var(--color-rust);
+  }
+  .card-action[data-on] svg {
+    animation: heart-pop 0.45s var(--ease-out-soft);
+  }
+  .card-clock {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    height: 3px;
+    background: rgb(255 255 255 / 0.08);
+  }
+  .card-clock > span {
+    display: block;
+    height: 100%;
+    background: var(--color-signal);
+    transform-origin: left;
+    transition: transform 0.25s linear;
+  }
+  .card-clock[data-hot] > span {
+    background: var(--color-rust);
+  }
+
+  /* ── Quick view ── */
+  .quick-view {
+    /* Preflight zeroes every margin, and auto margins are how a modal dialog
+       centres itself in the top layer. */
+    margin: auto;
+    width: min(56rem, calc(100% - 2rem));
+    max-height: calc(100dvh - 2rem);
+    padding: 0;
+    overflow: auto;
+    border: 1px solid var(--color-line-strong);
+    border-radius: 1rem;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    box-shadow: 0 30px 120px #00000080;
+  }
+  .quick-view[open] {
+    animation: qv-in 0.35s var(--ease-out-soft);
+  }
+  .quick-view::backdrop {
+    background: rgb(4 6 14 / 0.72);
+    backdrop-filter: blur(6px);
+  }
+  .quick-view[open]::backdrop {
+    animation: qv-fade 0.35s ease-out;
+  }
+  .quick-view-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  }
+  .quick-view-media {
+    padding: 1rem;
+  }
+  .quick-view-media .lot-plate {
+    border-radius: 0.7rem;
+  }
+  .quick-view-thumbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+  .quick-view-thumbs button {
+    width: 3.5rem;
+    height: 3.5rem;
+    overflow: hidden;
+    border: 1px solid var(--color-line);
+    border-radius: 0.45rem;
+    opacity: 0.55;
+    transition:
+      opacity 0.2s,
+      border-color 0.2s;
+  }
+  .quick-view-thumbs button[aria-current] {
+    border-color: var(--color-signal);
+    opacity: 1;
+  }
+  .quick-view-thumbs img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .quick-view-info {
+    padding: 1.75rem 1.75rem 1.75rem 0.75rem;
+  }
+  .quick-view-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-line);
+  }
+  .quick-view-facts dd {
+    margin-top: 0.4rem;
+    color: var(--color-signal);
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+  .quick-view-close {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    background: rgb(8 11 22 / 0.7);
+    color: var(--color-ink-soft);
+    font-size: 1.4rem;
+    line-height: 1;
+  }
+  .quick-view-close:hover {
+    color: var(--color-ink);
+  }
+  /* The page behind a modal does not scroll. */
+  html:has(.quick-view[open]) {
+    overflow: hidden;
+  }
+
+  /* ── Recently sold ── */
+  .sold-strip {
+    margin-top: 6rem;
+  }
+  .sold-row {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(13rem, 15rem);
+    gap: 1rem;
+    margin-top: 1.75rem;
+    padding-bottom: 0.25rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+  }
+  .sold-row > li {
+    scroll-snap-align: start;
+  }
+  .sold-card {
+    display: block;
+    overflow: hidden;
+    border: 1px solid var(--color-line);
+    border-radius: 0.9rem;
+    background: var(--color-surface);
+    transition: border-color 0.2s;
+  }
+  .sold-card:hover {
+    border-color: #8338ff80;
+  }
+
+  /* ── How it works ── */
+  .how-it-works {
+    margin-top: 6rem;
+  }
+  .how-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+  .how-step {
+    padding: 1.5rem;
+    border: 1px solid var(--color-line);
+    border-radius: 0.9rem;
+    background: linear-gradient(160deg, #161a33, var(--color-surface) 60%);
+  }
+  .how-num {
+    color: var(--color-faint);
+    font-family: ui-monospace, monospace;
+    font-size: 0.75rem;
+  }
+  .how-icon {
+    width: 3rem;
+    height: 3rem;
+    fill: none;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+  }
+  .how-rounds path {
+    stroke: var(--color-line-strong);
+    animation: round-light 2.1s linear infinite;
+  }
+  .how-shrink .how-track {
+    stroke: var(--color-line-strong);
+  }
+  .how-shrink .how-run {
+    stroke: var(--color-signal);
+    stroke-dasharray: 100;
+    transform: rotate(-90deg);
+    transform-origin: center;
+    transform-box: fill-box;
+    animation: clock-run 3.2s var(--ease-in-out-soft) infinite;
+  }
+  .how-hammer .how-head {
+    stroke: var(--color-electric);
+    transform-box: view-box;
+    transform-origin: 17px 36px;
+    animation: hammer-fall 2.4s var(--ease-in-out-soft) infinite;
+  }
+  .how-hammer rect {
+    fill: color-mix(in oklab, var(--color-vivid) 45%, transparent);
+  }
+  .how-hammer .how-base {
+    stroke: var(--color-line-strong);
+    animation: hammer-hit 2.4s linear infinite;
+  }
+
+  /* ── The house's figures ── */
+  .house-stats {
+    margin-top: 3rem;
+    padding-block: 1.75rem;
+    border-block: 1px solid var(--color-line);
+  }
+  .house-stats dl {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 1.1rem;
+  }
+  .house-stats dl > div {
+    padding-left: 1.5rem;
+    border-left: 1px solid var(--color-line);
+  }
+  .house-stats dl > div:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .house-stats dt {
+    color: var(--color-muted);
+    font-size: 0.75rem;
+  }
+  .house-stats dd {
+    margin-top: 0.5rem;
+    color: var(--color-ink);
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: 650;
+    letter-spacing: -0.04em;
+    line-height: 1;
+  }
+
+  @media (max-width: 767px) {
+    .quick-view-body,
+    .how-steps {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .quick-view-info {
+      padding: 0.5rem 1.25rem 1.5rem;
+    }
+    .house-stats dl > div {
+      padding-left: 0.85rem;
+    }
+    /* Two-up cards are ~170px wide; stacked, the buttons clear the status
+       badge in the other corner. */
+    .card-actions {
+      flex-direction: column;
+    }
+    .card-action {
+      width: 1.85rem;
+      height: 1.85rem;
+    }
+  }
+
+  /* Depth under the mouse — only where there is a mouse, and motion is
+     welcome. Each layer moves by a different amount, which is the depth. */
+  @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+    .catalogue-stage::before {
+      translate: calc(var(--sx, 0) * 18px) calc(var(--sy, 0) * 14px);
+      transition: translate 0.7s var(--ease-out-soft);
+    }
+    .stage-orbit-outer {
+      translate: calc(var(--sx, 0) * -26px) calc(var(--sy, 0) * -18px);
+      transition: translate 0.6s var(--ease-out-soft);
+    }
+    .stage-orbit-inner {
+      translate: calc(var(--sx, 0) * 14px) calc(var(--sy, 0) * 10px);
+      transition: translate 0.6s var(--ease-out-soft);
+    }
+  }
+
+  /* Under reduced motion the marquee does not move at all; it becomes a row
+     you scroll by hand, without the repeat. The headline letters are switched
+     off outright: the global block shortens durations but not delays, so they
+     would still pop in one by one over most of a second. */
+  @media (prefers-reduced-motion: reduce) {
+    .hero-ch {
+      animation: none;
+    }
+    .marquee-track {
+      animation: none;
+    }
+    .marquee-window {
+      overflow-x: auto;
+      mask-image: none;
+    }
+    .marquee-copy[aria-hidden] {
+      display: none;
+    }
+  }
+}
+
+@keyframes hero-ch-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.35em);
+    filter: blur(8px);
+  }
+}
+@keyframes orbit-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+@keyframes dot-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes marquee-slide {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes heart-pop {
+  40% {
+    transform: scale(1.35);
+  }
+}
+@keyframes qv-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+}
+@keyframes qv-fade {
+  from {
+    opacity: 0;
+  }
+}
+/* One arc lit at a time, in turn round the ring; ends unlit. */
+@keyframes round-light {
+  0%,
+  30%,
+  100% {
+    stroke: var(--color-line-strong);
+  }
+  8% {
+    stroke: var(--color-signal);
+  }
+}
+/* The ring runs down, reddening as it empties, and refills; ends full. */
+@keyframes clock-run {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  85% {
+    stroke-dashoffset: 100;
+    stroke: var(--color-rust);
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+/* Raised, brought down, a small bounce; ends at rest. */
+@keyframes hammer-fall {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  40% {
+    transform: rotate(-28deg);
+  }
+  55% {
+    transform: rotate(6deg);
+  }
+  64% {
+    transform: rotate(0);
+  }
+}
+@keyframes hammer-hit {
+  0%,
+  50%,
+  72%,
+  100% {
+    stroke: var(--color-line-strong);
+  }
+  56% {
+    stroke: var(--color-signal);
   }
 }

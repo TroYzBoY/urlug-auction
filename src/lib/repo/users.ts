@@ -16,7 +16,7 @@ export interface UserRow {
   paddle: string;
   password_hash: string;
   status: "active" | "suspended" | "closed";
-  role: "bidder" | "staff" | "admin";
+  role: "bidder" | "admin";
   phone_verified_at: Date | null;
 }
 
@@ -60,6 +60,17 @@ export interface CreateUserArgs {
   consents: readonly { document: string; version: string }[];
   ip: string | null;
   userAgent: string | null;
+  /**
+   * The admin opening this account on the person's behalf, when it is
+   * not the person themselves.
+   *
+   * Such an account is created with its phone already verified: the operator
+   * has the person, or their call, in front of them, which is the check the SMS
+   * code stands in for — and without it the account could not bid until a code
+   * nobody is sending arrived. The audit row then names the operator, so "who
+   * vouched for this number" has an answer.
+   */
+  createdBy?: number | null;
 }
 
 export type CreateUserResult =
@@ -94,8 +105,10 @@ export async function createUser(
 
       const inserted = await client.query<{ id: number }>(
         `INSERT INTO users (name, family_name, phone, password_hash, paddle,
-                            date_of_birth, terms_version, terms_accepted_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+                            date_of_birth, terms_version, terms_accepted_at,
+                            phone_verified_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, now(),
+                 CASE WHEN $8::boolean THEN now() END)
          ON CONFLICT DO NOTHING
          RETURNING id`,
         [
@@ -106,6 +119,7 @@ export async function createUser(
           paddle,
           args.dateOfBirth,
           args.termsVersion,
+          args.createdBy != null,
         ],
       );
 
@@ -154,8 +168,8 @@ export async function createUser(
     );
 
     await record(client, {
-      actorUserId: userId,
-      action: "user.registered",
+      actorUserId: args.createdBy ?? userId,
+      action: args.createdBy != null ? "admin.user_created" : "user.registered",
       targetType: "user",
       targetId: String(userId),
       // The password hash is not in this row, and neither is the phone: the

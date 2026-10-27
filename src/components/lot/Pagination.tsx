@@ -65,6 +65,7 @@ export function Pagination({
           <Link
             key={item}
             href={makeHref(item)}
+            transitionTypes={["catalogue"]}
             aria-label={t.lots.pageLabel(item)}
             aria-current={item === page ? "page" : undefined}
             data-numerals
@@ -116,6 +117,7 @@ function Step({
   return (
     <Link
       href={href}
+      transitionTypes={["catalogue"]}
       aria-label={label}
       className="grid size-9 place-items-center rounded-full text-sm text-ink-soft transition-colors hover:bg-raise hover:text-ink"
     >

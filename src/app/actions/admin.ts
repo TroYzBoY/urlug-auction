@@ -4,7 +4,10 @@ import { headers } from "next/headers";
 import { refresh } from "next/cache";
 import { recordDetached } from "@/lib/audit";
 import { t } from "@/lib/copy";
+import { groupNumber } from "@/lib/format";
+import { REGISTRATION_CONSENTS, TERMS_VERSION } from "@/lib/legal";
 import { log } from "@/lib/observability";
+import { hashPassword } from "@/lib/password";
 import { publish } from "@/lib/realtime";
 import {
   adjustBalance,
@@ -15,6 +18,7 @@ import {
   declareUnsold,
   grantBonus,
   markContactHandled,
+  recordPayment,
   rescheduleAuction,
   setManualAward,
   setUserRole,
@@ -22,15 +26,18 @@ import {
   updateLot,
   type Actor,
 } from "@/lib/repo/admin-write";
+import { createUser } from "@/lib/repo/users";
 import { clientIpFrom, requireAdmin } from "@/lib/session";
 import {
   adjustSchema,
+  adminCreateUserSchema,
   awardModeSchema,
   awardSchema,
   bonusSchema,
   firstError,
   lotSchema,
   lotControlSchema,
+  paymentSchema,
   rescheduleSchema,
   userRoleSchema,
   userStatusSchema,
@@ -514,6 +521,120 @@ export async function grantBonusAction(
   return {
     status: "ok",
     message: t.admin.bonusGranted(parsed.data.deltaPts, result.balancePts),
+  };
+}
+
+/**
+ * Opens an ordinary bidder account on somebody's behalf.
+ *
+ * Always a `bidder`. Staff access is granted afterwards through
+ * `setUserRoleAction`, where it needs a reason and leaves its own audit row —
+ * a form for opening accounts that could also open admin ones would make the
+ * role control's guards optional.
+ */
+export async function createUserAction(
+  _prev: AdminState,
+  formData: FormData,
+): Promise<AdminState> {
+  const who = await actor();
+  const parsed = adminCreateUserSchema.safeParse({
+    familyName: formData.get("familyName"),
+    name: formData.get("name"),
+    phone: formData.get("phone"),
+    password: formData.get("password"),
+    dateOfBirth: formData.get("dateOfBirth"),
+    consent: formData.get("consent") === "on",
+  });
+  if (!parsed.success) {
+    return { status: "error", message: firstError(parsed.error) };
+  }
+
+  const created = await createUser({
+    familyName: parsed.data.familyName,
+    name: parsed.data.name,
+    phone: parsed.data.phone,
+    passwordHash: await hashPassword(parsed.data.password),
+    dateOfBirth: parsed.data.dateOfBirth,
+    termsVersion: TERMS_VERSION,
+    consents: REGISTRATION_CONSENTS,
+    ip: who.ip,
+    userAgent: who.userAgent,
+    createdBy: who.id,
+  });
+  /*
+   * Said plainly, unlike on /register. The reason that form hides a taken
+   * number is that anyone can type one in; this one is behind requireAdmin, and
+   * an operator told "created" for an account that already existed would hand
+   * the person a password that does not work.
+   */
+  if (!created.ok) {
+    return { status: "error", message: t.admin.userPhoneTaken };
+  }
+
+  log.info({
+    event: "admin.user_created",
+    userId: created.userId,
+    actorId: who.id,
+  });
+  refresh();
+  return { status: "ok", message: t.admin.userCreated(created.paddle) };
+}
+
+/**
+ * Records money taken outside the payment provider and credits its points.
+ * See `recordPayment` for why this is a top-up rather than a bonus.
+ */
+export async function recordPaymentAction(
+  _prev: AdminState,
+  formData: FormData,
+): Promise<AdminState> {
+  const who = await actor();
+  const parsed = paymentSchema.safeParse({
+    userId: Number(formData.get("userId")),
+    amountMnt: Number(formData.get("amountMnt")),
+    method: formData.get("method"),
+    providerRef: formData.get("providerRef") ?? "",
+    memo: formData.get("memo") ?? "",
+    idempotencyKey: formData.get("idempotencyKey"),
+  });
+  if (!parsed.success) {
+    return { status: "error", message: firstError(parsed.error) };
+  }
+
+  const result = await recordPayment(parsed.data, who);
+  if (!result.ok) {
+    return {
+      status: "error",
+      message:
+        result.reason === "ref-taken"
+          ? t.admin.paymentRefTaken
+          : result.reason === "bad-amount"
+            ? t.admin.paymentBadAmount
+            : "Хэрэглэгч олдсонгүй.",
+    };
+  }
+
+  if (result.duplicate) {
+    return { status: "ok", message: t.admin.paymentDuplicate };
+  }
+
+  log.info({
+    event: "admin.payment_recorded",
+    targetUserId: parsed.data.userId,
+    amountMnt: parsed.data.amountMnt,
+    points: result.points,
+    method: parsed.data.method,
+    actorId: who.id,
+  });
+
+  refresh();
+  return {
+    status: "ok",
+    message: t.admin.paymentRecorded(
+      groupNumber(parsed.data.amountMnt),
+      result.points,
+      result.balancePts,
+    ),
   };
 }
 

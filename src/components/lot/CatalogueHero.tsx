@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { LotPlate } from "./LotPlate";
 import { LiveDot } from "./LotCard";
+import { FeaturedCarousel } from "./FeaturedCarousel";
+import { HeroTitle } from "./HeroTitle";
+import { StageParallax } from "./StageParallax";
 import { POINT_MNT, TOTAL_MINUTES, TOTAL_ROUNDS } from "@/lib/auction";
 import { groupNumber, pts } from "@/lib/format";
 import { t } from "@/lib/copy";
@@ -14,7 +17,59 @@ const STATUS: Record<LotStatus, string> = {
   unsold: t.lot.statusUnsold,
 };
 
-export function CatalogueHero({ lot }: { lot: Lot | null }) {
+/** One featured lot, as the hero's card. Only the first gets `priority`: it is
+    the one on screen when the page paints. */
+function FeaturedSlide({ lot, first }: { lot: Lot; first: boolean }) {
+  return (
+    <Link href={`/auction/${lot.id}`} className="featured-lot group">
+      <div className="featured-lot-top">
+        <span className="eyebrow text-electric">{t.lots.featured}</span>
+        <span className="featured-lot-status">
+          {lot.status === "live" && <LiveDot />}
+          {STATUS[lot.status]}
+        </span>
+      </div>
+      <LotPlate
+        category={lot.category}
+        image={coverOf(lot)?.url}
+        alt={coverOf(lot)?.alt ?? lot.title}
+        ratio="aspect-[5/4]"
+        sizes="(max-width: 479px) 76vw, (max-width: 1023px) 340px, 370px"
+        priority={first}
+        className="featured-lot-image"
+      />
+      <div className="featured-lot-info">
+        <div className="min-w-0">
+          <p className="eyebrow text-muted">{lot.code}</p>
+          <h2 className="text-ink group-hover:text-accent mt-2 truncate text-lg font-semibold">
+            {lot.title}
+          </h2>
+          <p className="text-muted mt-1 text-xs">
+            {lot.maker} · {lot.year}
+          </p>
+        </div>
+        <span className="featured-lot-arrow" aria-hidden>
+          ↗
+        </span>
+      </div>
+      <dl className="featured-price">
+        <dt className="eyebrow text-[0.625rem]">
+          {lot.status === "sold" ? t.lot.hammer : t.lot.estimate}
+        </dt>
+        <dd className="text-signal mt-1.5 text-sm font-semibold" data-numerals>
+          {lot.status === "sold"
+            ? pts(lot.hammerPts ?? 0)
+            : `${pts(lot.estimateLowPts)} – ${pts(lot.estimateHighPts)}`}
+          <span className="text-muted ml-1.5 text-xs font-normal">
+            {t.common.point}
+          </span>
+        </dd>
+      </dl>
+    </Link>
+  );
+}
+
+export function CatalogueHero({ lots }: { lots: Lot[] }) {
   return (
     <section
       className="catalogue-hero gutter"
@@ -24,8 +79,7 @@ export function CatalogueHero({ lot }: { lot: Lot | null }) {
         <div className="catalogue-intro">
           <p className="catalogue-label eyebrow">{t.brand.tagline}</p>
           <h1 id="catalogue-title" className="catalogue-heading">
-            {t.lots.heroTitle[0]}
-            <span>{t.lots.heroTitle[1]}</span>
+            <HeroTitle lines={t.lots.heroTitle} />
           </h1>
           <p className="text-muted mt-6 max-w-md text-sm leading-7 md:text-base">
             {t.lots.heroLede}
@@ -52,61 +106,21 @@ export function CatalogueHero({ lot }: { lot: Lot | null }) {
           </p>
         </div>
 
-        <div className="catalogue-stage">
+        <StageParallax>
           <div className="stage-orbit stage-orbit-outer" aria-hidden />
           <div className="stage-orbit stage-orbit-inner" aria-hidden />
           <span className="stage-coordinate" aria-hidden>
             URLUG — SELECT / 01
           </span>
-          {lot ? (
-            <Link href={`/auction/${lot.id}`} className="featured-lot group">
-              <div className="featured-lot-top">
-                <span className="eyebrow text-electric">{t.lots.featured}</span>
-                <span className="featured-lot-status">
-                  {lot.status === "live" && <LiveDot />}
-                  {STATUS[lot.status]}
-                </span>
-              </div>
-              <LotPlate
-                category={lot.category}
-                image={coverOf(lot)?.url}
-                alt={coverOf(lot)?.alt ?? lot.title}
-                ratio="aspect-[5/4]"
-                sizes="(max-width: 479px) 76vw, (max-width: 1023px) 340px, 370px"
-                priority
-                className="featured-lot-image"
-              />
-              <div className="featured-lot-info">
-                <div className="min-w-0">
-                  <p className="eyebrow text-muted">{lot.code}</p>
-                  <h2 className="text-ink group-hover:text-accent mt-2 truncate text-lg font-semibold">
-                    {lot.title}
-                  </h2>
-                  <p className="text-muted mt-1 text-xs">
-                    {lot.maker} · {lot.year}
-                  </p>
-                </div>
-                <span className="featured-lot-arrow" aria-hidden>
-                  ↗
-                </span>
-              </div>
-              <dl className="featured-price">
-                <dt className="eyebrow text-[0.625rem]">
-                  {lot.status === "sold" ? t.lot.hammer : t.lot.estimate}
-                </dt>
-                <dd
-                  className="text-signal mt-1.5 text-sm font-semibold"
-                  data-numerals
-                >
-                  {lot.status === "sold"
-                    ? pts(lot.hammerPts ?? 0)
-                    : `${pts(lot.estimateLowPts)} – ${pts(lot.estimateHighPts)}`}
-                  <span className="text-muted ml-1.5 text-xs font-normal">
-                    {t.common.point}
-                  </span>
-                </dd>
-              </dl>
-            </Link>
+          {lots.length > 0 ? (
+            <FeaturedCarousel
+              slides={lots.map((lot, i) => (
+                <FeaturedSlide key={lot.id} lot={lot} first={i === 0} />
+              ))}
+              labels={lots.map(
+                (lot, i) => `${t.lots.goToSlide(i + 1)}: ${lot.title}`,
+              )}
+            />
           ) : (
             <div className="stage-empty" aria-hidden>
               <span>U</span>
@@ -115,7 +129,7 @@ export function CatalogueHero({ lot }: { lot: Lot | null }) {
           <span className="stage-caption" aria-hidden>
             THE NEXT FIND IS YOURS.
           </span>
-        </div>
+        </StageParallax>
       </div>
 
       <dl className="catalogue-facts">

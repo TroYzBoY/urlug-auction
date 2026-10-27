@@ -1,4 +1,5 @@
 import { POINT_MNT } from "./auction";
+import { houseParts } from "./house-time";
 
 /*
  * Formatting is hand-rolled rather than Intl-based on purpose: Intl's grouping
@@ -49,17 +50,6 @@ export function clockText(remainingMs: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-/**
- * Bid-clock time to the millisecond, for the final-round log: "1.009", "0.000".
- *
- * Always three decimals, so a column of them lines up and 0.300 never reads as
- * three tenths of something else. Negative input — a clock already past zero —
- * is shown as zero rather than as a time that never existed.
- */
-export function msClock(ms: number): string {
-  return (Math.max(0, Math.round(ms)) / 1000).toFixed(3);
-}
-
 /** Coarse clock for the round timer: "18 мин" / "42 сек". */
 export function coarseClock(remainingMs: number): string {
   const sec = Math.max(0, Math.floor(remainingMs / 1000));
@@ -73,24 +63,17 @@ export function bidClockLabel(sec: number): string {
 }
 
 /**
- * Lot start time as "09 сарын 19 · 11:00". Built from UTC parts on purpose:
- * the server and the browser are in different zones during development, and a
- * local-time render would mismatch on hydration.
+ * Lot start time as "09 сарын 19 · 11:00", in Ulaanbaatar time wherever the
+ * server or the visitor is — see src/lib/house-time.ts. Explicit about its zone
+ * rather than local, so the server render and the browser's agree on hydration.
  */
 export function lotDate(iso: string): string {
-  const d = new Date(iso);
-  const month = (d.getUTCMonth() + 1).toString().padStart(2, "0");
-  const day = d.getUTCDate().toString().padStart(2, "0");
-  const hh = d.getUTCHours().toString().padStart(2, "0");
-  const mm = d.getUTCMinutes().toString().padStart(2, "0");
-  return `${month} сарын ${day} · ${hh}:${mm}`;
+  const p = houseParts(iso);
+  return `${p.month} сарын ${p.day} · ${p.hour}:${p.minute}`;
 }
 
-/** "14:32" wall clock from epoch ms, in fixed 24h form (hydration-safe). */
+/** "14:32:05" wall clock from epoch ms, Ulaanbaatar time (hydration-safe). */
 export function wallClock(at: number): string {
-  const d = new Date(at);
-  return `${d.getHours().toString().padStart(2, "0")}:${d
-    .getMinutes()
-    .toString()
-    .padStart(2, "0")}:${d.getSeconds().toString().padStart(2, "0")}`;
+  const p = houseParts(at);
+  return `${p.hour}:${p.minute}:${p.second}`;
 }

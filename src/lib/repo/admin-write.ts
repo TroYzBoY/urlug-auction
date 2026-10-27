@@ -2,12 +2,13 @@ import "server-only";
 import type { PoolClient } from "pg";
 import { transaction } from "../db";
 import { record } from "../audit";
-import { bidClockMs, roundEndOffsetMs } from "../auction";
+import { POINT_MNT, bidClockMs, roundEndOffsetMs } from "../auction";
 import { settle, type Outcome } from "../auction-engine";
 import { persistSettlement } from "./bids";
 import { enqueue } from "./notifications";
 import { announceDecision, grantLot } from "./award";
-import { MAX_BONUS_PTS } from "../validation";
+import { MAX_BONUS_PTS, MAX_PAYMENT_MNT } from "../validation";
+import { groupNumber } from "../format";
 import { t } from "../copy";
 
 /**
@@ -853,7 +854,9 @@ export type RoleResult =
   { ok: true } | { ok: false; reason: "not-found" | "self" | "last-admin" };
 
 /**
- * Grants or revokes staff access.
+ * Grants or revokes admin access. There are two roles — bidder and admin —
+ * since `staff` was removed: it could do everything an admin could, under a
+ * name that suggested otherwise.
  *
  * ⚠ Three guards, and each exists because of a specific way this goes wrong.
  *
@@ -867,14 +870,14 @@ export type RoleResult =
  * on the row being changed, so two admins demoting each other at once cannot
  * both pass the check.
  *
- * **Sessions are revoked on a DEMOTION.** A staff session that keeps working
+ * **Sessions are revoked on a DEMOTION.** An admin session that keeps working
  * after the role is taken away is the role not really having been taken away.
  * Promotions leave sessions alone — `currentUser` reads the role fresh on every
  * request, so a promoted user gets their new access without signing in again.
  */
 export async function setUserRole(
   userId: number,
-  role: "bidder" | "staff" | "admin",
+  role: "bidder" | "admin",
   reason: string,
   actor: Actor,
 ): Promise<RoleResult> {
@@ -902,8 +905,7 @@ export async function setUserRole(
       [userId, role],
     );
 
-    const demoted =
-      (user.role === "admin" || user.role === "staff") && role === "bidder";
+    const demoted = user.role === "admin" && role === "bidder";
     if (demoted) {
       await client.query(
         "UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL",
@@ -1050,6 +1052,196 @@ export async function grantBonus(
   });
 }
 
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * PAYMENT TAKEN BY HAND
+ *
+ * Money that reached the house outside the payment provider — cash at the desk,
+ * a transfer straight into the bank account — turned into points.
+ *
+ * ── Why this is a top-up, not a bonus or an adjustment ───────────────────────
+ *
+ * Somebody paid. Filed as a `bonus` it would read as the house giving points
+ * away; filed as an `adjustment`, as the house fixing a mistake. Either way the
+ * accounts could no longer say how much money was ever paid in. So it is a
+ * `topups` row like any other, born `paid`, with a `topup` ledger entry — and
+ * it is counted wherever top-ups are counted: the Цэнэглэлт figure on /admin,
+ * the first tab of the export, and the bidder's own history.
+ *
+ * ── Why it cannot be credited twice ──────────────────────────────────────────
+ *
+ *   • The form's idempotency key becomes the row's `reference`, which is
+ *     unique. A form submitted twice — a double tap, a retried request — lands
+ *     on the row the first submission made and credits nothing more.
+ *   • A bank transfer's own number is `provider_ref`, unique per provider. The
+ *     same transfer typed in twice, by two people on two different days, is
+ *     refused rather than paid out again.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+export interface PaymentInput {
+  userId: number;
+  amountMnt: number;
+  method: "cash" | "bank";
+  /** The bank's transaction number, or a cash receipt's. */
+  providerRef: string | null;
+  memo: string;
+  idempotencyKey: string;
+}
+
+export type PaymentResult =
+  | {
+      ok: true;
+      points: number;
+      balancePts: number;
+      paddle: string;
+      /** True when this exact submission had already been recorded. */
+      duplicate: boolean;
+    }
+  | { ok: false; reason: "not-found" | "bad-amount" | "ref-taken" };
+
+const PAYMENT_MEMO: Record<PaymentInput["method"], string> = {
+  cash: "Оноо худалдан авалт · бэлэн",
+  bank: "Оноо худалдан авалт · дансаар",
+};
+
+export async function recordPayment(
+  input: PaymentInput,
+  actor: Actor,
+): Promise<PaymentResult> {
+  /*
+   * Re-checked here, as `grantBonus` re-checks its cap: the schema guards the
+   * form, this guards the function for a caller that never saw it.
+   */
+  if (
+    !Number.isInteger(input.amountMnt) ||
+    input.amountMnt <= 0 ||
+    input.amountMnt > MAX_PAYMENT_MNT ||
+    input.amountMnt % POINT_MNT !== 0
+  ) {
+    return { ok: false, reason: "bad-amount" };
+  }
+  const points = input.amountMnt / POINT_MNT;
+  const reference = `desk-${input.idempotencyKey}`;
+
+  return transaction(async (client) => {
+    /*
+     * The user row is locked first, so two submissions of one form queue here
+     * and the second finds the first's row below rather than racing it into
+     * the unique index.
+     */
+    const res = await client.query<{ paddle: string }>(
+      "SELECT paddle FROM users WHERE id = $1 FOR UPDATE",
+      [input.userId],
+    );
+    const user = res.rows[0];
+    if (!user) return { ok: false, reason: "not-found" };
+
+    /*
+     * DO NOTHING without a target covers both unique indexes at once — the
+     * reference and the bank's number. Which one declined is decided below.
+     * Paid on arrival: there is no provider to wait for, so `expires_at` is
+     * only there because the column requires one.
+     */
+    const inserted = await client.query<{ id: number }>(
+      `INSERT INTO topups (user_id, points, amount_mnt, status, provider,
+                           provider_ref, reference, paid_at, expires_at)
+       VALUES ($1, $2, $3, 'paid', $4, $5, $6, now(), now())
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
+      [
+        input.userId,
+        points,
+        input.amountMnt,
+        input.method,
+        input.providerRef,
+        reference,
+      ],
+    );
+
+    if (inserted.rowCount === 0) {
+      const prior = await client.query<{ user_id: number; points: number }>(
+        "SELECT user_id, points FROM topups WHERE reference = $1",
+        [reference],
+      );
+      const first = prior.rows[0];
+      if (!first || first.user_id !== input.userId) {
+        return { ok: false, reason: "ref-taken" };
+      }
+      const balance = await client.query<{ pts: number }>(
+        "SELECT pts FROM balances WHERE user_id = $1",
+        [input.userId],
+      );
+      return {
+        ok: true,
+        points: first.points,
+        balancePts: balance.rows[0]?.pts ?? 0,
+        paddle: user.paddle,
+        duplicate: true,
+      };
+    }
+
+    const memo = input.memo
+      ? `${PAYMENT_MEMO[input.method]} — ${input.memo}`
+      : PAYMENT_MEMO[input.method];
+
+    await client.query(
+      `INSERT INTO ledger_entries (user_id, delta_pts, kind, ref_type, ref_id, memo)
+       VALUES ($1, $2, 'topup', 'topup', $3, $4)`,
+      [input.userId, points, reference, memo],
+    );
+
+    /* Upsert, for the same reason as in `grantBonus`: a credit cannot overdraw. */
+    const balance = await client.query<{ pts: number }>(
+      `INSERT INTO balances (user_id, pts) VALUES ($1, $2)
+       ON CONFLICT (user_id) DO UPDATE
+         SET pts = balances.pts + EXCLUDED.pts, updated_at = now()
+       RETURNING pts`,
+      [input.userId, points],
+    );
+
+    /*
+     * Told, unlike an adjustment. A bidder who handed over cash should not have
+     * to refresh the wallet to find out whether it was counted.
+     */
+    await enqueue(client, {
+      userId: input.userId,
+      channel: "inapp",
+      kind: "points.topup",
+      body: `${t.brand.name}: ${groupNumber(input.amountMnt)}₮ төлбөр хүлээн авч, ${points} оноо нэмэгдлээ.`,
+      href: "/wallet",
+      dedupeKey: `topup:${reference}`,
+    });
+
+    await record(client, {
+      actorUserId: actor.id,
+      action: "admin.payment_recorded",
+      targetType: "topup",
+      targetId: reference,
+      detail: {
+        userId: input.userId,
+        paddle: user.paddle,
+        amountMnt: input.amountMnt,
+        points,
+        method: input.method,
+        providerRef: input.providerRef,
+        memo: input.memo,
+        resultingPts: balance.rows[0]!.pts,
+      },
+      ip: actor.ip,
+      userAgent: actor.userAgent,
+    });
+
+    return {
+      ok: true,
+      points,
+      balancePts: balance.rows[0]!.pts,
+      paddle: user.paddle,
+      duplicate: false,
+    };
+  });
+}
+
 export type AdjustResult =
   | { ok: true; balancePts: number }
   | { ok: false; reason: "not-found" | "would-overdraw" };
@@ -1078,12 +1270,6 @@ export async function adjustBalance(
     ]);
     if (exists.rowCount === 0) return { ok: false, reason: "not-found" };
 
-    await client.query(
-      `INSERT INTO ledger_entries (user_id, delta_pts, kind, memo)
-       VALUES ($1, $2, 'adjustment', $3)`,
-      [userId, deltaPts, memo],
-    );
-
     const updated = await client.query<{ pts: number }>(
       `UPDATE balances SET pts = pts + $2, updated_at = now()
         WHERE user_id = $1 AND pts + $2 >= 0
@@ -1092,7 +1278,19 @@ export async function adjustBalance(
     );
     // The guard and the write in one statement; the CHECK on the table is the
     // backstop, but it would surface as a 500 rather than as this rejection.
+    //
+    // ⚠ Before the ledger insert, not after it. A refusal RETURNS, and
+    // `transaction` commits whatever was written before a return — so with the
+    // ledger row first, a refused correction left an append-only entry the
+    // balance never received, which is exactly the drift `reconcileBalances`
+    // alarms on, and nothing can delete it.
     if (updated.rowCount === 0) return { ok: false, reason: "would-overdraw" };
+
+    await client.query(
+      `INSERT INTO ledger_entries (user_id, delta_pts, kind, memo)
+       VALUES ($1, $2, 'adjustment', $3)`,
+      [userId, deltaPts, memo],
+    );
 
     await record(client, {
       actorUserId: actor.id,

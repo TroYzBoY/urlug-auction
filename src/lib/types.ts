@@ -3,8 +3,7 @@
  * The lot is closed to bids and has no result yet — bidders are shown that it
  * is being checked rather than a hammer price that does not exist.
  */
-export type LotStatus =
-  "upcoming" | "live" | "review" | "sold" | "unsold";
+export type LotStatus = "upcoming" | "live" | "review" | "sold" | "unsold";
 
 /** Drives the generated placeholder artwork + the silhouette shown on a lot. */
 export type LotCategory =
@@ -107,12 +106,6 @@ export interface Bid {
   round: number;
   /** Epoch ms. */
   at: number;
-  /**
-   * How much of the bid clock was left when the server accepted it, in ms —
-   * measured on the server, under the lock. null for a bid still in flight
-   * from this screen, and for bids from before it was recorded.
-   */
-  clockLeftMs: number | null;
   /** True for the signed-in bidder, so the feed can mark it. */
   isYou: boolean;
 }
@@ -138,11 +131,6 @@ export interface RoomState {
   bidClockEndsAt: number;
   /** Epoch ms the current round rolls over to the next. */
   roundEndsAt: number;
-  /**
-   * Epoch ms bidding stopped, once it has: a clock's deadline when a clock
-   * ended it, the moment of the stop when an operator did. null while live.
-   */
-  closedAt: number | null;
   /** Newest first. */
   bids: Bid[];
   /** False until the signed-in bidder has placed their first bid on this lot. */

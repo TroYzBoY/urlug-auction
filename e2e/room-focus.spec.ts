@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import {
-  clockLeftOf,
   finalRoundEndingIn,
   makeBidder,
   makeLiveLot,
@@ -83,13 +82,15 @@ test("focus mode keeps the clocks and the bid, and is remembered", async ({
   await page.goto("/auction/F02");
 
   await expect(page.getByRole("banner")).toBeVisible();
-  await expect(page.getByText("Тодорхойгүй · XVIII зуун")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Дэлгэрэнгүй" })).toBeVisible();
 
   await page.getByRole("button", { name: "Фокус" }).click();
 
-  // The header and the catalogue line go; the console stays.
+  // The header and the picture go; the console stays.
   await expect(page.getByRole("banner")).toHaveCount(0);
-  await expect(page.getByText("Тодорхойгүй · XVIII зуун")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Дэлгэрэнгүй" })).toHaveCount(
+    0,
+  );
   await expect(page.getByRole("timer")).toHaveCount(2);
   await expect(page.getByRole("button", { name: /Үнэ хаях/ })).toBeVisible();
   // The name leaves the screen, not the page: still the heading.
@@ -99,12 +100,47 @@ test("focus mode keeps the clocks and the bid, and is remembered", async ({
 
   // A preference, not a page state.
   await page.reload();
-  await expect(page.getByRole("button", { name: "Бүгдийг харах" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Бүгдийг харах" }),
+  ).toBeVisible();
   await expect(page.getByRole("banner")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Бүгдийг харах" }).click();
   await expect(page.getByRole("banner")).toBeVisible();
   await expect(page.getByRole("button", { name: "Фокус" })).toBeVisible();
+});
+
+test("a phone shows the picture, the clocks and the bid, and the description on demand", async ({
+  page,
+}) => {
+  await makeLiveLot("F04");
+  const bidder = await makeBidder("99110304", "Т-304");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, bidder);
+  await page.evaluate(() => localStorage.removeItem("urlug.room.focus"));
+  await page.goto("/auction/F04");
+
+  await expect(page.locator(".lot-plate")).toBeVisible();
+  await expect(page.getByRole("timer")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: /Үнэ хаях/ })).toBeVisible();
+  // The words are not on the page until they are asked for.
+  await expect(page.getByText("Тест лот.")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Дэлгэрэнгүй" }).click();
+  const sheet = page.getByRole("dialog", { name: "Хүрэл цоморлиг" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByText("Тест лот.")).toBeVisible();
+  await expect(sheet.getByText("Тодорхойгүй · XVIII зуун")).toBeVisible();
+
+  // Closing puts the bidder back in the room, bid button and all.
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Үнэ хаях/ })).toBeVisible();
+
+  // A desktop has no picture to carry the button; it stands under the title.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(page.locator(".lot-plate")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Дэлгэрэнгүй" })).toBeVisible();
 });
 
 test("the last clock reaching zero takes the bid button away before the server answers", async ({
@@ -131,33 +167,4 @@ test("the last clock reaching zero takes the bid button away before the server a
   });
   await expect(page.getByRole("button", { name: /Үнэ хаях/ })).toHaveCount(0);
   await expect(page.getByRole("timer")).toHaveCount(0);
-});
-
-test("the final round's log shows the bid clock a real bid was accepted on, to the millisecond", async ({
-  page,
-}) => {
-  await makeLiveLot("F04");
-  const bidder = await makeBidder("99110304", "Т-304");
-  await page.setViewportSize({ width: 390, height: 844 });
-  await signIn(page, bidder);
-  await finalRoundEndingIn("F04", 60_000);
-  await page.goto("/auction/F04");
-
-  const log = page.getByRole("region", { name: "Сүүлийн тойргийн бүртгэл" });
-  await expect(log).toBeVisible();
-  await expect(log.getByText("Энэ тойрогт хаялт хараахан алга")).toBeVisible();
-
-  await page.getByRole("button", { name: /Үнэ хаях/ }).click();
-
-  /*
-   * The row appears when the server's push brings the measurement — never
-   * from this screen's clock — and it says what the database says.
-   */
-  const row = log.getByRole("listitem").filter({ hasText: "Та" });
-  await expect(row).toBeVisible();
-  const shown = (await row.textContent())!.match(/(\d+\.\d{3})/)![1]!;
-  const stored = await clockLeftOf("F04");
-  expect(Number(shown)).toBe(stored / 1000);
-  expect(stored).toBeGreaterThan(50_000);
-  expect(stored).toBeLessThanOrEqual(60_000);
 });

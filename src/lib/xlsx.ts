@@ -1,5 +1,6 @@
 import "server-only";
 import { crc32, deflateRawSync } from "node:zlib";
+import { houseParts } from "./house-time";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -269,11 +270,16 @@ export function workbook(sheets: Sheet[]): Buffer {
   ]);
 }
 
-/** `2026-08-23 14:05` — sorts as text, and is unambiguous in any locale. */
+/**
+ * `2026-08-23 14:05` — sorts as text, and is unambiguous in any locale.
+ *
+ * Ulaanbaatar time. It used to be the server's local time, which in production
+ * is UTC: every payment in the accountant's spreadsheet was eight hours early.
+ */
 export function stamp(value: Date | string | null | undefined): string {
   if (!value) return "";
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const p = houseParts(d);
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
 }

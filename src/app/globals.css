@@ -376,6 +376,390 @@
   animation-name: via-blur;
 }
 
+/*
+ * The page transition (app/template.tsx). The old page leaves fast so it does
+ * not compete with what is arriving; the new one waits a beat for it and
+ * settles more slowly, so there is time to register it.
+ *
+ * The header is anchored: it neither slides nor crossfades, so there is one
+ * fixed point on screen and it is clear that the content moved, not the whole
+ * window. The overlay passes clicks through to the live page underneath.
+ */
+::view-transition {
+  pointer-events: none;
+}
+
+::view-transition-old(.page-out) {
+  animation: 170ms var(--ease-in-out-soft) both page-out;
+}
+
+::view-transition-new(.page-in) {
+  animation: 360ms var(--ease-out-soft) 90ms both page-in;
+}
+
+/* Into the room: opacity only, short, no delay — see app/template.tsx. */
+::view-transition-new(.page-fade) {
+  animation: 140ms linear both page-fade;
+}
+
+@keyframes page-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes page-out {
+  to {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(16px);
+  }
+}
+
+/*
+ * A filter chip or a page number in the catalogue (`catalogue` navigations,
+ * app/lots/page.tsx): a card that stays glides to its new place, one that
+ * leaves sinks and fades quickly, one that arrives rises in a beat later.
+ */
+::view-transition-group(.card-move) {
+  animation-duration: 460ms;
+  animation-timing-function: var(--ease-out-soft);
+}
+
+::view-transition-old(.card-out) {
+  animation: 200ms var(--ease-in-out-soft) both card-out;
+}
+
+::view-transition-new(.card-in) {
+  animation: 380ms var(--ease-out-soft) 110ms both card-in;
+}
+
+@keyframes card-out {
+  to {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.95);
+  }
+}
+
+::view-transition-group(site-header) {
+  animation: none;
+  z-index: 100;
+}
+
+::view-transition-old(site-header) {
+  display: none;
+}
+
+::view-transition-new(site-header) {
+  animation: none;
+}
+
+/*
+ * ── Scroll reveal (components/site/Reveal.tsx) ────────────────────────────
+ *
+ * Scrubbed by scroll position: the element rises and fades in over the first
+ * 22vh of scrolling after its top edge crosses the bottom of the screen. A
+ * length rather than a share of the element, so a tall section reveals as
+ * quickly as a small card.
+ *
+ * Only where the browser can drive it from scroll and the reader has not asked
+ * for less motion. Everywhere else this rule does not exist and nothing is
+ * ever hidden.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: reveal-rise linear both;
+      animation-timeline: view();
+      animation-range: entry var(--reveal-at, 0vh) entry
+        calc(var(--reveal-at, 0vh) + 22vh);
+    }
+  }
+}
+
+@keyframes reveal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--reveal-y, 24px));
+  }
+}
+
+/*
+ * ── Backdrop (components/site/Backdrop.tsx) ───────────────────────────────
+ *
+ * A faint cyan grid that drifts slowly downward; every fourth line of it a
+ * brighter column, down which a soft light falls now and then; one wash of
+ * the same cyan breathing at the top of the screen; and the sides fading back
+ * to the ground so the eye settles in the middle. One hue throughout, per the
+ * note on `body` above. All of it fades out down the page, so the lower
+ * screen, where reading happens, stays the flat ground.
+ *
+ * Built to cost nothing while a clock is running: the outer layer is static
+ * and carries the mask, and only the grid, the falling lights and the wash
+ * move, by transform and opacity alone, so the compositor animates them
+ * without a repaint or any main-thread work. The grid moves exactly one cell
+ * per loop, so the restart is invisible.
+ *
+ * Centred: the grid has a line down the middle of the screen and the columns
+ * stand in pairs either side of it, so the composition sits on the page
+ * rather than starting from its left edge.
+ *
+ * Pages with their own ground (the About descent) paint over it.
+ */
+.backdrop {
+  --cell: 64px;
+  /* Columns every fourth grid line, every second on a phone so two still
+     show either side of the middle. */
+  --col: calc(var(--cell) * 4);
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, black, transparent 85%);
+}
+
+@media (max-width: 639px) {
+  .backdrop {
+    --col: calc(var(--cell) * 2);
+  }
+}
+
+.backdrop i {
+  position: absolute;
+  inset: calc(var(--cell) * -1) 0 0;
+  background-image:
+    linear-gradient(rgb(71 234 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(71 234 255 / 0.05) 1px, transparent 1px);
+  background-size: var(--cell) var(--cell);
+  /* A vertical line exactly down the middle: the tile's left edge, where its
+     line is drawn, lands on the centre of the screen. */
+  background-position: calc(50% + var(--cell) / 2) 0;
+  animation: grid-drift 9s linear infinite;
+  will-change: transform;
+}
+
+/* The sides fade back to the ground. Over the grid and the columns, under
+   nothing a reader needs: the whole backdrop sits behind the page. */
+.backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    90deg,
+    var(--color-ground),
+    transparent 16%,
+    transparent 84%,
+    var(--color-ground)
+  );
+  opacity: 0.75;
+}
+
+.backdrop-cols {
+  position: absolute;
+  inset: 0;
+}
+
+/* A column: one grid line drawn a little brighter, strongest at the top. */
+.backdrop-cols b {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(50% + var(--c) * var(--col));
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    rgb(71 234 255 / 0.08),
+    rgb(71 234 255 / 0.03) 70%
+  );
+}
+
+/* Its light: a soft streak with a bright head, falling the height of the
+   screen and then resting out of sight for most of its period, so at any
+   moment only one or two are on their way down. */
+.backdrop-cols b::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -3px;
+  width: 7px;
+  height: 22vh;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(162 245 255 / 0.55) 50%,
+    transparent
+  );
+  mask-image: linear-gradient(to bottom, transparent, black 85%, transparent);
+  /* At rest — before its first fall, and for good under reduced motion —
+     it waits above the top of the screen, out of sight. */
+  transform: translateY(-25vh);
+  animation: beam-fall var(--period, 12s) linear var(--delay, 0s) infinite;
+  will-change: transform, opacity;
+}
+
+.backdrop::after {
+  content: "";
+  position: absolute;
+  inset: -20% -10% auto;
+  height: 70%;
+  background: radial-gradient(
+    50% 50% at 50% 30%,
+    rgb(71 234 255 / 0.07),
+    transparent 70%
+  );
+  animation: wash-breathe 14s var(--ease-in-out-soft) infinite alternate;
+  will-change: transform, opacity;
+}
+
+@keyframes grid-drift {
+  to {
+    transform: translateY(var(--cell));
+  }
+}
+
+@keyframes beam-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(-25vh);
+  }
+  6% {
+    opacity: 1;
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(105vh);
+  }
+  40.01%,
+  100% {
+    opacity: 0;
+    transform: translateY(105vh);
+  }
+}
+
+@keyframes wash-breathe {
+  from {
+    opacity: 0.6;
+    transform: translate3d(-8%, 0, 0) scale(1);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(8%, 4%, 0) scale(1.15);
+  }
+}
+
+/*
+ * ── The room's signals (components/room/RoomEffects.tsx) ──────────────────
+ *
+ * Every one of these is a separate layer that animates opacity, or a canvas of
+ * its own. None moves, scales or blurs anything a bidder reads or presses —
+ * the standing rule for the room's console.
+ */
+
+/* The final seconds: the screen's edges glow and pulse in the hot clock's
+   rust, about twice a second. Over everything, and clicks pass through. */
+.room-alarm {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 2px rgb(255 133 158 / 0.55),
+    inset 0 0 90px 12px rgb(255 133 158 / 0.22);
+  animation: alarm-pulse 0.5s var(--ease-in-out-soft) infinite alternate;
+}
+
+/* And the bid clock's own ring, in step with it. */
+.bid-clock[data-final]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 1px solid var(--color-rust);
+  box-shadow: inset 0 0 28px rgb(255 133 158 / 0.3);
+  animation: alarm-pulse 0.5s var(--ease-in-out-soft) infinite alternate;
+}
+
+@keyframes alarm-pulse {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* A new bid: a cyan light swells behind the price and fades. Behind the
+   digits (`z-index: -1` inside the price's own stacking context), so the
+   number is never covered, even for a frame. */
+.price-flash {
+  position: absolute;
+  inset: -40% -25%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    rgb(71 234 255 / 0.32),
+    rgb(131 56 255 / 0.12) 55%,
+    transparent
+  );
+  animation: flash-out 1.2s linear both;
+}
+
+/* Holds at full strength for a moment so the eye catches it, then fades
+   evenly — an ease-out curve had it two-thirds gone before anyone looked. */
+@keyframes flash-out {
+  0%,
+  25% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* A new row in the feed: one sweep of light across it. */
+.feed-shine {
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(71 234 255 / 0.22),
+    transparent
+  );
+  animation: decision-sweep 0.9s var(--ease-out-soft) both;
+}
+
+/* The win burst's canvas, over the whole screen for its two and a half
+   seconds, clicks passing through. */
+.room-burst {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

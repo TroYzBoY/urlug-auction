@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { ViewTransition } from "react";
 import { LotPlate } from "./LotPlate";
+import { BidClockBar, LivePrice, StartsIn } from "./CardLive";
+import { CardWatch } from "./CardWatch";
+import { QuickView } from "./QuickView";
 import { t } from "@/lib/copy";
-import { lotDate, pts, ptsToMnt } from "@/lib/format";
+import { lotDate, pts } from "@/lib/format";
 import { coverOf, type Lot, type LotStatus } from "@/lib/types";
 
 export function LiveDot() {
@@ -23,27 +26,26 @@ const STATUS: Record<LotStatus, { label: string; tone: string }> = {
   unsold: { label: t.lot.statusUnsold, tone: "text-faint" },
 };
 
-export function LotCard({ lot }: { lot: Lot }) {
+export function LotCard({
+  lot,
+  watching,
+}: {
+  lot: Lot;
+  /** Whether the viewer follows this lot; null when signed out. Leave it out
+      and the card has no heart. */
+  watching?: boolean | null;
+}) {
   const isLive = lot.status === "live";
   const isSold = lot.status === "sold";
   const status = STATUS[lot.status];
 
   /*
-   * No hover lift and no plate zoom.
-   *
-   * The card used to rise 3px on a spring and the photograph inside it scaled
-   * to 1.02 over 700ms. Two objections, and the second is the real one:
-   *
-   *   1. Neither exists on touch, which is most of this audience. A grid whose
-   *      only affordance is a hover state has no affordance on a phone.
-   *   2. A catalogue of twelve cards that each lift and zoom is a grid that
-   *      will not hold still while you read it.
-   *
-   * The title still changes colour on hover, which is the affordance that
-   * matters: it says the whole card is a link.
+   * The card holds still under the mouse: no lean and no zoom, so the grid
+   * reads as a grid. The title's colour change is the affordance that says the
+   * whole card is a link.
    */
   return (
-    <article className="auction-card">
+    <article className="auction-card relative">
       <Link
         href={`/auction/${lot.id}`}
         className="group block text-left focus-visible:outline-offset-4"
@@ -58,6 +60,7 @@ export function LotCard({ lot }: { lot: Lot }) {
               ratio="aspect-[4/3]"
             />
           </ViewTransition>
+          {isLive && <BidClockBar lotId={lot.id} />}
 
           {/* Tighter type and tracking at two-up. "Хүлээгдэж байна" is 15
               characters, and at the eyebrow's full 0.18em tracking it stretched
@@ -135,21 +138,54 @@ export function LotCard({ lot }: { lot: Lot }) {
                   </dd>
                 </div>
                 <div className="sm:text-right">
-                  <dt className="eyebrow">
-                    {isLive ? t.lot.opening : t.lot.startsAt}
-                  </dt>
-                  <dd
-                    data-numerals
-                    className="text-ink-soft mt-1 text-xs font-medium"
-                  >
-                    {isLive ? ptsToMnt(lot.openingPts) : lotDate(lot.startsAt)}
-                  </dd>
+                  {isLive ? (
+                    <>
+                      <dt className="eyebrow">{t.room.currentPrice}</dt>
+                      <dd
+                        data-numerals
+                        className="text-signal mt-1 text-xs font-semibold"
+                      >
+                        <LivePrice
+                          lotId={lot.id}
+                          initialPts={lot.currentPts ?? lot.openingPts}
+                        />
+                        <span className="text-muted ml-1 text-xs font-normal">
+                          {t.common.point}
+                        </span>
+                      </dd>
+                    </>
+                  ) : lot.status === "upcoming" ? (
+                    <StartsIn
+                      at={lot.startsAt}
+                      fallback={lotDate(lot.startsAt)}
+                    />
+                  ) : (
+                    <>
+                      <dt className="eyebrow">{t.lot.startsAt}</dt>
+                      <dd
+                        data-numerals
+                        className="text-ink-soft mt-1 text-xs font-medium"
+                      >
+                        {lotDate(lot.startsAt)}
+                      </dd>
+                    </>
+                  )}
                 </div>
               </>
             )}
           </dl>
         </div>
       </Link>
+
+      {/* Outside the link: a button inside an <a> is invalid, and a press on
+          either must not open the lot. Over the photograph's top-left corner;
+          the status badge has the other one. */}
+      <div className="card-actions">
+        {watching !== undefined && (
+          <CardWatch lotId={lot.id} watching={watching} />
+        )}
+        <QuickView lot={lot} />
+      </div>
     </article>
   );
 }

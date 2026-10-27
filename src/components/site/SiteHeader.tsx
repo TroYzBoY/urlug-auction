@@ -56,7 +56,7 @@ export async function SiteHeader({ minimal = false }: { minimal?: boolean }) {
               name: user.name,
               paddle: user.paddle,
               balancePts: user.balancePts,
-              isStaff: user.role === "admin" || user.role === "staff",
+              isAdmin: user.role === "admin",
             }
           : null
       }

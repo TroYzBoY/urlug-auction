@@ -11,7 +11,7 @@ import { pts } from "@/lib/format";
 
 /**
  * `desktop: false` keeps a link in the compact menu. Desktop navigation leaves
- * room for the notification bell, staff controls and the bidder's balance.
+ * room for the notification bell, admin controls and the bidder's balance.
  */
 const LINKS = [
   { href: "/lots", label: t.nav.lots, desktop: true },
@@ -46,7 +46,7 @@ export interface HeaderAccount {
   name: string;
   paddle: string;
   balancePts: number;
-  isStaff: boolean;
+  isAdmin: boolean;
 }
 
 /** What the bell needs: the recent list, and how many of them are unread. */
@@ -97,7 +97,10 @@ export function Header({
      * it reads as a stray line floating over the artwork.
      */
     return (
-      <header className="house-header bg-ground/90 sticky top-0 z-40 border-b backdrop-blur-md">
+      <header
+        className="house-header bg-ground/90 sticky top-0 z-40 border-b backdrop-blur-md"
+        style={{ viewTransitionName: "site-header" }}
+      >
         <div className="gutter flex h-14 items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             {/*
@@ -135,7 +138,10 @@ export function Header({
   }
 
   return (
-    <header className="fixed top-3 left-1/2 z-50 w-[calc(100%-2.5rem)] max-w-[73rem] -translate-x-1/2 sm:top-5 md:w-[calc(100%-5rem)]">
+    <header
+      className="fixed top-3 left-1/2 z-50 w-[calc(100%-2.5rem)] max-w-[73rem] -translate-x-1/2 sm:top-5 md:w-[calc(100%-5rem)]"
+      style={{ viewTransitionName: "site-header" }}
+    >
       <motion.div
         initial={false}
         animate={{ y: 0, opacity: 1 }}
@@ -182,7 +188,7 @@ export function Header({
             URL. Outlined rather than filled: it is a door, not the thing the
             page is for.
           */}
-          {account?.isStaff && (
+          {account?.isAdmin && (
             <Link href="/admin" className="hidden lg:block">
               <motion.span
                 whileHover={{ scale: 1.03 }}
@@ -275,7 +281,7 @@ export function Header({
             */}
             {account ? (
               <>
-                {account.isStaff && (
+                {account.isAdmin && (
                   <Link
                     href="/admin"
                     onClick={() => setOpen(false)}

@@ -7,7 +7,7 @@ import { settle, type EngineState } from "../auction-engine";
  * ADMIN READS
  *
  * ⚠ Nothing here checks authorisation. Every function assumes the caller has
- * already established that the viewer is staff — see `requireAdmin` in
+ * already established that the viewer is an admin — see `requireAdmin` in
  * `src/lib/session.ts`, which every admin page and action calls first.
  *
  * That split is deliberate and worth stating: a repository that sometimes
@@ -328,7 +328,7 @@ export interface AdminUserRow {
   paddle: string;
   phone: string;
   status: "active" | "suspended" | "closed";
-  role: "bidder" | "staff" | "admin";
+  role: "bidder" | "admin";
   verified: boolean;
   balancePts: number;
   bidCount: number;

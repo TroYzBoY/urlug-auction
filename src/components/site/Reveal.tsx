@@ -1,9 +1,12 @@
+import type { CSSProperties } from "react";
+
 type RevealProps = {
   children: React.ReactNode;
   className?: string;
-  /** Accepted and ignored. See the note below. */
+  /** Staggers the reveal, in milliseconds of the old timed version — now a
+      scroll offset, 4vh per 80ms. */
   delay?: number;
-  /** Accepted and ignored. See the note below. */
+  /** How far it rises from, in px. */
   y?: number;
   as?: "div" | "section" | "article" | "li";
   id?: string;
@@ -11,44 +14,42 @@ type RevealProps = {
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * A SECTION WRAPPER. IT NO LONGER REVEALS ANYTHING.
+ * A SECTION THAT RISES INTO VIEW AS YOU SCROLL TO IT.
  *
- * Scroll reveals are gone from the site. They were the largest source of motion
- * outside the landing, and on a phone they meant most of a page was invisible
- * at any moment — you scrolled, waited a beat, then read.
+ * Driven by the scroll position itself (`animation-timeline: view()` on
+ * `.reveal` in globals.css), not by a timer or an observer. Three things follow
+ * from that, and they are why this came back after the timed version was cut:
  *
- * ── Why the component survives ───────────────────────────────────────────────
+ *   1. Nothing waits. The old reveals played on a clock once an element was
+ *      found in view, so you scrolled, waited a beat, then read. This is
+ *      finished by the time an element is a fifth of the way up the screen,
+ *      and stopping the scroll stops it where it is.
+ *   2. Nothing can be stranded invisible. Jumping past an element with an
+ *      anchor or the End key lands on its finished state, because the state is
+ *      a function of position — the problem `reveal-manager.ts` existed to
+ *      solve, solved by the browser.
+ *   3. No JavaScript at all. This stays a Server Component, and a browser
+ *      without scroll-driven animations, or a reader who has asked for reduced
+ *      motion, simply gets the content standing still.
  *
- * It is used about thirty times across five pages, and it carries `as` and `id`
- * that those call sites depend on for their heading structure and anchors.
- * Deleting it would be a mechanical edit of every page for no gain, and would
- * lose the semantic element choice along the way.
- *
- * `delay` and `y` are kept in the signature and ignored. Removing them would
- * churn every call site to say nothing; leaving them means restoring the
- * animation later is one file, not thirty.
- *
- * ── What went with it ────────────────────────────────────────────────────────
- *
- * `reveal-manager.ts` and the `[data-reveal]` rules in `globals.css`. The
- * manager was careful work — it tracked position rather than intersection
- * precisely so that jumping past an element with an anchor link or the End key
- * still revealed it, which `IntersectionObserver` gets wrong. That care was in
- * service of never leaving content invisible, and not hiding it in the first
- * place achieves the same thing with no code.
- *
- * This is now a Server Component: no "use client", no hook, no JavaScript
- * shipped for it at all.
+ * `delay` becomes a scroll offset so the catalogue still staggers by column.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 export function Reveal({
   children,
   className = "",
+  delay = 0,
+  y,
   as: Tag = "div",
   id,
 }: RevealProps) {
+  const style = {
+    ...(delay ? { "--reveal-at": `${(delay / 80) * 4}vh` } : {}),
+    ...(y !== undefined ? { "--reveal-y": `${y}px` } : {}),
+  } as CSSProperties;
+
   return (
-    <Tag id={id} className={className}>
+    <Tag id={id} className={`reveal ${className}`} style={style}>
       {children}
     </Tag>
   );

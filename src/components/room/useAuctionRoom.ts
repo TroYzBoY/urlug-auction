@@ -64,7 +64,9 @@ interface State {
  * the 40 most recent.
  */
 function project(state: State): RoomState {
-  const live = state.pending.filter((p) => p.bid.points > state.server.currentPts);
+  const live = state.pending.filter(
+    (p) => p.bid.points > state.server.currentPts,
+  );
   if (live.length === 0) return state.server;
 
   const top = live[live.length - 1]!;
@@ -74,7 +76,10 @@ function project(state: State): RoomState {
     leader: top.bid.paddle,
     bidClockEndsAt: top.bidClockEndsAt,
     hasBid: true,
-    bids: [...live.map((p) => p.bid).reverse(), ...state.server.bids].slice(0, 40),
+    bids: [...live.map((p) => p.bid).reverse(), ...state.server.bids].slice(
+      0,
+      40,
+    ),
   };
 }
 
@@ -158,11 +163,15 @@ export function useAuctionRoom(
    * rather than to a diff they missed the start of.
    */
   useEffect(() => {
-    const source = new EventSource(`/api/room/${encodeURIComponent(lotId)}/stream`);
+    const source = new EventSource(
+      `/api/room/${encodeURIComponent(lotId)}/stream`,
+    );
 
     source.addEventListener("state", (event) => {
       try {
-        const next = JSON.parse((event as MessageEvent<string>).data) as RoomState;
+        const next = JSON.parse(
+          (event as MessageEvent<string>).data,
+        ) as RoomState;
         syncServerClock(next.serverNow);
         dispatch({ type: "sync", state: next });
       } catch (err) {
@@ -211,8 +220,6 @@ export function useAuctionRoom(
           points,
           round: internal.server.round,
           at: now,
-          // The server measures this; until its push arrives it is unknown.
-          clockLeftMs: null,
           isYou: true,
         },
         bidClockEndsAt: now + clockMs,

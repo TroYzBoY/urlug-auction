@@ -35,9 +35,9 @@ export type DescentState = {
   burn: number;
   /** 0…1 dusk → roast. Flips inside a dissolve, never in the open. */
   night: number;
-  /** 0…1 the rust flood of the hammer. */
+  /** 0…1 the purple flood of the hammer. */
   climax: number;
-  /** 0…1 the amber spill of the hall. */
+  /** 0…1 the cyan spill of the hall. */
   door: number;
   /** Per-scene progress, 0…1, indexed by registration order. */
   scene: number[];

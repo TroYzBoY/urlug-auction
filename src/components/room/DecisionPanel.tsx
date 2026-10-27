@@ -22,9 +22,7 @@ function standings(bids: readonly Bid[]): Bid[] {
     const held = best.get(bid.paddle);
     if (!held || bid.points > held.points) best.set(bid.paddle, bid);
   }
-  return [...best.values()]
-    .sort((a, b) => b.points - a.points)
-    .slice(0, SHOWN);
+  return [...best.values()].sort((a, b) => b.points - a.points).slice(0, SHOWN);
 }
 
 /**
@@ -42,11 +40,10 @@ function standings(bids: readonly Bid[]): Bid[] {
  *             in the transaction that closes it, and the room goes straight
  *             from the last clock to the result.
  *
- * What it shows is the leading bids being gone over: a sweeping bar, a band
- * passing down the list, each row lighting in turn. That is decoration, and it
- * is decoration over the REAL standing bids — the room already shows every one
- * of them in the feed — under a headline that says a winner is being decided,
- * which is true in both cases. It does not pretend to a progress figure or to
+ * What it shows is a loading screen over the leading bids: a sweeping bar, a
+ * band passing down the list, each row lighting in turn. That is decoration,
+ * and it is decoration over the REAL standing bids — the room already shows
+ * every one of them in the feed — under a plain "Loading…" headline. It does not pretend to a progress figure or to
  * steps being ticked off, because there are none to report.
  *
  * `role="status"` because it replaces a panel somebody may have had focus in;
@@ -67,7 +64,7 @@ export function DecisionPanel({
     <div
       role="status"
       aria-live="polite"
-      className="border-line bg-surface/95 flex flex-1 flex-col justify-center border-t px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-md short:pt-3 lg:block lg:border lg:p-6"
+      className="border-line bg-surface/95 short:pt-3 flex flex-1 flex-col justify-center border-t px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-md lg:block lg:border lg:p-6"
     >
       <div className="flex items-center gap-2.5">
         <Spinner className="size-4" />
@@ -75,7 +72,7 @@ export function DecisionPanel({
           {phase === "closing" ? t.room.closing : t.room.deciding}
         </p>
       </div>
-      <p className="text-ink mt-2 text-base leading-snug font-medium short:text-sm">
+      <p className="text-ink short:text-sm mt-2 text-base leading-snug font-medium">
         {phase === "closing" ? t.room.closingBody : t.room.reviewBody}
       </p>
 

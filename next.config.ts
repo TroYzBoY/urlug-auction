@@ -65,6 +65,19 @@ const nextConfig: NextConfig = {
   /* Naming the framework and its version to every visitor buys nothing. */
   poweredByHeader: false,
 
+  images: {
+    /*
+     * The optimiser resizes only the two places lot photographs live: the
+     * catalogue's files and the admin's uploads. Without a list it would fetch
+     * and resize any path on this origin it was asked for. No query strings —
+     * an image path never needs one, and allowing them invites enumeration.
+     */
+    localPatterns: [
+      { pathname: "/media/**", search: "" },
+      { pathname: "/api/images/**", search: "" },
+    ],
+  },
+
   async headers() {
     return [
       { source: "/:path*", headers: SECURITY_HEADERS },

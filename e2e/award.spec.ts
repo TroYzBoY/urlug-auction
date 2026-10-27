@@ -76,20 +76,15 @@ test("a lot left to the clock shows the standing leader as winner the moment it 
    * clock covers the ticker's quarter-second cadence and the push.
    */
   await expect(page.getByRole("timer")).toHaveCount(0, { timeout: 10_000 });
-  await expect(page.getByText("ЦОХИВ", { exact: true }).first()).toBeVisible({
+  await expect(
+    page.getByText("ЯЛАГЧ ТОДОРЛОО", { exact: true }).first(),
+  ).toBeVisible({
     timeout: 2_000,
   });
-  await expect(page.getByText("Ялагчийг тодруулж байна")).toHaveCount(0);
-  await expect(page.locator('dt:has-text("Хүлээн авагч") + dd')).toHaveText(
+  await expect(page.getByText("Loading…")).toHaveCount(0);
+  await expect(page.locator('dt:has-text("Ялагч") + dd')).toHaveText(
     "Тэргүүлсэн оролцогч",
   );
-
-  // The final-round log records the close where it happened: the bid clock
-  // at zero, and who it went to.
-  const log = page.getByRole("region", { name: "Сүүлийн тойргийн бүртгэл" });
-  await expect(log.getByText("Хаялт хаагдлаа")).toBeVisible();
-  await expect(log.getByText("0.000", { exact: false })).toBeVisible();
-  await expect(log.getByText("Ялагч: Тэргүүлсэн оролцогч")).toBeVisible();
 
   const result = await withDatabase(async (client) => {
     const rows = await client.query(
@@ -108,6 +103,35 @@ test("a lot left to the clock shows the standing leader as winner the moment it 
     hammer_pts: 1300,
   });
   expect(errors).toEqual([]);
+});
+
+test("on a phone, the bid history appears once the lot is sold, winner first", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await makeBidder("99110092", "Т-292");
+  await makeBidder("99110093", "Т-293");
+  await makeLiveLot(LOT);
+  await seedFinalRound("5 seconds");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect((await page.goto(`/auction/${LOT}`))?.status()).toBe(200);
+
+  // While bidding a phone has no room for it.
+  const feed = page.getByRole("region", { name: "Хаялтын урсгал" });
+  await expect(page.getByRole("timer")).toHaveCount(2);
+  await expect(feed).toBeHidden();
+
+  await expect(page.getByRole("timer")).toHaveCount(0, { timeout: 10_000 });
+  await expect(feed).toBeVisible({ timeout: 2_000 });
+  await expect(feed.getByText("Ялагч", { exact: true }).first()).toBeVisible();
+  await expect(
+    feed.getByText("Тэргүүлсэн оролцогч", { exact: true }).first(),
+  ).toBeVisible();
+  // The real bids are still there, in the order they were placed.
+  await expect(feed.getByRole("listitem")).toHaveCount(2);
+  await expect(feed.getByRole("listitem").first()).toContainText(
+    "Тэргүүлсэн оролцогч",
+  );
 });
 
 for (const override of [false, true]) {
@@ -138,7 +162,9 @@ for (const override of [false, true]) {
     await page
       .getByRole("button", { name: "Тийм, би тодруулна", exact: true })
       .click();
-    await expect(page.getByText("Админ тодруулна", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Админ тодруулна", { exact: true }),
+    ).toBeVisible();
 
     // Expire the final round with two real bid records. The ticker and the
     // decision action must turn this running row into review themselves.
@@ -151,9 +177,7 @@ for (const override of [false, true]) {
     room.on("pageerror", (error) => errors.push(error.message));
     try {
       expect((await room.goto(`/auction/${LOT}`))?.status()).toBe(200);
-      await expect(
-        room.getByText("ШАЛГАЖ БАЙНА", { exact: true }),
-      ).toBeVisible();
+      await expect(room.getByText("LOADING", { exact: true })).toBeVisible();
 
       expect((await page.goto("/admin"))?.status()).toBe(200);
       const picker = page.getByRole("combobox", { name: "Ялагчийг сонгох" });
@@ -185,14 +209,14 @@ for (const override of [false, true]) {
       await expect(picker).toHaveCount(0);
       // No navigation or reload on this page: this must arrive through SSE.
       await expect(
-        room.getByText("ЦОХИВ", { exact: true }).first(),
+        room.getByText("ЯЛАГЧ ТОДОРЛОО", { exact: true }).first(),
       ).toBeVisible();
-      await expect(room.locator('dt:has-text("Хүлээн авагч") + dd')).toHaveText(
+      await expect(room.locator('dt:has-text("Ялагч") + dd')).toHaveText(
         override ? "Доод хаялттай оролцогч" : "Тэргүүлсэн оролцогч",
       );
       await expect(
         room.locator(
-          'p[aria-live="polite"][aria-atomic="true"] span[aria-hidden]',
+          'p[aria-live="polite"][aria-atomic="true"] span[aria-hidden]:not(.price-flash)',
         ),
       ).toHaveText(override ? /^1\s250$/ : /^1\s300$/);
       await room.screenshot({ path: testInfo.outputPath("winner-result.png") });

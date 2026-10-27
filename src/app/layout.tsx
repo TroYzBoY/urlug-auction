@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { Backdrop } from "@/components/site/Backdrop";
 import { MotionProvider } from "@/components/site/MotionProvider";
 import { t } from "@/lib/copy";
 import { SITE_URL } from "@/lib/site";
@@ -57,7 +58,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: SITE_TITLE,
     description:
-      "Зургаан тойрог, 2 цаг 45 минут. Хугацаа хумигдана, шийдэмгий нь цохино.",
+      "Зургаан тойрог, 2 цаг 45 минут. Хугацаа хумигдана, шийдэмгий нь ялна.",
     type: "website",
     locale: "mn_MN",
   },
@@ -108,6 +109,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         />
       </head>
       <body className="min-h-dvh antialiased">
+        <Backdrop />
+
         {/*
           Skip link. Every page here opens with a header, and on the room that
           header sits above a lot plate, a clock and a price — a keyboard or

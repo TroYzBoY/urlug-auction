@@ -81,10 +81,12 @@ describe("the happy path", () => {
     if (!res.ok) return;
     expect(res.acceptedPts).toBe(1201);
 
-    const [auction] = await query<{ current_pts: number; leader_paddle: string }>(
-      "SELECT current_pts, leader_paddle FROM auctions WHERE lot_id = $1",
-      [LOT],
-    );
+    const [auction] = await query<{
+      current_pts: number;
+      leader_paddle: string;
+    }>("SELECT current_pts, leader_paddle FROM auctions WHERE lot_id = $1", [
+      LOT,
+    ]);
     expect(auction!.current_pts).toBe(1201);
     expect(auction!.leader_paddle).toBe("Т-100");
   });
@@ -93,7 +95,9 @@ describe("the happy path", () => {
     await seedRunningLot(url, { lotId: LOT, bidClockMsFromNow: 5_000 });
     const user = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
 
-    await placeBid(args({ userId: user.id, paddle: user.paddle, points: 1201 }));
+    await placeBid(
+      args({ userId: user.id, paddle: user.paddle, points: 1201 }),
+    );
 
     const [auction] = await query<{ ms_left: number }>(
       `SELECT EXTRACT(EPOCH FROM (bid_clock_ends_at - now())) * 1000 AS ms_left
@@ -117,8 +121,8 @@ describe("the happy path", () => {
 
     /*
      * The clock had three seconds when seeded; the bid lands a few ms later.
-     * What is stored is the clock BEFORE this bid reset it — the figure the
-     * final-round log shows — and the same number travels back on the result.
+     * What is stored is the clock BEFORE this bid reset it. It stays on the
+     * row and is not sent back to the room.
      */
     const [bid] = await query<{ clock_left_ms: number }>(
       "SELECT clock_left_ms FROM bids WHERE lot_id = $1",
@@ -126,7 +130,7 @@ describe("the happy path", () => {
     );
     expect(bid!.clock_left_ms).toBeGreaterThan(2_000);
     expect(bid!.clock_left_ms).toBeLessThanOrEqual(3_000);
-    expect(res.bid.clockLeftMs).toBe(bid!.clock_left_ms);
+    expect(res.bid).not.toHaveProperty("clockLeftMs");
   });
 });
 
@@ -190,7 +194,9 @@ describe("the rules, re-enforced server-side", () => {
   it("refuses an unverified bidder", async () => {
     await seedRunningLot(url, { lotId: LOT });
     const user = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
-    await query("UPDATE users SET phone_verified_at = NULL WHERE id = $1", [user.id]);
+    await query("UPDATE users SET phone_verified_at = NULL WHERE id = $1", [
+      user.id,
+    ]);
 
     const res = await placeBid(
       args({ userId: user.id, paddle: user.paddle, points: 1201 }),
@@ -202,7 +208,9 @@ describe("the rules, re-enforced server-side", () => {
   it("refuses a suspended bidder", async () => {
     await seedRunningLot(url, { lotId: LOT });
     const user = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
-    await query("UPDATE users SET status = 'suspended' WHERE id = $1", [user.id]);
+    await query("UPDATE users SET status = 'suspended' WHERE id = $1", [
+      user.id,
+    ]);
 
     const res = await placeBid(
       args({ userId: user.id, paddle: user.paddle, points: 1201 }),
@@ -320,7 +328,9 @@ describe("the rules, re-enforced server-side", () => {
     await seedRunningLot(url, { lotId: LOT, bidClockMsFromNow: -1_000 });
     const user = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
 
-    await placeBid(args({ userId: user.id, paddle: user.paddle, points: 1220 }));
+    await placeBid(
+      args({ userId: user.id, paddle: user.paddle, points: 1220 }),
+    );
 
     const [auction] = await query<{ due: boolean }>(
       `SELECT (round_ends_at <= now()) AS due FROM auctions WHERE lot_id = $1`,
@@ -339,8 +349,12 @@ describe("the join fee", () => {
       balancePts: 50,
     });
 
-    await placeBid(args({ userId: user.id, paddle: user.paddle, points: 1230 }));
-    await placeBid(args({ userId: user.id, paddle: user.paddle, points: 1232 }));
+    await placeBid(
+      args({ userId: user.id, paddle: user.paddle, points: 1230 }),
+    );
+    await placeBid(
+      args({ userId: user.id, paddle: user.paddle, points: 1232 }),
+    );
 
     const [balance] = await query<{ pts: number }>(
       "SELECT pts FROM balances WHERE user_id = $1",
@@ -364,7 +378,9 @@ describe("the join fee", () => {
       balancePts: 50,
     });
 
-    await placeBid(args({ userId: user.id, paddle: user.paddle, points: 1201 }));
+    await placeBid(
+      args({ userId: user.id, paddle: user.paddle, points: 1201 }),
+    );
 
     const [balance] = await query<{ pts: number }>(
       "SELECT pts FROM balances WHERE user_id = $1",
@@ -402,10 +418,20 @@ describe("idempotency", () => {
     const key = crypto.randomUUID();
 
     const first = await placeBid(
-      args({ userId: user.id, paddle: user.paddle, points: 1201, idempotencyKey: key }),
+      args({
+        userId: user.id,
+        paddle: user.paddle,
+        points: 1201,
+        idempotencyKey: key,
+      }),
     );
     const retry = await placeBid(
-      args({ userId: user.id, paddle: user.paddle, points: 1201, idempotencyKey: key }),
+      args({
+        userId: user.id,
+        paddle: user.paddle,
+        points: 1201,
+        idempotencyKey: key,
+      }),
     );
 
     expect(first.ok).toBe(true);
@@ -424,8 +450,22 @@ describe("idempotency", () => {
     // Both in flight at once — the second must block on the row lock rather
     // than racing the unique index and surfacing as a 500.
     const [a, b] = await Promise.all([
-      placeBid(args({ userId: user.id, paddle: user.paddle, points: 1201, idempotencyKey: key })),
-      placeBid(args({ userId: user.id, paddle: user.paddle, points: 1201, idempotencyKey: key })),
+      placeBid(
+        args({
+          userId: user.id,
+          paddle: user.paddle,
+          points: 1201,
+          idempotencyKey: key,
+        }),
+      ),
+      placeBid(
+        args({
+          userId: user.id,
+          paddle: user.paddle,
+          points: 1201,
+          idempotencyKey: key,
+        }),
+      ),
     ]);
 
     expect(a.ok).toBe(true);
@@ -492,7 +532,9 @@ describe("concurrency — the reason for the row lock", () => {
     await Promise.all(
       bidders.flatMap((b, i) =>
         Array.from({ length: 5 }, (_, n) =>
-          placeBid(args({ userId: b.id, paddle: b.paddle, points: 1201 + i + n * 8 })),
+          placeBid(
+            args({ userId: b.id, paddle: b.paddle, points: 1201 + i + n * 8 }),
+          ),
         ),
       ),
     );
@@ -522,7 +564,9 @@ describe("the append-only guarantee", () => {
   it("refuses to update a bid", async () => {
     await seedRunningLot(url, { lotId: LOT, currentPts: 1200 });
     const user = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
-    await placeBid(args({ userId: user.id, paddle: user.paddle, points: 1201 }));
+    await placeBid(
+      args({ userId: user.id, paddle: user.paddle, points: 1201 }),
+    );
 
     await expect(
       query("UPDATE bids SET points = 1 WHERE lot_id = $1", [LOT]),
@@ -532,7 +576,9 @@ describe("the append-only guarantee", () => {
   it("refuses to delete a bid", async () => {
     await seedRunningLot(url, { lotId: LOT, currentPts: 1200 });
     const user = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
-    await placeBid(args({ userId: user.id, paddle: user.paddle, points: 1201 }));
+    await placeBid(
+      args({ userId: user.id, paddle: user.paddle, points: 1201 }),
+    );
 
     await expect(
       query("DELETE FROM bids WHERE lot_id = $1", [LOT]),
@@ -544,11 +590,14 @@ describe("the audit trail", () => {
   it("records every accepted bid in the same transaction", async () => {
     await seedRunningLot(url, { lotId: LOT, currentPts: 1200 });
     const user = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
-    await placeBid(args({ userId: user.id, paddle: user.paddle, points: 1201 }));
-
-    const rows = await query<{ action: string; detail: Record<string, unknown> }>(
-      "SELECT action, detail FROM audit_log WHERE action = 'bid.placed'",
+    await placeBid(
+      args({ userId: user.id, paddle: user.paddle, points: 1201 }),
     );
+
+    const rows = await query<{
+      action: string;
+      detail: Record<string, unknown>;
+    }>("SELECT action, detail FROM audit_log WHERE action = 'bid.placed'");
     expect(rows).toHaveLength(1);
     expect(rows[0]!.detail.points).toBe(1201);
     expect(rows[0]!.detail.previousPts).toBe(1200);

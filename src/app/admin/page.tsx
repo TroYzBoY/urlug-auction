@@ -5,6 +5,7 @@ import {
   AuctionControls,
   ContactHandledButton,
   CreateLotForm,
+  CreateUserForm,
   UserControls,
   WinnerPicker,
 } from "@/components/admin/AdminForms";
@@ -211,7 +212,7 @@ export default async function AdminPage() {
         </div>
         {/*
           These two stay wide and scroll. The bidder-facing tables were made to
-          fit a phone; this is a staff tool used at a desk, and dropping columns
+          fit a phone; this is an admin tool used at a desk, and dropping columns
           from it would cost an operator information they came here for.
         */}
         <div className="overflow-x-auto">
@@ -298,7 +299,11 @@ export default async function AdminPage() {
         </div>
       </Panel>
 
-      <Panel heading={t.admin.users} empty="—" isEmpty={userRows.length === 0}>
+      {/* Never "empty": the form that opens an account lives inside it. */}
+      <Panel heading={t.admin.users} empty="—" isEmpty={false}>
+        <div className="mb-5">
+          <CreateUserForm />
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[40rem] border-collapse text-sm">
             <thead>

@@ -60,7 +60,7 @@ describe("the palette", () => {
     // A `prefers-color-scheme` block or a `data-theme` selector would mean a
     // second palette had crept back in without the toggle to reach it.
     expect(css).not.toMatch(/@media\s*\(prefers-color-scheme/);
-    expect(css).not.toContain('data-theme');
+    expect(css).not.toContain("data-theme");
   });
 
   it("declares color-scheme: dark", () => {
@@ -104,9 +104,12 @@ describe("nothing hides content", () => {
      * gated behind a `.js` class, so a page whose JavaScript failed rendered
      * plainly rather than blank.
      *
-     * Reveals are gone, so the guard gets stronger: no rule anywhere should
-     * start content invisible. Two things are legitimately exempt, and both are
-     * decorative layers with content BEHIND them rather than inside them:
+     * The guard is stronger than that now: no rule anywhere should start
+     * content invisible. Scroll reveals came back, but their hidden state
+     * lives only in a keyframe on a scroll timeline (see the test below), and
+     * keyframes are stripped here. Two things are legitimately exempt, and
+     * both are decorative layers with content BEHIND them rather than inside
+     * them:
      *
      *   [data-shaft]  the landing's WebGL canvases, held at 0 between scenes
      *   .dither-layer the halftone overlay on a lot plate, which fading out
@@ -125,5 +128,26 @@ describe("nothing hides content", () => {
       );
 
     expect(offenders).toEqual([]);
+  });
+
+  it("reveals only where scroll drives them and motion is welcome", () => {
+    /*
+     * A reveal's hidden state is safe for one reason: it is a function of
+     * scroll position, so no element can be left invisible — scroll to it and
+     * it is there. A timed reveal, or one in a browser that cannot drive it
+     * from scroll, has no such guarantee. So `.reveal` must only ever animate
+     * inside both guards, and nowhere else.
+     */
+    const motion = css.indexOf(
+      "@media (prefers-reduced-motion: no-preference)",
+    );
+    expect(motion).toBeGreaterThan(-1);
+    const block = blockAt(css, motion);
+    const supports = block.indexOf("@supports (animation-timeline: view())");
+    expect(supports).toBeGreaterThan(-1);
+    expect(blockAt(block, supports)).toMatch(/\.reveal\s*\{/);
+
+    const outside = css.replace(block, "");
+    expect(outside).not.toMatch(/\.reveal\s*\{/);
   });
 });

@@ -88,6 +88,13 @@ export default defineConfig({
        * value alone, so an empty string here wins over the file.
        */
       DEV_SKIP_OTP: "",
+      /*
+       * UTC, like production. A developer here runs in Ulaanbaatar time, which
+       * hid every place that read or wrote a time in the SERVER's zone: lots
+       * advertised and scheduled eight hours off, and none of it visible on
+       * the machine it was written on.
+       */
+      TZ: "UTC",
     },
   },
 });

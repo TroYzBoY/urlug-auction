@@ -20,7 +20,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- ── Users ────────────────────────────────────────────────────────────────────
 
 DO $$ BEGIN
-  CREATE TYPE user_role   AS ENUM ('bidder', 'staff', 'admin');
+  CREATE TYPE user_role   AS ENUM ('bidder', 'admin');
   EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -314,6 +314,35 @@ CREATE INDEX IF NOT EXISTS audit_actor_idx  ON audit_log (actor_user_id, created
 CREATE INDEX IF NOT EXISTS audit_action_idx ON audit_log (action, created_at DESC);
 CREATE INDEX IF NOT EXISTS audit_target_idx ON audit_log (target_type, target_id, created_at DESC);
 
+-- `staff` is gone. It was a second admin under another name — everything
+-- `requireAdmin` guarded, it could do: promote, credit, export every phone
+-- number. Anyone still holding it becomes a bidder, with an audit row saying
+-- so; an admin promotes them back on purpose if they should keep the panel.
+--
+-- A value cannot be dropped from a Postgres enum, so the type is rebuilt. The
+-- check on pg_enum makes this run once: on a fresh database, or after it has
+-- run, the type never had the value and the block does nothing.
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+     WHERE t.typname = 'user_role' AND e.enumlabel = 'staff'
+  ) THEN
+    INSERT INTO audit_log (action, target_type, target_id, detail)
+    SELECT 'admin.role_changed', 'user', id::text,
+           jsonb_build_object('paddle', paddle, 'from', 'staff', 'to', 'bidder',
+                              'reason', 'staff role removed')
+      FROM users WHERE role = 'staff';
+    UPDATE users SET role = 'bidder', updated_at = now() WHERE role = 'staff';
+
+    ALTER TYPE user_role RENAME TO user_role_with_staff;
+    CREATE TYPE user_role AS ENUM ('bidder', 'admin');
+    ALTER TABLE users ALTER COLUMN role DROP DEFAULT;
+    ALTER TABLE users ALTER COLUMN role TYPE user_role USING role::text::user_role;
+    ALTER TABLE users ALTER COLUMN role SET DEFAULT 'bidder';
+    DROP TYPE user_role_with_staff;
+  END IF;
+END $$;
+
 -- ── Rate limiting ────────────────────────────────────────────────────────────
 --
 -- In the database rather than in process memory on purpose: an in-memory
@@ -544,7 +573,121 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS family_name TEXT;
 
 -- Contact email. NOT a login credential — accounts are identified and
 -- authenticated by phone number, and nothing in the auth path reads this. It
--- exists so staff accounts can be reached by mail and so an operator can
+-- exists so admin accounts can be reached by mail and so an operator can
 -- recognise an account they created.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
 CREATE INDEX IF NOT EXISTS users_email_idx ON users (email) WHERE email IS NOT NULL;
+
+-- ── Uploaded photographs ─────────────────────────────────────────────────────
+--
+-- What an admin uploads from the lot form, served back by /api/images/<id>.
+--
+-- In the database rather than on the machine's disk, because the disk is not
+-- where anything lives: a deploy replaces the machine, and a second machine
+-- would not have the first one's files. Postgres is already the one thing every
+-- instance shares and the backups already cover.
+--
+-- The id is the SHA-256 of the bytes. The same photograph uploaded twice is
+-- one row, and since an id can never point at different bytes, the image route
+-- can tell browsers to cache it forever.
+CREATE TABLE IF NOT EXISTS media (
+  id           TEXT        PRIMARY KEY CHECK (id ~ '^[a-f0-9]{64}$'),
+  content_type TEXT        NOT NULL
+                 CHECK (content_type IN ('image/jpeg', 'image/png', 'image/webp')),
+  bytes        BYTEA       NOT NULL,
+  size_bytes   INT         NOT NULL CHECK (size_bytes > 0),
+  uploaded_by  BIGINT      REFERENCES users (id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ── Records that cannot be rewritten ─────────────────────────────────────────
+--
+-- The audit trail, the consents and the money records are evidence, and
+-- evidence an UPDATE can quietly edit is not evidence. `bids` and
+-- `ledger_entries` have been append-only from the start; these join them.
+--
+-- No page and no Server Function deletes any of them. These triggers are what
+-- keeps that true for code that has not been written yet — a bug, a script run
+-- at the wrong moment, an admin feature somebody adds later.
+--
+-- What they do not stop: TRUNCATE, which fires no row triggers and is how the
+-- test suites reset, and whoever holds the database owner's password, who
+-- could drop the trigger first. The answer to that one is the backups and who
+-- has the password, not more SQL.
+
+CREATE OR REPLACE FUNCTION refuse_rewrite() RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION '% is append-only (attempted %)', TG_TABLE_NAME, TG_OP;
+END $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS audit_log_no_rewrite ON audit_log;
+CREATE TRIGGER audit_log_no_rewrite BEFORE UPDATE OR DELETE ON audit_log
+  FOR EACH ROW EXECUTE FUNCTION refuse_rewrite();
+
+DROP TRIGGER IF EXISTS consents_no_rewrite ON consents;
+CREATE TRIGGER consents_no_rewrite BEFORE UPDATE OR DELETE ON consents
+  FOR EACH ROW EXECUTE FUNCTION refuse_rewrite();
+
+-- A top-up is never removed. While it is pending, only its outcome may be
+-- written — status, provider_ref, paid_at; once it is paid, failed or expired,
+-- nothing about it changes again. A paid top-up that could be edited back to
+-- pending is a way to credit the same money twice.
+CREATE OR REPLACE FUNCTION topups_guard() RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'topups is append-only (attempted DELETE)';
+  END IF;
+  IF OLD.status <> 'pending' THEN
+    RAISE EXCEPTION 'top-up % is % and can no longer change', OLD.reference, OLD.status;
+  END IF;
+  IF (NEW.id, NEW.user_id, NEW.points, NEW.amount_mnt, NEW.provider,
+      NEW.reference, NEW.created_at)
+     IS DISTINCT FROM
+     (OLD.id, OLD.user_id, OLD.points, OLD.amount_mnt, OLD.provider,
+      OLD.reference, OLD.created_at) THEN
+    RAISE EXCEPTION 'top-up %: only its outcome may change', OLD.reference;
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS topups_no_rewrite ON topups;
+CREATE TRIGGER topups_no_rewrite BEFORE UPDATE OR DELETE ON topups
+  FOR EACH ROW EXECUTE FUNCTION topups_guard();
+
+-- Who won a lot, and for how much, is fixed when the hammer falls. Its status
+-- may move on (due → paid); the row may not go, and the winner and the price
+-- may not change.
+CREATE OR REPLACE FUNCTION settlements_guard() RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'settlements is append-only (attempted DELETE)';
+  END IF;
+  IF (NEW.lot_id, NEW.user_id, NEW.hammer_pts, NEW.created_at)
+     IS DISTINCT FROM (OLD.lot_id, OLD.user_id, OLD.hammer_pts, OLD.created_at) THEN
+    RAISE EXCEPTION 'settlement for lot %: winner and price are fixed', OLD.lot_id;
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS settlements_no_rewrite ON settlements;
+CREATE TRIGGER settlements_no_rewrite BEFORE UPDATE OR DELETE ON settlements
+  FOR EACH ROW EXECUTE FUNCTION settlements_guard();
+
+-- Entering a lot is where a join fee is charged, so the entry is a money
+-- record too. Only `first_bid_at` is ever written after it.
+CREATE OR REPLACE FUNCTION lot_participants_guard() RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'lot_participants is append-only (attempted DELETE)';
+  END IF;
+  IF (NEW.lot_id, NEW.user_id, NEW.entered_at, NEW.entered_in_round, NEW.join_fee_pts)
+     IS DISTINCT FROM
+     (OLD.lot_id, OLD.user_id, OLD.entered_at, OLD.entered_in_round, OLD.join_fee_pts) THEN
+    RAISE EXCEPTION 'lot entry %/%: only first_bid_at may change', OLD.lot_id, OLD.user_id;
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS lot_participants_no_rewrite ON lot_participants;
+CREATE TRIGGER lot_participants_no_rewrite BEFORE UPDATE OR DELETE ON lot_participants
+  FOR EACH ROW EXECUTE FUNCTION lot_participants_guard();

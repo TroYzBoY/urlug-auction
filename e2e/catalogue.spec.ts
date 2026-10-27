@@ -259,13 +259,16 @@ test("the featured lot and all status filters fit at 280px and 320px", async ({
   for (const width of [280, 320]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/lots");
-    await expect(page.locator(".featured-lot")).toBeVisible();
+    // The carousel stacks every slide in one cell; the one on screen is the
+    // active one, and the rest wait off to the side at zero opacity.
+    const featured = ".featured-slide[data-active] .featured-lot";
+    await expect(page.locator(featured)).toBeVisible();
     await expect(page.locator(".catalogue-filter")).toHaveCount(4);
 
     // A clipped parent can hide overflow without widening the document.
     // Check the visible controls and featured card themselves as well.
     const bounds = await page
-      .locator(".featured-lot, .catalogue-filter")
+      .locator(`${featured}, .catalogue-filter`)
       .evaluateAll((elements) =>
         elements.map((element) => {
           const rect = element.getBoundingClientRect();

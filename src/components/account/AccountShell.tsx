@@ -106,7 +106,7 @@ export function Panel({
   note?: React.ReactNode;
 }) {
   return (
-    <section className="mt-14">
+    <section className="reveal mt-14">
       <h2 className="text-lg font-medium tracking-[-0.02em] text-ink">
         {heading}
       </h2>

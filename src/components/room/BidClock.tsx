@@ -5,6 +5,7 @@ import { urgencyOf } from "@/lib/auction";
 import { clockText } from "@/lib/format";
 import { t } from "@/lib/copy";
 import { useCountdown } from "./useCountdown";
+import { EdgeAlarm } from "./RoomEffects";
 
 const URGENCY_TEXT = {
   calm: "text-ink",
@@ -32,8 +33,8 @@ export function BidClock({
   /**
    * Focus mode: the clock is the screen. It fills whatever height the room
    * gives it and the numerals are sized to that card — a size container, so
-   * they shrink with it when a join-fee notice or the final-round log takes
-   * some of the screen, instead of overflowing it and cutting off the label.
+   * they shrink with it when a join-fee notice takes some of the screen,
+   * instead of overflowing it and cutting off the label.
    * The one figure a bidder in round 6 is watching should not be the size of
    * a footnote beside the price, nor be clipped.
    */
@@ -45,21 +46,40 @@ export function BidClock({
   });
 
   const urgency = remaining === null ? "calm" : urgencyOf(remaining, totalMs);
-  const frac = remaining === null ? 1 : Math.max(0, Math.min(1, remaining / totalMs));
+  const frac =
+    remaining === null ? 1 : Math.max(0, Math.min(1, remaining / totalMs));
+
+  /*
+   * The final seconds: the card's ring pulses and the screen's edges glow
+   * (EdgeAlarm). Five seconds, or the last 60% of a clock shorter than that —
+   * round 6's whole clock is five seconds, and an alarm that never switched
+   * off there would stop meaning anything.
+   */
+  const final =
+    !frozen &&
+    remaining !== null &&
+    remaining > 0 &&
+    remaining <= Math.min(5000, totalMs * 0.6);
 
   return (
     <div
-      className={`border-line bg-surface relative isolate flex flex-col overflow-hidden border px-4 transition-all duration-300 md:px-6 ${
+      data-final={final || undefined}
+      className={`bid-clock border-line bg-surface relative isolate flex flex-col overflow-hidden border px-4 transition-all duration-300 md:px-6 ${
         focus
-          ? "h-full justify-center py-3 [container-type:size]"
-          : "justify-between py-3.5 short:py-3 md:py-6"
+          ? "[container-type:size] h-full justify-center py-3"
+          : "short:py-3 justify-between py-3.5 md:py-6"
       }`}
     >
       {/* Warm bloom behind the numerals; intensifies with urgency. */}
       <motion.div
         aria-hidden
         animate={{
-          opacity: urgency === "hot" ? [0.35, 0.65, 0.35] : urgency === "warm" ? 0.3 : 0.14,
+          opacity:
+            urgency === "hot"
+              ? [0.35, 0.65, 0.35]
+              : urgency === "warm"
+                ? 0.3
+                : 0.14,
         }}
         transition={{
           repeat: urgency === "hot" ? Infinity : 0,
@@ -82,19 +102,23 @@ export function BidClock({
         data-numerals
         role="timer"
         aria-live="off"
-        animate={urgency === "hot" && !frozen ? { scale: [1, 1.02, 1] } : { scale: 1 }}
+        animate={
+          urgency === "hot" && !frozen ? { scale: [1, 1.02, 1] } : { scale: 1 }
+        }
         transition={{ repeat: Infinity, duration: 0.6 }}
         className={`display leading-none tracking-tight transition-colors duration-300 ${
           focus
             ? "mt-2 text-[clamp(2.25rem,min(28cqw,42cqh),9rem)]"
-            : "mt-2.5 text-[clamp(2.75rem,10vw,4.5rem)] short:mt-2 short:text-[2.75rem]"
+            : "short:mt-2 short:text-[2.75rem] mt-2.5 text-[clamp(2.75rem,10vw,4.5rem)]"
         } ${URGENCY_TEXT[urgency]}`}
       >
         {remaining === null ? "—" : clockText(remaining)}
       </motion.p>
 
       {/* Hairline progress bar */}
-      <div className={`bg-line-strong/30 h-1 w-full overflow-hidden rounded-full ${focus ? "mt-3" : "mt-3 short:mt-2.5"}`}>
+      <div
+        className={`bg-line-strong/30 h-1 w-full overflow-hidden rounded-full ${focus ? "mt-3" : "short:mt-2.5 mt-3"}`}
+      >
         <motion.div
           initial={false}
           animate={{ scaleX: frac }}
@@ -103,7 +127,8 @@ export function BidClock({
           style={{ width: "100%" }}
         />
       </div>
+
+      <EdgeAlarm on={final} />
     </div>
   );
 }
-

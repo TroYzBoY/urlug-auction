@@ -30,7 +30,7 @@ export interface SessionUser {
   familyName: string | null;
   phone: string;
   paddle: string;
-  role: "bidder" | "staff" | "admin";
+  role: "bidder" | "admin";
   status: "active" | "suspended" | "closed";
   phoneVerified: boolean;
   balancePts: number;
@@ -115,7 +115,7 @@ export async function requireUser(redirectTo: string): Promise<SessionUser> {
  */
 export async function requireAdmin(): Promise<SessionUser> {
   const user = await currentUser();
-  if (!user || (user.role !== "admin" && user.role !== "staff")) notFound();
+  if (!user || user.role !== "admin") notFound();
   return user;
 }
 

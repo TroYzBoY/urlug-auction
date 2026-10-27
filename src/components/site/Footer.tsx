@@ -60,6 +60,8 @@ const GROUPS = [
     links: [
       { href: "/terms", label: t.footer.terms },
       { href: "/privacy", label: t.footer.privacy },
+      /* CC BY photographs are credited there; the cards have no room for it. */
+      { href: "/credits", label: t.footer.credits },
     ],
   },
 ] as const;
@@ -81,7 +83,7 @@ export function Footer() {
      */
     <footer className="house-footer border-line bg-ground relative z-10 mt-24 border-t">
       {/* ── Band 1: the house, and where to go ───────────────────────────── */}
-      <div className="gutter grid grid-cols-2 gap-x-8 gap-y-12 py-14 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] md:py-16">
+      <div className="reveal gutter grid grid-cols-2 gap-x-8 gap-y-12 py-14 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] md:py-16">
         <div className="col-span-2 max-w-xs md:col-span-1">
           <p className="house-wordmark text-ink text-base font-bold tracking-[0.22em]">
             {t.brand.name}
@@ -146,7 +148,7 @@ export function Footer() {
       </div>
 
       {/* ── Band 2: who this actually is ─────────────────────────────────── */}
-      <div className="gutter border-line border-t py-8">
+      <div className="reveal gutter border-line border-t py-8">
         <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
           <address className="text-faint text-xs leading-relaxed not-italic">
             <span className="text-muted block font-medium">
@@ -185,7 +187,7 @@ export function Footer() {
       </div>
 
       {/* ── Band 3: the line at the bottom ───────────────────────────────── */}
-      <div className="gutter border-line border-t py-5">
+      <div className="reveal gutter border-line border-t py-5">
         <p className="text-faint text-xs">
           © {new Date().getFullYear()} {t.brand.name}. {t.footer.rights}.
         </p>

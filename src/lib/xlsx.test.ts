@@ -175,8 +175,12 @@ describe("workbook", () => {
 });
 
 describe("stamp", () => {
-  it("formats a date as sortable text", () => {
-    expect(stamp(new Date(2026, 7, 23, 14, 5))).toBe("2026-08-23 14:05");
+  it("formats a date as sortable text, in Ulaanbaatar time", () => {
+    expect(stamp(new Date("2026-08-23T14:05:00+08:00"))).toBe(
+      "2026-08-23 14:05",
+    );
+    // Whatever zone the server runs in — production is UTC.
+    expect(stamp("2026-08-23T06:05:00Z")).toBe("2026-08-23 14:05");
   });
 
   it("gives an empty cell for a missing or unusable value", () => {

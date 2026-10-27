@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ViewTransition } from "react";
 import { Footer } from "@/components/site/Footer";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { Reveal } from "@/components/site/Reveal";
@@ -9,6 +10,11 @@ import { getLiveLots, getResultLots, getUpcomingLots } from "@/lib/api";
 import { t } from "@/lib/copy";
 import type { Lot } from "@/lib/types";
 import { CatalogueHero } from "@/components/lot/CatalogueHero";
+import { LiveMarquee } from "@/components/lot/LiveMarquee";
+import { HowItWorks, SoldStrip } from "@/components/lot/HomeSections";
+import { houseStats, livePrices } from "@/lib/repo/home";
+import { watched } from "@/lib/repo/watchlist";
+import { currentUser } from "@/lib/session";
 import { coverOf } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -49,11 +55,20 @@ export default async function LotsPage(props: PageProps<"/lots">) {
     ? (rawFilter as FilterKey)
     : "all";
 
-  const [live, upcoming, results] = await Promise.all([
+  const [live, upcoming, results, prices, stats, user] = await Promise.all([
     getLiveLots(),
     getUpcomingLots(),
     getResultLots(),
+    livePrices(),
+    houseStats(),
+    currentUser(),
   ]);
+
+  /* Which lots this viewer follows, for the hearts. null signed out, so each
+     heart becomes a way to sign in. */
+  const following = user
+    ? new Set((await watched(user.id)).map((w) => w.lotId))
+    : null;
 
   /* Live first in the combined view — it is the only group with a clock. */
   const pools: Record<FilterKey, Lot[]> = {
@@ -62,12 +77,29 @@ export default async function LotsPage(props: PageProps<"/lots">) {
     upcoming,
     results,
   };
-  const featured =
-    [live, upcoming, results]
-      .map((pool) => pool.find((lot) => coverOf(lot)))
-      .find((lot) => lot !== undefined) ??
-    pools.all[0] ??
-    null;
+  /*
+   * The hero's carousel: up to four lots with a photograph, live first, then
+   * upcoming, then results — the same order of interest as the grid. A lot
+   * without a photograph only appears when nothing else would.
+   */
+  const withCover = pools.all.filter((lot) => coverOf(lot));
+  const featured = (withCover.length ? withCover : pools.all).slice(0, 4);
+
+  /* The marquee's opening figures, so it paints with real prices before its
+     first poll. */
+  const priceOf = new Map(prices.map((p) => [p.id, p]));
+  const marquee = live.map((lot) => {
+    const p = priceOf.get(lot.id);
+    return {
+      id: lot.id,
+      code: lot.code,
+      title: lot.title,
+      currentPts: p?.currentPts ?? lot.currentPts ?? lot.openingPts,
+      bidCount: p?.bidCount ?? lot.bidCount ?? 0,
+      round: p?.round ?? 1,
+    };
+  });
+  const sold = results.filter((lot) => lot.status === "sold").slice(0, 8);
   const search = query.toLocaleLowerCase("mn");
   const matching = (pool: Lot[]) =>
     search
@@ -102,7 +134,8 @@ export default async function LotsPage(props: PageProps<"/lots">) {
       <SiteHeader />
 
       <main id="main" className="pt-28 md:pt-32">
-        <CatalogueHero lot={featured} />
+        <CatalogueHero lots={featured} />
+        <LiveMarquee lots={marquee} />
 
         <section id="catalogue" className="catalogue-collection gutter">
           <div className="collection-heading">
@@ -157,6 +190,7 @@ export default async function LotsPage(props: PageProps<"/lots">) {
                   <Link
                     key={f.key}
                     href={makeHref(1, f.key)}
+                    transitionTypes={["catalogue"]}
                     aria-current={active ? "page" : undefined}
                     className="catalogue-filter"
                   >
@@ -241,11 +275,31 @@ export default async function LotsPage(props: PageProps<"/lots">) {
 
               <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 lg:gap-6">
                 {visible.map((lot, i) => (
-                  /* Stagger by column, not index — otherwise the last card in a
-                     nine-item grid waits most of a second. */
-                  <Reveal key={lot.id} delay={(i % 3) * 80} y={18}>
-                    <LotCard lot={lot} />
-                  </Reveal>
+                  /*
+                   * Named per lot, and animated only for a "catalogue"
+                   * navigation — a filter chip or a page number. A card that
+                   * stays glides to its new place, one that goes fades down,
+                   * one that arrives rises in. Every other navigation sees
+                   * `none`, so the plate's morph into the lot page and the
+                   * page transition are untouched.
+                   */
+                  <ViewTransition
+                    key={lot.id}
+                    name={`card-${lot.id}`}
+                    enter={{ catalogue: "card-in", default: "none" }}
+                    exit={{ catalogue: "card-out", default: "none" }}
+                    update={{ catalogue: "card-move", default: "none" }}
+                    default="none"
+                  >
+                    {/* Stagger by column, not index — otherwise the last card
+                        in a nine-item grid waits most of a second. */}
+                    <Reveal delay={(i % 3) * 80} y={18}>
+                      <LotCard
+                        lot={lot}
+                        watching={following ? following.has(lot.id) : null}
+                      />
+                    </Reveal>
+                  </ViewTransition>
                 ))}
               </div>
 
@@ -257,6 +311,9 @@ export default async function LotsPage(props: PageProps<"/lots">) {
             </>
           )}
         </section>
+
+        <SoldStrip lots={sold} />
+        <HowItWorks stats={stats} />
       </main>
 
       <Footer />

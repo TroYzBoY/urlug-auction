@@ -6,6 +6,7 @@ import { ROUNDS } from "@/lib/auction";
 import { bidClockLabel } from "@/lib/format";
 import { t } from "@/lib/copy";
 import { Shaft } from "./Shaft";
+import { Decode } from "./Decode";
 import {
   descent,
   easeIn,
@@ -126,6 +127,28 @@ export function Descent() {
      identical result. */
   const lastT = useRef<number[]>([-1, -1, -1, -1, -1]);
 
+  /* The glitch writes onto its own few headings, not onto the root: a custom
+     property changed on the root restyles every element in the descent, every
+     frame the glitch runs. */
+  const rootEl = useRef<HTMLDivElement | null>(null);
+  const glitchEls = useRef<HTMLElement[]>([]);
+  const glitchOn = useRef(false);
+  /* When the hammer last landed, in descent seconds, and whether it is past
+     the landing point now — the burst plays on the crossing, not while the
+     scroll happens to rest there. */
+  const hammerAt = useRef(-Infinity);
+  const hammerDown = useRef(false);
+  /* The last handover fade written to the stages. */
+  const lastHandoff = useRef(-1);
+
+  useEffect(() => {
+    const root = rootEl.current;
+    if (!root) return;
+    glitchEls.current = Array.from(
+      root.querySelectorAll<HTMLElement>(`.${s.glitch}`),
+    );
+  }, []);
+
   /*
    * One loop, owned by the one component that needs it. Started in an effect
    * rather than at module scope so that navigating away to /lots actually
@@ -143,6 +166,63 @@ export function Descent() {
   }, []);
 
   useDescentFrame((d: DescentState) => {
+    /*
+     * ── The handover ──
+     *
+     * Near each scene boundary the stages fade toward nothing and back, so
+     * one scene's content dissolves into the ground and the next one's rises
+     * out of it. The ground itself stays still. `burn` is already the right
+     * curve — zero away from a boundary, full exactly where the incoming
+     * stage pins, smooth in between — it just no longer drives a fog over the
+     * page. Written to all five stages only when it moves; at most two are
+     * ever on screen, and the rest cost a no-op restyle.
+     */
+    if (Math.abs(d.burn - lastHandoff.current) > 0.002) {
+      lastHandoff.current = d.burn;
+      const h = d.burn.toFixed(3);
+      for (const st of [stage0, stage1, stage2, stage3, stage4]) {
+        st.current?.style.setProperty("--handoff", h);
+      }
+    }
+
+    /*
+     * ── The glitch ──
+     *
+     * The headings split into cyan and purple and jump sideways. It peaks
+     * halfway through each
+     * dissolve, when the burn is at its most ragged, and only while the page
+     * is moving — a reader who stops mid-dissolve gets a still screen. It
+     * bursts for under half a second as the hammer lands, and once as the page
+     * opens. Nothing is written while it is idle, and the reduced-motion path
+     * never sets a burn or a clock, so it never runs there.
+     */
+    const b = d.burn;
+    const down = d.scene[3] >= 0.56 && d.scene[3] < 0.95;
+    if (down && !hammerDown.current) hammerAt.current = d.t;
+    hammerDown.current = down;
+    const impact = 1 - seg(d.t - hammerAt.current, 0.05, 0.45);
+    const intro = seg(d.t, 0.1, 0.25) * (1 - seg(d.t, 0.3, 0.9));
+    const g = Math.max(
+      4 * b * (1 - b) * Math.min(1, d.vel * 5),
+      impact,
+      intro * 0.8,
+    );
+    if (g > 0.02) {
+      /* New offsets on roughly every third frame: a stepped jump reads as a
+         bad signal, a smooth one as a wobble. */
+      const jump = !glitchOn.current || Math.random() < 0.35;
+      const gj = (Math.random() * 2 - 1).toFixed(2);
+      for (const el of glitchEls.current) {
+        if (!glitchOn.current) el.setAttribute("data-on", "");
+        el.style.setProperty("--glitch", g.toFixed(3));
+        if (jump) el.style.setProperty("--gj", gj);
+      }
+      glitchOn.current = true;
+    } else if (glitchOn.current) {
+      glitchOn.current = false;
+      for (const el of glitchEls.current) el.removeAttribute("data-on");
+    }
+
     /** True when this scene's progress moved enough to be worth restyling. */
     const moved = (i: number) => {
       if (Math.abs(d.scene[i] - lastT.current[i]) < 0.0004) return false;
@@ -246,7 +326,10 @@ export function Descent() {
       const t = d.scene[4];
       set(s5, {
         door: easeOut(seg(t, 0, 0.6)),
-        doorFade: seg(t, 0, 0.2) * (1 - seg(t, 0.74, 1) * 0.65),
+        /* Out completely by the end of the scene. It used to keep a third of
+           its light, and that wash then scrolled away with the stage and
+           showed its bottom edge as a hard line across the epilogue. */
+        doorFade: seg(t, 0, 0.2) * (1 - seg(t, 0.7, 1)),
         roll: 1.15 * (1 - easeOut(seg(t, 0.2, 0.62))),
         ledeFade: seg(t, 0.35, 0.62),
       });
@@ -254,7 +337,7 @@ export function Descent() {
   });
 
   return (
-    <div className={s.root}>
+    <div ref={rootEl} className={s.root}>
       <Shaft />
       <div className={s.vignette} aria-hidden />
 
@@ -282,24 +365,28 @@ export function Descent() {
 
           <div className={s.s1Wrap}>
             <div className={s.slate}>
-              <span>{t.home.slatePlace}</span>
-              <span>{t.home.slateEdition}</span>
-              <span>{t.home.slateYear}</span>
+              <span><Decode text={t.home.slatePlace} scene={0} /></span>
+              <span><Decode text={t.home.slateEdition} scene={0} /></span>
+              <span><Decode text={t.home.slateYear} scene={0} /></span>
             </div>
-            <h1 className={s.wordmark}>
+            <h1 className={`${s.wordmark} ${s.glitch}`}>
               <Split text={t.brand.name} />
             </h1>
             <p className={s.s1Line}>
               <b>{t.home.headline[0]}</b> {t.home.headline[1]}
             </p>
-            <p className={s.s1Sub}>{t.home.eyebrow}</p>
+            <p className={s.s1Sub}>
+              <Decode text={t.home.eyebrow} scene={0} duration={900} />
+            </p>
           </div>
 
           <div className={s.cue}>
             <span>{t.descent.scrollCue}</span>
             <i />
           </div>
-          <div className={s.floor}>{t.descent.floors.street}</div>
+          <div className={s.floor}>
+            <Decode text={t.descent.floors.street} scene={0} />
+          </div>
         </div>
       </section>
 
@@ -308,8 +395,12 @@ export function Descent() {
         <div ref={stage1} className={s.stage}>
           <div className={s.s2Wrap}>
             <div className={s.s2Title}>
-              <p className={s.eyebrow}>{t.descent.clocksEyebrow}</p>
-              <h2>{t.descent.clocksTitle}</h2>
+              <p className={s.eyebrow}>
+                <Decode text={t.descent.clocksEyebrow} scene={1} />
+              </p>
+              <h2 className={s.glitch}>
+                <Decode text={t.descent.clocksTitle} scene={1} duration={900} />
+              </h2>
             </div>
 
             <div className={s.dials}>
@@ -354,20 +445,26 @@ export function Descent() {
               <div className={s.callout}>
                 <div className={s.laser} />
                 <div className={s.calloutTxt}>
-                  <h3>{t.room.bidClock}</h3>
+                  <h3>
+                    <Decode text={t.room.bidClock} scene={1} at={0.3} />
+                  </h3>
                   <p>{t.rules.clocksBidBody}</p>
                 </div>
               </div>
               <div className={`${s.callout} ${s.coRound}`}>
                 <div className={s.laser} />
                 <div className={s.calloutTxt}>
-                  <h3>{t.rules.clocksRoundTitle}</h3>
+                  <h3>
+                    <Decode text={t.rules.clocksRoundTitle} scene={1} at={0.3} />
+                  </h3>
                   <p>{t.rules.clocksRoundBody}</p>
                 </div>
               </div>
             </div>
           </div>
-          <div className={s.floor}>{t.descent.floors.vestibule}</div>
+          <div className={s.floor}>
+            <Decode text={t.descent.floors.vestibule} scene={1} />
+          </div>
         </div>
       </section>
 
@@ -403,9 +500,13 @@ export function Descent() {
               ))}
             </div>
 
-            <p className={s.s3Note}>{t.descent.stairNote}</p>
+            <p className={s.s3Note}>
+              <Decode text={t.descent.stairNote} scene={2} duration={1000} />
+            </p>
           </div>
-          <div className={s.floor}>{t.descent.floors.stair}</div>
+          <div className={s.floor}>
+            <Decode text={t.descent.floors.stair} scene={2} />
+          </div>
         </div>
       </section>
 
@@ -415,7 +516,10 @@ export function Descent() {
           <div className={s.flood} aria-hidden />
           <div className={s.s4Wrap}>
             <div className={s.s4Stack}>
-              <span className={s.shear} aria-label={t.descent.finalClock}>
+              <span
+                className={`${s.shear} ${s.glitch}`}
+                aria-label={t.descent.finalClock}
+              >
                 <span className={`${s.half} ${s.halfTop}`} aria-hidden>
                   {t.descent.finalClock}
                 </span>
@@ -423,11 +527,15 @@ export function Descent() {
                   {t.descent.finalClock}
                 </span>
               </span>
-              <p className={s.hammer}>{t.descent.hammered}</p>
+              <p className={`${s.hammer} ${s.glitch}`}>{t.descent.hammered}</p>
             </div>
-            <p className={s.s4Sub}>{t.room.soldNote}</p>
+            <p className={s.s4Sub}>
+              <Decode text={t.room.soldNote} scene={3} at={0.62} duration={900} />
+            </p>
           </div>
-          <div className={s.floor}>{t.descent.floors.threshold}</div>
+          <div className={s.floor}>
+            <Decode text={t.descent.floors.threshold} scene={3} />
+          </div>
         </div>
       </section>
 
@@ -438,13 +546,17 @@ export function Descent() {
             <i />
           </div>
           <div className={s.s5Wrap}>
-            <p className={s.eyebrow}>{t.descent.floors.hall}</p>
-            <h2>
+            <p className={s.eyebrow}>
+              <Decode text={t.descent.floors.hall} scene={4} />
+            </p>
+            <h2 className={s.glitch}>
               <Split text={t.descent.hallTitle} />
             </h2>
             <p className={s.s5Lede}>{t.descent.hallLede}</p>
           </div>
-          <div className={s.floor}>{t.descent.floors.hall}</div>
+          <div className={s.floor}>
+            <Decode text={t.descent.floors.hall} scene={4} />
+          </div>
         </div>
       </section>
 

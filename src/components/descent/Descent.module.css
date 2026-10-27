@@ -15,31 +15,18 @@
 
 .root {
   position: relative;
-  color: var(--descent-ink, #f4ece2);
+  color: var(--descent-ink, #f3f5ff);
   /* Fallback ground for the moment before the first shader frame, and for
      good on machines with no WebGL. */
   /* Flat, and the same colour the shader paints — which is also the page's
      ground. The fallback matters: it is what a machine with no WebGL sees. */
-  background: var(--descent-ground, #191310);
-
-  /* The descent keeps the original warm palette while the rest of the site is
-     cyan and purple. These shadow the global tokens for this subtree only, so
-     the rust flood, the amber hall and the chestnut dials come back without
-     touching globals.css. The values are the pre-redesign ones — see
-     design-backups/pre-edgerunners-2026-09-18/. `--color-ground` is the
-     shaft's darkest tone (Shaft.tsx `shaftLo`), so `.tail` fades the last
-     scene into the shaft's own ground. */
-  --color-ground: #191310;
-  --color-accent: #c48b48;
-  --amber-gold: #c48b48;
-  --rust-bright: #df5b3e;
-  --cream-ink: #f6f1e8;
+  background: var(--descent-ground, #080b16);
 
   /* Clips the fixed layers — both canvases, the vignette, the floating marks —
      to the descent's own box. Fixed elements ignore `overflow`, but not an
      ancestor's clip-path, so without this the shaft keeps painting in the
-     footer's top margin: by the bottom of the page the door has warmed it to
-     amber, and it shows as a lit band between the tail and the footer. */
+     footer's top margin: by the bottom of the page the door has lit it cyan,
+     and it shows as a lit band between the tail and the footer. */
   clip-path: inset(0);
 }
 
@@ -80,9 +67,8 @@
  *
  * Two things fix it, and both are needed.
  *
- *   1. `.root` sets `--color-ground` to `shaftLo` (#191310) exactly, so the two
- *      grounds are the same colour and there is nothing to see at the join.
- *      The footer then starts on its own navy ground, behind its border.
+ *   1. `shaftLo` is exactly `--color-ground` (#080b16), so the two grounds are
+ *      the same colour and there is nothing to see at the join.
  *   2. This — a band of the page's own ground fading up over the last screen of
  *      the descent, so the shaft's texture and its geometry dissolve out rather
  *      than being cut off.
@@ -108,9 +94,31 @@
 
 /* The footer's top margin is breathing room after ordinary content. After the
    descent the tail already gives that room, and the margin would be a strip of
-   the site's navy between the shaft's brown and the footer's border. */
+   the page backdrop between the shaft and the footer's border. */
 :global(main):has(> .root) + :global(footer) {
   margin-top: 0;
+}
+
+/*
+ * ── The glitch ──────────────────────────────────────────────────────────────
+ *
+ * Driven from Descent.tsx, which sets `data-on` and two numbers on these
+ * elements only while it runs: `--glitch` (0…1 strength) and `--gj` (a −1…1
+ * sideways jump). At rest there is no filter at all.
+ *
+ * Two stacked drop-shadows rather than text-shadow: the masked character roll
+ * clips each letter to its own box, which would cut a text-shadow off at the
+ * letter's edge. A filter on the heading applies after that clip.
+ *
+ * `translate`, not `transform`, so the jump composes with the scale the
+ * hammer and the shear already animate instead of replacing it.
+ */
+.glitch[data-on] {
+  filter: drop-shadow(
+      calc(var(--glitch, 0) * 0.05em) 0 0 rgb(71 234 255 / 0.85)
+    )
+    drop-shadow(calc(var(--glitch, 0) * -0.05em) 0 0 rgb(131 56 255 / 0.85));
+  translate: calc(var(--gj, 0) * var(--glitch, 0) * 0.05em) 0;
 }
 
 .vignette {
@@ -136,7 +144,7 @@
   font-weight: 500;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--descent-ink, #f4ece2);
+  color: var(--descent-ink, #f3f5ff);
 }
 .mark {
   left: var(--descent-margin);
@@ -185,6 +193,11 @@
   place-items: center;
   padding: calc(var(--descent-margin) * 2.2) var(--descent-margin);
   transform: translateZ(0);
+  /* The handover between scenes (Descent.tsx): this scene's content fades
+     into the ground as the next takes over, instead of a fog wiping across
+     the screen. The stage is already its own compositor layer, so this is a
+     composite-only change. */
+  opacity: calc(1 - var(--handoff, 0));
 }
 
 /* Pin durations. One number per scene, and the only place timing lives. */
@@ -216,7 +229,7 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--descent-muted, #a89e90);
+  color: var(--descent-muted, #a0acc8);
 }
 .floor::before {
   content: "";
@@ -232,7 +245,7 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--descent-muted, #a89e90);
+  color: var(--descent-muted, #a0acc8);
 }
 
 /* Masked character roll — the connective typography of the whole piece. */
@@ -281,7 +294,7 @@
   font-weight: 500;
   letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: var(--descent-muted, #a89e90);
+  color: var(--descent-muted, #a0acc8);
   opacity: var(--fade, 1);
   transform: translate3d(0, calc(var(--lift, 0) * -30px), 0);
 }
@@ -310,7 +323,7 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--descent-muted, #a89e90);
+  color: var(--descent-muted, #a0acc8);
   opacity: var(--fade, 1);
 }
 .portal {
@@ -326,7 +339,7 @@
 }
 .portal rect {
   fill: none;
-  stroke: var(--descent-ink, #f4ece2);
+  stroke: var(--descent-ink, #f3f5ff);
   vector-effect: non-scaling-stroke;
 }
 .cue {
@@ -342,7 +355,7 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--descent-muted, #a89e90);
+  color: var(--descent-muted, #a0acc8);
   opacity: var(--fade, 1);
 }
 .cue i {
@@ -428,7 +441,7 @@
 .dial circle,
 .dial line {
   fill: none;
-  stroke: var(--descent-ink, #f4ece2);
+  stroke: var(--descent-ink, #f3f5ff);
   vector-effect: non-scaling-stroke;
 }
 .rim {
@@ -439,7 +452,7 @@
   opacity: 0.35;
 }
 .sweep {
-  stroke: var(--color-accent, #8c5a38);
+  stroke: var(--color-accent, #47eaff);
   stroke-width: 2;
   opacity: 0.9;
 }
@@ -465,7 +478,7 @@
 }
 .laser {
   height: 1px;
-  background: var(--color-accent, #8c5a38);
+  background: var(--color-accent, #47eaff);
   opacity: 0.7;
   transform-origin: left center;
   transform: scaleX(var(--laser, 1));
@@ -477,7 +490,7 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--color-accent, #8c5a38);
+  color: var(--color-accent, #47eaff);
 }
 .callout p {
   margin: 0;
@@ -515,7 +528,7 @@
   right: var(--descent-margin);
   top: 50%;
   height: 1px;
-  background: var(--descent-line, rgba(60, 42, 26, 0.16));
+  background: var(--descent-line, rgba(71, 234, 255, 0.15));
 }
 .axis::after {
   content: "";
@@ -525,7 +538,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--color-accent, #8c5a38);
+  background: var(--color-accent, #47eaff);
 }
 /* height:auto with rows that refuse to shrink. With height:100% the six 34vh
    rows get flex-shrunk to fit the viewport, the rail ends up a third of its
@@ -578,13 +591,13 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--descent-muted, #a89e90);
+  color: var(--descent-muted, #a0acc8);
 }
 .railB .clock {
   font-weight: 800;
   line-height: 0.88;
   letter-spacing: -0.035em;
-  color: var(--color-accent, #8c5a38);
+  color: var(--color-accent, #47eaff);
 }
 .s3Note {
   position: absolute;
@@ -596,22 +609,22 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--descent-muted, #a89e90);
+  color: var(--descent-muted, #a0acc8);
 }
 
 /* ═══ 04 · БОСГО ════════════════════════════════════════════════════════════ */
 
 /*
- * The hammer's red.
+ * The hammer's vivid purple.
  *
- * A full-bleed rust wash, scrubbed by `--flood` as the shear resolves into
+ * A full-bleed purple wash, scrubbed by `--flood` as the shear resolves into
  * "ЦОХИВ". It is the one place in the piece where colour flooding the screen is
  * the right answer: the hammer falling IS the moment, and everything else in
  * the descent is deliberately quiet so that this reads as an event rather than
  * as more decoration.
  *
  * `screen` blending rather than a plain paint, so it lifts the ground toward
- * rust instead of covering it — the geometry stays legible through it.
+ * violet instead of covering it — the geometry stays legible through it.
  */
 .flood {
   position: absolute;
@@ -620,7 +633,7 @@
   pointer-events: none;
   background: radial-gradient(
     120% 100% at 50% 60%,
-    var(--rust-bright, #cf5f34) 0%,
+    var(--vivid-purple, #8338ff) 0%,
     transparent 72%
   );
   opacity: var(--flood, 0);
@@ -667,16 +680,16 @@
   clip-path: polygon(0 62%, 100% 52%, 100% 100%, 0 100%);
   transform: translate3d(calc(var(--shear, 0) * 14%), 0, 0);
 }
-/* Knocked out of the flood rather than tinted with it — rust type on a rust
-   field is the one word here that must not be hard to read. */
+/* Knocked out of the flood rather than tinted with it — purple type on a
+   purple field is the one word here that must not be hard to read. */
 .hammer {
   margin: 0;
   font-weight: 800;
   font-size: var(--t-mono);
   line-height: 0.84;
   letter-spacing: 0.02em;
-  color: var(--cream-ink, #f6f1e8);
-  text-shadow: 0 0 60px rgb(25 19 16 / 0.45);
+  color: var(--cream-ink, #f3f5ff);
+  text-shadow: 0 0 60px rgb(8 11 22 / 0.45);
   opacity: var(--hammerFade, 0);
   transform: scale(var(--hammerScale, 1));
   will-change: transform, opacity;
@@ -687,14 +700,14 @@
   font-weight: 500;
   letter-spacing: 0.3em;
   text-transform: uppercase;
-  color: var(--descent-muted, #a89e90);
+  color: var(--descent-muted, #a0acc8);
   opacity: var(--subFade, 0);
 }
 
 /* ═══ 05 · ТАНХИМ ═══════════════════════════════════════════════════════════ */
 
 /*
- * The hall's amber — the answer to scene 04's red.
+ * The hall's cyan — the answer to scene 04's purple.
  *
  * This used to be a clipped RECTANGLE: a lit doorway 780×560 that widened as
  * you scrolled, masked at the edges so its bounding box did not show. The shape
@@ -703,10 +716,10 @@
  * rather than as a doorway, and no amount of feathering fixed the fact that it
  * was a box.
  *
- * It is now the same full-bleed wash as `.flood`, in amber instead of rust:
- * red for the hammer, gold for the room you walk into. Two scenes, one visual
- * grammar, and the pairing is the point — the piece resolves from the violence
- * of the hammer into the warmth of the hall.
+ * It is now the same full-bleed wash as `.flood`, in cyan instead of purple:
+ * purple for the hammer, cyan for the room you walk into. Two scenes, one
+ * visual grammar, and the pairing is the point — the piece resolves from the
+ * violence of the hammer into the light of the hall.
  *
  * `--door` still scrubs it, so the light still arrives as you descend; it now
  * arrives as the room filling with light rather than as a rectangle growing.
@@ -723,7 +736,7 @@
   inset: 0;
   background: radial-gradient(
     120% 100% at 50% 72%,
-    var(--amber-gold, #c98a4b) 0%,
+    var(--color-accent, #47eaff) 0%,
     transparent 74%
   );
   /*
@@ -788,7 +801,7 @@
   font-weight: 800;
   font-size: clamp(1.6rem, 4.4vw, 3.4rem);
   letter-spacing: -0.02em;
-  color: var(--descent-ink, #f4ece2);
+  color: var(--descent-ink, #f3f5ff);
   text-decoration: none;
   transition:
     color 0.5s var(--ease-out-soft),
@@ -796,7 +809,7 @@
 }
 .enter a:hover,
 .enter a:focus-visible {
-  color: var(--amber-gold, #c48b48);
+  color: var(--color-accent, #47eaff);
   text-shadow:
     0 0 30px var(--descent-glow),
     0 0 80px var(--descent-glow);
@@ -807,7 +820,7 @@
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--descent-muted, #a89e90);
+  color: var(--descent-muted, #a0acc8);
 }
 
 /* ── narrow screens ───────────────────────────────────────────────────────── */

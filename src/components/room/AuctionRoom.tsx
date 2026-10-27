@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { Header } from "@/components/site/Header";
 import { RollingNumber } from "@/components/site/RollingNumber";
 import { LiveDot } from "@/components/lot/LotCard";
+import { LotPlate } from "@/components/lot/LotPlate";
 import { placeBid as submitBid } from "@/app/actions/bid";
 import {
   LATE_ENTRY_FROM_ROUND,
@@ -13,13 +14,14 @@ import {
 } from "@/lib/auction";
 import { ptsToMnt } from "@/lib/format";
 import { t } from "@/lib/copy";
-import type { RoomState } from "@/lib/types";
+import { coverOf, type RoomState } from "@/lib/types";
 import { BidClock } from "./BidClock";
 import { BidFeed } from "./BidFeed";
 import { BidPanel } from "./BidPanel";
 import { DecisionPanel } from "./DecisionPanel";
-import { FinalLog, finalCloseOf } from "./FinalLog";
+import { LotDetails } from "./LotDetails";
 import { RoundTimer } from "./RoundTimer";
+import { WinBurst, buzz } from "./RoomEffects";
 import { useAuctionRoom } from "./useAuctionRoom";
 import { useFocusMode } from "./useFocusMode";
 
@@ -163,14 +165,23 @@ export function AuctionRoom({
    */
   const focused = focus && !frozen && !closing;
 
-  /* With no bid panel to show, the wait or the result takes the rest of a
-     phone screen rather than sitting at the foot of an empty one. */
-  const panelFills = deciding || frozen;
+  /*
+   * The lot's photograph — phones only, and only while bids are being taken.
+   *
+   * A phone shows the picture, the clocks and the bid button, and the words go
+   * behind "Дэлгэрэнгүй". The standing price and leader ride on the picture
+   * rather than taking a row of their own, which is the row the picture needs.
+   * Focus mode keeps its bare clock, and a closed lot gives the space back to
+   * the bid history, as before.
+   */
+  const showPicture = !focused && !frozen && !closing;
+  const cover = coverOf(lot);
 
-  /* The final round's millisecond log, from the round it starts in until the
-     result has been read. */
-  const finalRound = state.round >= TOTAL_ROUNDS;
-  const finalClose = finalCloseOf(state, frozen || closing);
+  /* With no bid panel to show, the wait takes the rest of a phone screen
+     rather than sitting at the foot of an empty one. The result does not: it
+     sits at the foot at its own height, and the bid history above it gets the
+     space instead (see the feed below). */
+  const panelFills = deciding;
 
   /*
    * The join fee, and whether this bidder can cover it.
@@ -184,6 +195,42 @@ export function AuctionRoom({
     !frozen && !state.hasBid && state.round >= LATE_ENTRY_FROM_ROUND;
   const shortOfJoinFee = joinFeeApplies && balancePts < LATE_JOIN_PENALTY_PTS;
   const bidClockTotalMs = spec.bidClockSec * 1000;
+
+  /*
+   * The room's signals (RoomEffects). All of them key off a CHANGE seen on
+   * this screen, never off the state a page loaded into: opening a lot you
+   * already won, or one already past its first bid, does not burst, flash or
+   * buzz.
+   *
+   *   flash  a light behind the price whenever it moves
+   *   burst  neon sparks when the hammer falls to this bidder
+   *   buzz   a double pulse when somebody takes the lead from them, and a
+   *          longer one when they win — on phones that have a vibrator
+   *
+   * A bid the server rejects rolls the lead back too, and that is not being
+   * outbid, so it does not buzz: the rejection message is the feedback.
+   */
+  const [initialPts] = useState(state.currentPts);
+  const [initialOutcome] = useState(state.outcome);
+  const youWon = state.outcome === "sold" && isYourLead;
+  const showBurst = youWon && initialOutcome !== "sold";
+  const wasLeading = useRef(isYourLead);
+
+  useEffect(() => {
+    if (
+      wasLeading.current &&
+      !isYourLead &&
+      state.outcome === "running" &&
+      !rejection
+    ) {
+      buzz([70, 50, 70]);
+    }
+    wasLeading.current = isYourLead;
+  }, [isYourLead, state.outcome, rejection]);
+
+  useEffect(() => {
+    if (showBurst) buzz([120, 60, 120, 60, 260]);
+  }, [showBurst]);
   const roundTotalMs = (spec.durationMin * 60_000) / ROUND_TIME_SCALE;
 
   return (
@@ -208,9 +255,10 @@ export function AuctionRoom({
       {!focused && <Header minimal />}
 
       {/*
-        The room is deliberately spare: no object plate, no catalogue facts, no
-        prose note. Those belong to the catalogue page (LotPreview). What is left
-        is the console a bidder acts on — the two timers, the price, the panel —
+        The room is deliberately spare: no catalogue facts and no prose note on
+        the page. Those open in a sheet (LotDetails), and in full on the
+        catalogue page (LotPreview). What is left is the console a bidder acts
+        on — the two timers, the price, the panel, and on a phone the picture —
         and focus mode takes away the rest of the words as well.
       */}
       <main
@@ -224,9 +272,7 @@ export function AuctionRoom({
           <div
             className={`scroll-quiet flex min-h-0 flex-col overflow-y-auto pb-3 lg:overflow-visible lg:pb-0 ${
               panelFills ? "flex-none" : "flex-1"
-            } ${
-              focused ? "gap-3" : "gap-3.5 short:gap-2.5 lg:gap-6"
-            }`}
+            } ${focused ? "gap-3" : "short:gap-2.5 gap-3.5 lg:gap-6"}`}
           >
             {/* Identity — one status line and the name. The maker and year
                 are the first thing to go when the screen is short. */}
@@ -242,7 +288,9 @@ export function AuctionRoom({
                     {deciding
                       ? t.room.review
                       : frozen
-                        ? t.room.sold
+                        ? state.outcome === "sold"
+                          ? t.room.sold
+                          : t.room.unsold
                         : t.room.live}
                   </span>
                   <span aria-hidden className="text-line-strong">
@@ -255,20 +303,36 @@ export function AuctionRoom({
                 )}
               </div>
               {/* In focus mode the name leaves the screen but not the page:
-                  it is still the heading a screen reader lands on. */}
+                  it is still the heading a screen reader lands on. So it does
+                  on a phone showing the picture, where it moves into the
+                  details sheet. */}
               <h1
                 className={
                   focused
                     ? "sr-only"
-                    : "mt-1.5 truncate text-lg leading-tight font-medium tracking-[-0.03em] sm:text-2xl lg:overflow-visible lg:whitespace-normal"
+                    : `mt-1.5 truncate text-lg leading-tight font-medium tracking-[-0.03em] sm:text-2xl lg:overflow-visible lg:whitespace-normal ${
+                        showPicture ? "max-lg:sr-only" : ""
+                      }`
                 }
               >
                 {lot.title}
               </h1>
               {!focused && (
-                <p className="text-muted mt-0.5 text-sm short:hidden">
+                <p
+                  className={`text-muted short:hidden mt-0.5 text-sm ${
+                    showPicture ? "max-lg:hidden" : ""
+                  }`}
+                >
                   {lot.maker} · {lot.year}
                 </p>
+              )}
+              {/* Wherever there is no picture to carry the button. */}
+              {!focused && (
+                <LotDetails
+                  lot={lot}
+                  variant="link"
+                  className={`short:mt-1.5 mt-2 ${showPicture ? "max-lg:hidden" : ""}`}
+                />
               )}
             </div>
 
@@ -293,6 +357,87 @@ export function AuctionRoom({
             )}
 
             {/*
+              The picture takes whatever height the phone has left once the
+              clocks and the panel are placed, down to a strip on the shortest
+              screens — it gives way before the clock does.
+
+              ⚠ The price here is a `div` live region, not the row's `p`: only
+              one of the two is ever displayed, so only one is announced, and
+              the e2e suite locates the row's by that `p`.
+            */}
+            {showPicture && (
+              <div className="border-line short:min-h-24 relative isolate min-h-28 flex-1 overflow-hidden border lg:hidden">
+                <div className="absolute inset-0">
+                  <LotPlate
+                    category={lot.category}
+                    image={cover?.url}
+                    alt={cover?.alt || lot.title}
+                    ratio="size-full"
+                    sizes="100vw"
+                  />
+                </div>
+                <div
+                  aria-hidden
+                  className="from-ground via-ground/75 absolute inset-x-0 bottom-0 h-3/4 bg-linear-to-t to-transparent"
+                />
+
+                <LotDetails
+                  lot={lot}
+                  variant="chip"
+                  className="absolute top-2.5 right-2.5"
+                />
+
+                {/* On a short screen the picture is a strip, and the labels
+                    go so the figures stay clear of the button above them. */}
+                <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 px-3.5 pb-3">
+                  <div className="shrink-0">
+                    <p className="eyebrow short:hidden">
+                      {t.room.currentPrice}
+                    </p>
+                    <div
+                      aria-live="polite"
+                      aria-atomic="true"
+                      className="display text-ink short:mt-0 short:text-[1.875rem] relative isolate mt-1 text-[clamp(1.875rem,8.5vw,2.5rem)] leading-none"
+                    >
+                      {state.currentPts !== initialPts && (
+                        <span
+                          key={state.currentPts}
+                          aria-hidden
+                          className="price-flash"
+                        />
+                      )}
+                      <RollingNumber value={state.currentPts} />
+                      <span className="text-muted ml-1.5 align-baseline text-sm font-normal tracking-normal">
+                        {t.common.point}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="min-w-0 text-right">
+                    <p className="eyebrow short:hidden">{t.room.leader}</p>
+                    <p
+                      data-numerals
+                      className={`short:mt-0 mt-1 truncate text-lg font-medium ${
+                        isYourLead ? "text-flare" : "text-ink"
+                      }`}
+                    >
+                      {state.leader
+                        ? isYourLead
+                          ? t.room.you
+                          : leaderName
+                        : "—"}
+                    </p>
+                    {state.hasBid && !isYourLead && (
+                      <p className="text-rust mt-0.5 text-xs font-medium">
+                        {t.room.outbid}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/*
               The console: bid clock and round clock. Side by side normally, so
               the whole clock situation is one glance; in focus mode the bid
               clock takes the height and the round becomes one row beneath it.
@@ -302,9 +447,10 @@ export function AuctionRoom({
               would even keep running down to a round that will never start —
               and two dead timers beside a result read as a frozen page.
             */}
-            {!frozen && !closing &&
+            {!frozen &&
+              !closing &&
               (focused ? (
-                <div className="flex min-h-48 flex-1 flex-col gap-2.5 short:min-h-28 lg:min-h-80">
+                <div className="short:min-h-28 flex min-h-48 flex-1 flex-col gap-2.5 lg:min-h-80">
                   <div className="min-h-0 flex-1">
                     <BidClock
                       endsAt={state.bidClockEndsAt}
@@ -342,11 +488,12 @@ export function AuctionRoom({
               ))}
 
             {/* Current price + leader. One row; in focus mode a smaller one,
-                without the tugrik conversion. */}
+                without the tugrik conversion. On a phone showing the picture,
+                the picture carries them instead. */}
             <div
-              className={`border-line flex items-end justify-between gap-4 border-b sm:gap-6 ${
-                focused ? "pb-3" : "pb-3.5 short:pb-2.5 lg:pb-5"
-              }`}
+              className={`border-line items-end justify-between gap-4 border-b sm:gap-6 ${
+                focused ? "pb-3" : "short:pb-2.5 pb-3.5 lg:pb-5"
+              } ${showPicture ? "hidden lg:flex" : "flex"}`}
             >
               {/* The price never gives way; a long name does, by truncating —
                   wrapping it onto its own line cost the phone a whole row. */}
@@ -360,19 +507,32 @@ export function AuctionRoom({
                 <p
                   aria-live="polite"
                   aria-atomic="true"
-                  className={`display text-ink leading-none ${
+                  className={`display text-ink relative isolate leading-none ${
                     focused
                       ? "mt-1.5 text-[clamp(2rem,8vw,2.75rem)]"
-                      : "mt-2 text-[clamp(2.5rem,9vw,3.75rem)] short:mt-1.5 short:text-[2.25rem]"
+                      : "short:mt-1.5 short:text-[2.25rem] mt-2 text-[clamp(2.5rem,9vw,3.75rem)]"
                   }`}
                 >
+                  {/* Keyed on the price, so each new bid remounts it and
+                      the flash plays again. Behind the digits, never over
+                      them. */}
+                  {state.currentPts !== initialPts && (
+                    <span
+                      key={state.currentPts}
+                      aria-hidden
+                      className="price-flash"
+                    />
+                  )}
                   <RollingNumber value={state.currentPts} />
                   <span className="text-muted ml-2 align-baseline text-base font-normal tracking-normal">
                     {t.common.point}
                   </span>
                 </p>
                 {!focused && (
-                  <p data-numerals className="text-muted mt-1.5 text-sm short:mt-1">
+                  <p
+                    data-numerals
+                    className="text-muted short:mt-1 mt-1.5 text-sm"
+                  >
                     {ptsToMnt(state.currentPts)}
                   </p>
                 )}
@@ -383,14 +543,12 @@ export function AuctionRoom({
                 <p
                   data-numerals
                   className={`truncate font-medium ${
-                    focused ? "mt-1.5 text-xl" : "mt-2 text-2xl short:mt-1.5 short:text-xl"
+                    focused
+                      ? "mt-1.5 text-xl"
+                      : "short:mt-1.5 short:text-xl mt-2 text-2xl"
                   } ${isYourLead ? "text-flare" : "text-ink"}`}
                 >
-                  {state.leader
-                    ? isYourLead
-                      ? t.room.you
-                      : leaderName
-                    : "—"}
+                  {state.leader ? (isYourLead ? t.room.you : leaderName) : "—"}
                 </p>
                 {state.hasBid && !isYourLead && !frozen && (
                   <p className="text-rust mt-1 text-xs font-medium">
@@ -405,43 +563,29 @@ export function AuctionRoom({
               </div>
             </div>
 
-            {/*
-              Round 6 to the millisecond: each bid with the bid clock it was
-              accepted on, and the close. Whole rows only — a list clipped
-              through the middle of a line reads as broken — so it gives up
-              rows by count: three normally, two in focus mode where the clock
-              takes the height, and on a short phone during bidding just the
-              newest line with no heading, which is the one that matters with
-              five seconds on the clock. After the close there is room again.
-            */}
-            {finalRound && (
-              <FinalLog
-                state={state}
-                close={finalClose}
-                winnerName={
-                  state.outcome === "sold"
-                    ? isYourLead
-                      ? t.room.you
-                      : leaderName
-                    : null
-                }
-                rows={frozen || closing ? 4 : 3}
-                className={`shrink-0 ${
-                  frozen || closing
-                    ? "short:[&_li:nth-child(n+3)]:hidden"
-                    : `short:border-b-0 short:pb-0 short:[&>p]:hidden short:[&_li:nth-child(n+2)]:hidden ${
-                        focused ? "[&_li:nth-child(n+3)]:hidden" : ""
-                      }`
-                }`}
-              />
-            )}
-
-            {/* The feed is richness, not a control — kept on the desktop where
-                there is room beneath the fold, dropped on phones and in focus
-                mode where it would only push the console around. */}
+            {/* While bidding the feed is richness, not a control — kept on the
+                desktop where there is room beneath the fold, dropped on phones
+                and in focus mode where it would only push the console around.
+                Once the lot is decided there is no console left to push, and
+                the history is what a bidder wants to read: phones get it too,
+                in the column that scrolls above the result. */}
             {!focused && (
-              <div className="hidden lg:block">
-                <BidFeed bids={state.bids} />
+              <div className={frozen ? undefined : "hidden lg:block"}>
+                <BidFeed
+                  bids={state.bids}
+                  winner={
+                    state.outcome === "sold" && state.leader
+                      ? {
+                          paddle: state.leader,
+                          name: isYourLead
+                            ? t.room.you
+                            : (leaderName ?? state.leader),
+                          isYou: isYourLead,
+                          points: state.currentPts,
+                        }
+                      : null
+                  }
+                />
               </div>
             )}
           </div>
@@ -474,6 +618,8 @@ export function AuctionRoom({
           </aside>
         </div>
       </main>
+
+      {showBurst && <WinBurst />}
     </div>
   );
 }

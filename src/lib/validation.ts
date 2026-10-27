@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { POINT_MNT } from "./auction";
+import { groupNumber } from "./format";
+import { parseHouseTime } from "./house-time";
 import { MINIMUM_AGE, isOldEnough } from "./legal";
 
 /**
@@ -217,6 +220,20 @@ const ptsField = (label: string) =>
     // rejection, and a rejection is what the operator should see.
     .max(2_000_000_000, `${label} хэт өндөр байна.`);
 
+/*
+ * A time an admin typed into a `datetime-local` box, which carries no zone.
+ * Read as Ulaanbaatar time and handed on as an ISO instant, so nothing past
+ * this point can parse it in the server's zone — production's is UTC, and that
+ * opened a lot meant for 20:00 at 04:00 the next morning.
+ */
+const houseTimeSchema = (message: string) =>
+  z
+    .string()
+    .trim()
+    .transform((v) => parseHouseTime(v))
+    .refine((d) => !Number.isNaN(d.getTime()), message)
+    .transform((d) => d.toISOString());
+
 export const lotSchema = z
   .object({
     /* Appears in the URL, so it is restricted to what is safe there. */
@@ -279,20 +296,25 @@ export const lotSchema = z
         z
           .array(
             z.object({
-              url: z.string().max(500),
+              /*
+               * A path on this site: the catalogue's files or an upload. The
+               * image optimiser serves nothing else (next.config.ts), so any
+               * other address would save and then break the lot's page.
+               */
+              url: z
+                .string()
+                .max(500)
+                .regex(
+                  /^(?!.*\.\.)\/(media|api\/images)\/[A-Za-z0-9._\/-]+$/,
+                  "Зургийн зам буруу — зургийг «Зураг оруулах» товчоор оруулна уу.",
+                ),
               alt: z.string().max(200),
               credit: z.string().max(200),
             }),
           )
           .max(12, "Нэг лотод 12-оос олон зураг оруулах боломжгүй."),
       ),
-    opensAt: z
-      .string()
-      .trim()
-      .refine(
-        (v) => !Number.isNaN(Date.parse(v)),
-        "Эхлэх хугацаа буруу байна.",
-      ),
+    opensAt: houseTimeSchema("Эхлэх хугацаа буруу байна."),
   })
   .refine((v) => v.estimateHighPts >= v.estimateLowPts, {
     message: "Дээд үнэлгээ доод үнэлгээнээс бага байж болохгүй.",
@@ -353,10 +375,7 @@ export const awardSchema = z.object({
 
 export const rescheduleSchema = z.object({
   lotId: z.string().trim().min(1).max(32),
-  opensAt: z
-    .string()
-    .trim()
-    .refine((v) => !Number.isNaN(Date.parse(v)), "Хугацаа буруу байна."),
+  opensAt: houseTimeSchema("Хугацаа буруу байна."),
 });
 
 export const userStatusSchema = z.object({
@@ -371,7 +390,7 @@ export const userStatusSchema = z.object({
 
 export const userRoleSchema = z.object({
   userId: z.number().int().positive(),
-  role: z.enum(["bidder", "staff", "admin"]),
+  role: z.enum(["bidder", "admin"]),
   reason: z
     .string()
     .trim()
@@ -432,6 +451,82 @@ export const adjustSchema = z.object({
     .min(4, "Тайлбар бичнэ үү — хэрэглэгчийн гүйлгээний түүхэнд харагдана.")
     .max(200),
 });
+
+/*
+ * An account opened by an admin on somebody's behalf — at the desk, or over the
+ * phone.
+ *
+ * Every field the person would have typed into /register is held to the same
+ * rule here, so this form cannot make an account the sign-up form would have
+ * refused: an under-18 date of birth is refused here exactly as it is there.
+ *
+ * `consent` is the operator stating that the person accepted the rules. An
+ * account cannot exist without its consent rows (see `createUser`), and when
+ * somebody else fills the form in, they are the only one who can vouch for it.
+ */
+export const adminCreateUserSchema = z.object({
+  familyName: familyNameSchema,
+  name: nameSchema,
+  phone: phoneSchema,
+  password: passwordSchema,
+  dateOfBirth: dateOfBirthSchema,
+  consent: z.literal(true, {
+    message: "Хэрэглэгч дүрэм, нөхцөлийг зөвшөөрсөн гэдгийг тэмдэглэнэ үү.",
+  }),
+});
+
+/**
+ * The most money one hand-recorded payment can carry.
+ *
+ * The same blast radius as `MAX_BONUS_PTS`, in tögrög: one extra zero typed on
+ * a desk payment would otherwise put ten times the bidding power into a real
+ * sale. Larger sums are recorded as more than one payment.
+ */
+export const MAX_PAYMENT_MNT = MAX_BONUS_PTS * POINT_MNT;
+
+/*
+ * Money that reached the house outside the payment provider — cash at the desk,
+ * or a transfer straight into the bank account.
+ *
+ * The amount is in tögrög because that is what the operator is holding or
+ * reading off a bank statement; the points follow from it. It must be a whole
+ * number of points — a payment that converts to 12.5 points is a typo, not a
+ * purchase.
+ *
+ * A bank transfer must carry its transaction number. That number is what stops
+ * one transfer being typed in twice, and it is the first thing anybody asks for
+ * when a bidder says the points never arrived.
+ */
+export const paymentSchema = z
+  .object({
+    userId: z.number().int().positive(),
+    amountMnt: z
+      .number({ message: "Дүн тоо байна." })
+      .int("Дүн бүхэл тоо байна.")
+      .positive("Дүн эерэг тоо байна.")
+      .max(
+        MAX_PAYMENT_MNT,
+        `Нэг удаад дээд тал нь ${groupNumber(MAX_PAYMENT_MNT)}₮ бүртгэнэ.`,
+      )
+      .refine(
+        (v) => v % POINT_MNT === 0,
+        `Дүн ${POINT_MNT}₮-д хуваагдах ёстой — 1 оноо = ${POINT_MNT}₮.`,
+      ),
+    method: z.enum(["cash", "bank"], {
+      message: "Төлбөрийн хэлбэрийг сонгоно уу.",
+    }),
+    providerRef: z
+      .string()
+      .trim()
+      .max(100, "Гүйлгээний дугаар хэт урт байна.")
+      .transform((v) => (v === "" ? null : v)),
+    memo: z.string().trim().max(200, "Тэмдэглэл хэт урт байна."),
+    idempotencyKey: z.string().min(8).max(64),
+  })
+  .refine((v) => v.method !== "bank" || v.providerRef !== null, {
+    message: "Дансны шилжүүлгийн гүйлгээний дугаарыг оруулна уу.",
+    path: ["providerRef"],
+  });
 
 export type LotInputParsed = z.infer<typeof lotSchema>;
 

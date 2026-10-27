@@ -9,8 +9,8 @@ import { descent, clamp, type DescentState } from "./useDescent";
  *
  * Continuous tone, start to finish. There is no threshold anywhere in the
  * fragment path, so the field cannot speckle: daylight falloff, wall curvature,
- * the floors sweeping past, the haze and the door glow all composite as smooth
- * gradients and then mix between a lit tone and a shadow tone.
+ * the haze and the door glow all composite as smooth gradients and then mix
+ * between a lit tone and a shadow tone.
  *
  * Two passes share this source and differ only by `uMode`:
  *   0 — the ambient field, behind the content
@@ -77,10 +77,10 @@ void main(){
   /* The shaft is brighter down its centre line. */
   float wall = 1.0 - cu * cu * 2.6;
 
-  /* Floors sweeping upward past the camera. Soft bands, so they read as light
-     passing rather than as drawn rules. */
-  float fb = fract(v * 4.5 + uP * 22.0 + uTime * 0.05) - 0.5;
-  float band = exp(-fb * fb * 34.0) * (0.14 + uVel * 0.26);
+  /* No floors sweep past any more. They were soft horizontal bands that
+     scrolled up the screen and strengthened with scroll speed, and against
+     the navy they read as stripes drawn across the page rather than as light
+     passing — so the ground is only daylight, wall, haze and the door. */
 
   /* Slow volumetric haze — the thing that makes it feel like air. */
   float haze = fbm(vec2(uv.x * 2.2, v * 3.0 + uP * 5.5)
@@ -90,16 +90,16 @@ void main(){
   float dv = v - 0.66;
   float glow = uDoor * exp(-(cu * cu * 11.0 + dv * dv * 9.0));
 
-  float lum = L * wall * 1.15 + band * wall + glow * 1.4
+  float lum = L * wall * 1.15 + glow * 1.4
             + (haze - 0.5) * 0.16 + uClimax * 0.30;
 
   /* Soft shoulder, not a hard clamp.
      The door's glow peaks well above 1, and clamp() collapses everything past
      that into one flat colour — a plateau covering ~13% of the frame in the
      hall, with a visible edge where it stops. Because the wall term is a
-     parabola in x and the band term is horizontal, that edge runs
-     near-vertical at the sides and near-horizontal top and bottom, so it
-     reads as a rectangle sitting in the middle of the picture.
+     parabola in x and the glow an ellipse, that edge runs near-vertical at
+     the sides and near-horizontal top and bottom, so it reads as a rectangle
+     sitting in the middle of the picture.
 
      No backticks in this comment: the whole shader is a JS template literal,
      and one would end the string.
@@ -137,37 +137,27 @@ void main(){
    because the shader needs to interpolate them per frame; globals.css stays
    the source of truth for everything CSS can express. */
 const C = {
-  bone: [250, 246, 239],
-  boneInset: [233, 226, 212],
-  dusk: [150, 133, 113],
-  duskInset: [122, 106, 89],
-  roast: [25, 19, 16],
-  roastInset: [50, 40, 32],
-
   /*
    * The shaft's two tones.
    *
-   * ⚠ `shaftLo` IS the descent's `--color-ground` (#191310), exactly — set on
-   * `.root` in Descent.module.css, since the rest of the site is navy. `.tail`
-   * fades the last scene into `--color-ground`, so when the two differ the end
-   * of the descent shows a band of a different colour. If the palette moves,
-   * both move together.
+   * ⚠ `shaftLo` IS `--roast-page` (#080b16), the site's `--color-ground`,
+   * exactly. `.tail` fades the last scene into `--color-ground`, so when the
+   * two differ the end of the descent shows a band of a different colour. If
+   * the palette moves, both move together.
    *
-   * `shaftHi` is the lit tone, twenty-five code values up. The shader mixes
-   * between the two by a noise-driven luminance, so that distance IS how much
-   * texture the ground has — enough for the haze and the passing floors to
-   * read as light moving in the shaft. It was cut to four on 22 August for a
-   * flatter ground; this is the original figure.
+   * `shaftHi` is `--roast-inset`, the lit tone. The shader mixes between the
+   * two by a noise-driven luminance, so that distance IS how much texture the
+   * ground has — enough for the haze and the passing floors to read as light
+   * moving in the shaft. It was cut to a few code values on 22 August for a
+   * flatter ground; this keeps the texture.
    */
-  shaftLo: [25, 19, 16],
-  shaftHi: [50, 40, 32],
-  umberInk: [28, 23, 20],
-  umberMute: [116, 106, 93],
-  creamInk: [246, 241, 232],
-  creamMute: [168, 158, 144],
-  chestnut: [140, 90, 56],
-  amber: [196, 139, 72],
-  rust: [217, 85, 56],
+  shaftLo: [8, 11, 22],
+  shaftHi: [26, 33, 64],
+  ink: [243, 245, 255],
+  muted: [160, 172, 200],
+  violet: [186, 149, 255],
+  purple: [131, 56, 255],
+  cyan: [71, 234, 255],
 } as const;
 
 type RGB = readonly number[];
@@ -282,23 +272,22 @@ function draw(r: Renderer, mode: number, hi: RGB, lo: RGB, s: DescentState) {
  * DEPTH → COLOUR
  *
  * `hi` is the lit tone and `lo` the shadow, and the shader mixes between them
- * by luminance. `heat` pushes both toward chestnut, rust or amber — one number,
- * and it is the whole drama control: the scene dissolves, a fast scroll, the
- * hammer (rust) and the hall's door (amber) all warm the shaft.
+ * by luminance. `heat` pushes both toward purple at the hammer and cyan at the
+ * hall's door — the two places the story calls for colour, both rising and
+ * falling with the scroll so the ground never switches.
  *
- * The original journey also started at bone and dimmed through dusk before
- * reaching roast. That half is left out: the descent stays dark brown from the
- * top, and only the heat moves.
+ * Scene changes and scroll speed used to heat it too. That made the whole
+ * background flare violet at every boundary and whenever the page moved fast,
+ * which read as the background flicking between states rather than as depth.
+ *
+ * The descent stays navy from the top, like the rest of the site, and only the
+ * heat moves.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 function depthColors(s: DescentState) {
-  const heat = clamp(
-    s.burn * 0.35 + s.climax + s.door * 0.55 + s.vel * 0.12,
-    0,
-    1,
-  );
-  let hot = mix(C.chestnut, C.rust, s.climax);
-  hot = mix(hot, C.amber, s.door * 0.8);
+  const heat = clamp(s.climax + s.door * 0.55, 0, 1);
+  let hot = mix(C.violet, C.purple, s.climax);
+  hot = mix(hot, C.cyan, s.door * 0.8);
 
   return {
     hi: mix(C.shaftHi, hot, heat * 0.8),
@@ -356,7 +345,6 @@ export function Shaft() {
 
     const root = document.documentElement.style;
     let published = false;
-    let burnOn = false;
 
     const unsub = descent.subscribe((s) => {
       const { hi, lo } = depthColors(s);
@@ -364,26 +352,18 @@ export function Shaft() {
       if (field) draw(field, 0, hi, lo, s);
 
       /*
-       * The dissolve between scenes: an organic front sweeps across the screen
-       * in the shaft's own shadow tone, covers the moment one stage unsticks
-       * and the next takes over, and sweeps back off. Drawn only while
-       * `burn` is above zero, so between boundaries there is no full-screen
-       * alpha layer composited over the page.
+       * The burn layer is held off.
+       *
+       * It swept a front of fog across the whole screen at every scene
+       * boundary to cover one stage handing over to the next. Seen in motion
+       * it read as the background being swapped out under a cloud, so the
+       * handover is now the scenes' own content fading out and back in over a
+       * still ground (`--handoff`, written by Descent.tsx).
+       *
+       * The canvas and its renderer are still created rather than deleted:
+       * bringing the fog back is this one branch.
        */
-      if (burn) {
-        if (s.burn > 0.004) {
-          if (!burnOn) {
-            burnOn = true;
-            burnCv.style.opacity = "1";
-          }
-          draw(burn, 1, hi, lo, s);
-        } else if (burnOn) {
-          burnOn = false;
-          burnCv.style.opacity = "0";
-          burn.gl.clearColor(0, 0, 0, 0);
-          burn.gl.clear(burn.gl.COLOR_BUFFER_BIT);
-        }
-      }
+      void burn;
 
       /*
        * Hand the descent's colour to CSS once.
@@ -405,10 +385,10 @@ export function Shaft() {
        */
       root.setProperty("--descent-ground", css(C.shaftLo));
       root.setProperty("--descent-ground-hi", css(C.shaftHi));
-      root.setProperty("--descent-ink", css(C.creamInk));
-      root.setProperty("--descent-muted", css(C.creamMute));
-      root.setProperty("--descent-line", "rgba(246,236,222,0.19)");
-      root.setProperty("--descent-glow", "rgba(196,139,72,.55)");
+      root.setProperty("--descent-ink", css(C.ink));
+      root.setProperty("--descent-muted", css(C.muted));
+      root.setProperty("--descent-line", "rgba(71,234,255,0.15)");
+      root.setProperty("--descent-glow", "rgba(71,234,255,.24)");
     });
 
     return () => {

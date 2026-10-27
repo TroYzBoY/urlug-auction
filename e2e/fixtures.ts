@@ -84,7 +84,7 @@ export async function makeBidder(
   phone: string,
   paddle: string,
   balancePts = 500,
-  role: "bidder" | "staff" | "admin" = "bidder",
+  role: "bidder" | "admin" = "bidder",
 ): Promise<TestBidder> {
   await withClient(async (c) => {
     const res = await c.query<{ id: number }>(
@@ -163,17 +163,6 @@ export async function finalRoundEndingIn(
   );
 }
 
-/** The newest bid's recorded bid-clock remainder on a lot, in ms. */
-export async function clockLeftOf(lotId: string): Promise<number> {
-  return withClient(async (c) => {
-    const res = await c.query<{ clock_left_ms: number }>(
-      "SELECT clock_left_ms FROM bids WHERE lot_id = $1 ORDER BY id DESC LIMIT 1",
-      [lotId],
-    );
-    return res.rows[0]!.clock_left_ms;
-  });
-}
-
 /** Signs in through the real form, so the session cookie is a real one. */
 export async function signIn(page: Page, bidder: TestBidder): Promise<void> {
   await page.goto("/login");
@@ -234,6 +223,34 @@ export async function passwordHashFor(phone: string): Promise<string> {
       [phone],
     );
     return res.rows[0]?.password_hash ?? "";
+  });
+}
+
+/** A photograph on a lot's gallery, with the credit a licensed one carries. */
+export async function addLotImage(
+  lotId: string,
+  url: string,
+  credit: string | null = null,
+): Promise<void> {
+  await withClient((c) =>
+    c.query(
+      `INSERT INTO lot_images (lot_id, url, alt, sort_order, credit)
+       VALUES ($1, $2, 'Урд тал',
+               (SELECT COUNT(*) FROM lot_images WHERE lot_id = $1), $3)`,
+      [lotId, url, credit],
+    ),
+  );
+}
+
+/** A bidder's balance, read from the database rather than the DOM. */
+export async function balanceFor(phone: string): Promise<number> {
+  return withClient(async (c) => {
+    const res = await c.query<{ pts: number }>(
+      `SELECT b.pts FROM balances b JOIN users u ON u.id = b.user_id
+        WHERE u.phone = $1`,
+      [phone],
+    );
+    return res.rows[0]?.pts ?? 0;
   });
 }
 
