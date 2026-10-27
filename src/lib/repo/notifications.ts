@@ -149,10 +149,17 @@ export async function deliverPending(batch = 50): Promise<number> {
         sent += 1;
       } catch (err) {
         const attempts = row.attempts + 1;
+        /*
+         * ⚠ The casts are load-bearing. Without them Postgres deduces $2 as
+         * integer from `attempts` and as text from `$2 >= $3`, refuses the
+         * statement, and the whole batch rolls back — the texts already sent
+         * in it are sent again on the next pass, and this one is never given
+         * up on.
+         */
         await client.query(
           `UPDATE notifications
-              SET attempts = $2,
-                  status = CASE WHEN $2 >= $3 THEN 'failed'::notification_status
+              SET attempts = $2::int,
+                  status = CASE WHEN $2::int >= $3::int THEN 'failed'::notification_status
                                 ELSE 'pending'::notification_status END
             WHERE id = $1`,
           [row.id, attempts, MAX_ATTEMPTS],
