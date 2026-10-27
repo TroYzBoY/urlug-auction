@@ -1,6 +1,6 @@
 import "server-only";
 import { Client } from "pg";
-import { env } from "./env";
+import { env, ON_VERCEL } from "./env";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -134,13 +134,42 @@ export async function subscribe(
     hub.listeners.set(lotId, set);
   }
   set.add(fn);
+  /*
+   * The last stream on this instance may have closed the listener between the
+   * connect above and here (closeIdleListener). Reconnect for this one.
+   */
+  if (!hub.client) {
+    void ensureListening().catch((err) =>
+      console.error("[realtime] reconnect failed", err),
+    );
+  }
 
   return () => {
     const current = hub.listeners.get(lotId);
     if (!current) return;
     current.delete(fn);
     if (current.size === 0) hub.listeners.delete(lotId);
+    if (ON_VERCEL && hub.listeners.size === 0) closeIdleListener();
   };
+}
+
+/**
+ * Closes the listener connection once nobody on this instance is watching.
+ *
+ * Vercel only. A long-running server keeps its one connection for good, but a
+ * Vercel instance is frozen between requests with the connection still open on
+ * Supabase's session pooler, and enough of those fill all 15 of its slots.
+ * Closed at once rather than after a grace period, because a timer does not
+ * fire on a frozen instance. The next stream to open reconnects.
+ */
+function closeIdleListener(): void {
+  const client = hub.client;
+  if (!client) return;
+  // Cleared first, so the "end" handler sees a deliberate close and does not
+  // reconnect, and the next subscribe connects afresh.
+  hub.client = null;
+  hub.connecting = null;
+  void client.end().catch(() => {});
 }
 
 /**

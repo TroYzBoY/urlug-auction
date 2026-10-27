@@ -1,6 +1,7 @@
 import "server-only";
+import { attachDatabasePool } from "@vercel/functions";
 import { Pool, types, type PoolClient, type QueryResultRow } from "pg";
-import { env } from "./env";
+import { env, ON_VERCEL } from "./env";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -52,7 +53,11 @@ export function getPool(): Pool {
     // A bid must not sit behind a wedged connection while a 5-second clock
     // runs down. Fail fast and let the caller show a rejection.
     connectionTimeoutMillis: 5_000,
-    idleTimeoutMillis: 30_000,
+    /*
+     * Shorter on Vercel, where every instance's idle connections count against
+     * the session pooler's 15 — see attachDatabasePool below.
+     */
+    idleTimeoutMillis: ON_VERCEL ? 5_000 : 30_000,
     /*
      * Postgres kills a statement that overruns this. Without it, one runaway
      * query can hold the `FOR UPDATE` lock on an auction row indefinitely and
@@ -80,6 +85,15 @@ export function getPool(): Pool {
   created.on("error", (err) => {
     console.error("[db] idle client error", err);
   });
+
+  /*
+   * ⚠ On Vercel an instance is frozen between requests, idle connections and
+   * all, and idleTimeoutMillis cannot fire while it is. Every frozen instance
+   * then holds its connections open on Supabase's session pooler until it has
+   * all 15 and every page fails with EMAXCONNSESSION. This closes idle clients
+   * before the instance suspends.
+   */
+  if (ON_VERCEL) attachDatabasePool(created);
 
   globalThis.__urlugPool = created;
   return created;
