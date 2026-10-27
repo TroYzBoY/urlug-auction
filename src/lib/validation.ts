@@ -336,24 +336,6 @@ export const lotControlSchema = z.object({
 });
 
 /*
- * Switching who names a lot's winner.
- *
- * The reason is required only when handing the decision to a person — that is
- * the direction that lets the outcome differ from the bidding, so it is the one
- * the audit row has to explain. Going back to the clock needs none.
- */
-export const awardModeSchema = z
-  .object({
-    lotId: z.string().trim().min(1).max(32),
-    manual: z.enum(["1", "0"]).transform((v) => v === "1"),
-    reason: z.string().trim().max(500).optional(),
-  })
-  .refine((v) => !v.manual || (v.reason?.length ?? 0) >= 4, {
-    message: "Шалтгааныг бичнэ үү — аудитын бүртгэлд үлдэнэ.",
-    path: ["reason"],
-  });
-
-/*
  * Naming a winner.
  *
  * `note` is required and is not decoration: this is the one admin action that

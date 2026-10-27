@@ -242,7 +242,7 @@ export default async function AdminPage() {
               {lotRows.map((lot) => (
                 <tr key={lot.lotId} className="border-line border-b">
                   <td className="py-3 pr-4">
-                    {/* Into the lot's own page: its award switch, and its
+                    {/* Into the lot's own page: its details, and its
                         decision when it is waiting on one. */}
                     <Link
                       href={`/admin/lots/${encodeURIComponent(lot.lotId)}`}
@@ -262,11 +262,6 @@ export default async function AdminPage() {
                     >
                       {OUTCOME_LABEL[lot.outcome] ?? lot.outcome}
                     </span>
-                    {lot.manualAward && (
-                      <span className="eyebrow text-flare ml-2 text-[0.625rem]">
-                        {t.admin.manualBadge}
-                      </span>
-                    )}
                   </td>
                   <td data-numerals className="text-muted py-3 pr-4">
                     {lot.round}

@@ -20,7 +20,6 @@ import {
   markContactHandled,
   recordPayment,
   rescheduleAuction,
-  setManualAward,
   setUserRole,
   setUserStatus,
   updateLot,
@@ -31,7 +30,6 @@ import { clientIpFrom, requireAdmin } from "@/lib/session";
 import {
   adjustSchema,
   adminCreateUserSchema,
-  awardModeSchema,
   awardSchema,
   bonusSchema,
   firstError,
@@ -170,45 +168,6 @@ export async function closeAuctionAction(
   await publish(parsed.data.lotId);
   refresh();
   return { status: "ok", message: t.admin.closedToReview };
-}
-
-/**
- * Hands one lot's winner to an admin, or back to the clock.
- *
- * Not published: nothing a bidder sees changes until the lot closes, so there
- * is nothing to push.
- */
-export async function setAwardModeAction(
-  _prev: AdminState,
-  formData: FormData,
-): Promise<AdminState> {
-  const who = await actor();
-  const parsed = awardModeSchema.safeParse({
-    lotId: formData.get("lotId"),
-    manual: formData.get("manual"),
-    reason: formData.get("reason") ?? undefined,
-  });
-  if (!parsed.success) {
-    return { status: "error", message: firstError(parsed.error) };
-  }
-
-  const { lotId, manual, reason } = parsed.data;
-  const result = await setManualAward(lotId, manual, reason ?? null, who);
-  if (!result.ok) {
-    return {
-      status: "error",
-      message:
-        result.reason === "already-closed"
-          ? t.admin.awardModeClosed
-          : "Лот олдсонгүй.",
-    };
-  }
-
-  refresh();
-  return {
-    status: "ok",
-    message: manual ? t.admin.awardModeManualDone : t.admin.awardModeAutoDone,
-  };
 }
 
 export async function cancelAuctionAction(

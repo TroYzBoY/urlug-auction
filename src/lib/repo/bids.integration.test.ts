@@ -265,10 +265,7 @@ describe("the rules, re-enforced server-side", () => {
     if (!res.ok) expect(res.reason).toBe("round-closed");
 
     // And it persists that, rather than leaving the catalogue advertising a
-    // live lot that rejects every bid. `review` here because the seeded leader
-    // has a paddle but no account behind it, so there is nobody on record for
-    // the automatic award to hand the lot to — see the next test for the
-    // ordinary case.
+    // live lot that rejects every bid.
     const [auction] = await query<{ outcome: string }>(
       "SELECT outcome FROM auctions WHERE lot_id = $1",
       [LOT],
@@ -276,7 +273,9 @@ describe("the rules, re-enforced server-side", () => {
     expect(auction!.outcome).toBe("review");
   });
 
-  it("hands the lot to the standing leader when a late bid is what closes it", async () => {
+  it("leaves the lot for an admin, and tells them, when a late bid is what closes it", async () => {
+    const admin = await seedUser(url, { phone: "99119999", paddle: "Т-001" });
+    await query("UPDATE users SET role = 'admin' WHERE id = $1", [admin.id]);
     const leader = await seedUser(url, { phone: "99110002", paddle: "Т-200" });
     await seedRunningLot(url, {
       lotId: LOT,
@@ -302,20 +301,19 @@ describe("the rules, re-enforced server-side", () => {
     expect(res.ok).toBe(false);
 
     /*
-     * Sold, not left in review. The ticker only revisits lots that are still
-     * running, so a lot this path closed and did not hand over would wait in
-     * review for an admin nobody asked for.
+     * Not sold: an admin names the winner. But the admins are told here, not
+     * left to find it — the ticker only revisits lots that are still
+     * running, so it will never get to this one.
      */
-    const [auction] = await query<{ outcome: string; leader_user_id: number }>(
-      "SELECT outcome, leader_user_id FROM auctions WHERE lot_id = $1",
+    const [auction] = await query<{ outcome: string }>(
+      "SELECT outcome FROM auctions WHERE lot_id = $1",
       [LOT],
     );
-    expect(auction).toEqual({ outcome: "sold", leader_user_id: leader.id });
-    const settlements = await query(
-      "SELECT 1 FROM settlements WHERE lot_id = $1 AND user_id = $2",
-      [LOT, leader.id],
+    expect(auction!.outcome).toBe("review");
+    const told = await query<{ user_id: number; kind: string }>(
+      "SELECT user_id, kind FROM notifications",
     );
-    expect(settlements).toHaveLength(1);
+    expect(told).toEqual([{ user_id: admin.id, kind: "lot.review" }]);
   });
 
   it("keeps round_ends_at current, so the ticker stops re-settling a live lot", async () => {

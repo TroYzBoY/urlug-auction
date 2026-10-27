@@ -314,14 +314,8 @@ export async function closeAuction(
     // A lot nobody bid on has nothing to review; it is simply unsold.
     const outcome = auction.leader_paddle ? "review" : "unsold";
 
-    /*
-     * `manual_award` is set whatever the lot was set to. An automatic lot would
-     * otherwise be handed to whoever led at the moment of the emergency, which
-     * is exactly the silent decision this function exists to avoid.
-     */
     await client.query(
       `UPDATE auctions SET outcome = $2::auction_outcome,
-                           manual_award = true,
                            settled_at = COALESCE(settled_at, now()),
                            hammer_round = round, version = version + 1,
                            updated_at = now()
@@ -341,67 +335,6 @@ export async function closeAuction(
         standingLeader: auction.leader_paddle,
         round: auction.round,
       },
-      ip: actor.ip,
-      userAgent: actor.userAgent,
-    });
-
-    return { ok: true };
-  });
-}
-
-/* ── Who names the winner ───────────────────────────────────────────────── */
-
-export type AwardModeResult =
-  | { ok: true }
-  | { ok: false; reason: "not-found" | "already-closed" };
-
-/**
- * Switches one lot between the clock naming its winner (the default) and an
- * admin doing it after the last round.
- *
- * Only before the lot closes. Once bidding has stopped an automatic lot is
- * already sold — there is nothing left to take over — and a manual one is in
- * the review queue, where the dropdown already defaults to the standing leader
- * for the admin who wants the ordinary answer.
- *
- * Switching TO manual requires a reason, like every other control that lets a
- * person override what the bidding produced; switching back does not, because
- * it hands the decision back to the rule everybody bid under.
- */
-export async function setManualAward(
-  lotId: string,
-  manual: boolean,
-  reason: string | null,
-  actor: Actor,
-): Promise<AwardModeResult> {
-  return transaction(async (client) => {
-    const res = await client.query<{ outcome: string; manual_award: boolean }>(
-      "SELECT outcome, manual_award FROM auctions WHERE lot_id = $1 FOR UPDATE",
-      [lotId],
-    );
-    const auction = res.rows[0];
-    if (!auction) return { ok: false, reason: "not-found" };
-    if (auction.outcome !== "scheduled" && auction.outcome !== "running") {
-      return { ok: false, reason: "already-closed" };
-    }
-    if (auction.manual_award === manual) return { ok: true };
-
-    /*
-     * `version` is left alone: it counts changes to the SALE — price, round,
-     * outcome — and this changes none of them. Nothing is published either, so
-     * an open room never hears about it.
-     */
-    await client.query(
-      "UPDATE auctions SET manual_award = $2, updated_at = now() WHERE lot_id = $1",
-      [lotId, manual],
-    );
-
-    await record(client, {
-      actorUserId: actor.id,
-      action: manual ? "admin.award_manual" : "admin.award_automatic",
-      targetType: "lot",
-      targetId: lotId,
-      detail: { reason, outcome: auction.outcome },
       ip: actor.ip,
       userAgent: actor.userAgent,
     });
@@ -497,9 +430,7 @@ async function lockForDecision(
  *
  * The settlement is opened in the same transaction, so the sale and the
  * obligation it creates come into existence together — a hammer with no invoice
- * is a lot nobody is chasing. The handover itself is `grantLot`, shared with
- * the automatic path, so a lot decided here produces exactly the rows and the
- * messages one decided by the clock does.
+ * is a lot nobody is chasing. The handover itself is `grantLot`.
  */
 export async function awardLot(
   lotId: string,

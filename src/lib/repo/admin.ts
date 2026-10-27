@@ -83,9 +83,7 @@ export interface AdminLotRow {
   bidCount: number;
   leaderPaddle: string | null;
   round: number;
-  /** An admin names this lot's winner, rather than the clock. */
-  manualAward: boolean;
-  /** Who named the winner of a sold lot; null when the clock did. */
+  /** Who named the winner of a sold lot; null for lots the clock sold. */
   awardedByPaddle: string | null;
 }
 
@@ -99,13 +97,12 @@ interface AdminLotDbRow {
   bid_count: number;
   leader_paddle: string | null;
   round: number;
-  manual_award: boolean;
   awarded_by_paddle: string | null;
 }
 
 const ADMIN_LOT_SELECT = `
   SELECT a.lot_id, l.code, l.title, a.outcome, a.opens_at, a.current_pts,
-         a.bid_count, a.leader_paddle, a.round, a.manual_award,
+         a.bid_count, a.leader_paddle, a.round,
          awarder.paddle AS awarded_by_paddle
     FROM auctions a
     JOIN lots l ON l.id = a.lot_id
@@ -123,7 +120,6 @@ function toAdminLot(r: AdminLotDbRow): AdminLotRow {
     bidCount: r.bid_count,
     leaderPaddle: r.leader_paddle,
     round: r.round,
-    manualAward: r.manual_award,
     awardedByPaddle: r.awarded_by_paddle,
   };
 }
@@ -213,11 +209,10 @@ export async function reviewQueue(): Promise<ReviewLotRow[]> {
     outcome: EngineState["outcome"];
     settled_at: Date | null;
     bid_count: number;
-    manual_award: boolean;
   }>(
     `SELECT a.lot_id, l.code, l.title, a.opens_at, a.round, a.current_pts,
             a.leader_paddle, a.leader_user_id, a.bid_clock_ends_at, a.outcome,
-            a.settled_at, a.bid_count, a.manual_award
+            a.settled_at, a.bid_count
        FROM auctions a JOIN lots l ON l.id = a.lot_id
       WHERE a.outcome IN ('running', 'review')
       ORDER BY a.opens_at DESC`,
@@ -239,19 +234,7 @@ export async function reviewQueue(): Promise<ReviewLotRow[]> {
         now,
       ),
     }))
-    /*
-     * A lot the clock has just closed belongs here only if a person is to
-     * decide it. An automatic one is about to be sold by the ticker — listing
-     * it for the quarter-second until that happens would invite an admin to
-     * race the clock for a decision that is not theirs. A lot already STORED
-     * as review is always shown, whatever its flag: something put it there,
-     * and nothing but this queue will take it out.
-     */
-    .filter(
-      ({ row, live }) =>
-        live.outcome === "review" &&
-        (row.manual_award || row.outcome === "review"),
-    );
+    .filter(({ live }) => live.outcome === "review");
 
   if (pending.length === 0) return [];
 

@@ -58,6 +58,9 @@ beforeEach(async () => {
  * sale; in rounds 1–5 it only moves the lot up a round.
  */
 async function seedLot(msFromNow: number): Promise<void> {
+  // An admin, so a closing lot has somebody to tell.
+  const admin = await seedUser(url, { phone: "99119999", paddle: "Т-001" });
+  await query("UPDATE users SET role = 'admin' WHERE id = $1", [admin.id]);
   const bidder = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
   await seedRunningLot(url, {
     lotId: LOT,
@@ -96,7 +99,8 @@ describe("tickFor", () => {
 
     expect(report.leader).toBe(true);
     expect(report.settled).toBe(1);
-    expect(await outcome()).toBe("sold");
+    // Closed for an admin to decide — the clock no longer sells anything.
+    expect(await outcome()).toBe("review");
 
     /*
      * It stayed for a clock 1.5s away rather than leaving it to the next call,
@@ -105,7 +109,7 @@ describe("tickFor", () => {
     expect(took).toBeGreaterThanOrEqual(1_500);
     expect(took).toBeLessThan(4_000);
 
-    // The winner's message went with the call that sold the lot.
+    // The admins' message went with the call that closed the lot.
     const pending = await query(
       "SELECT 1 FROM notifications WHERE status = 'pending'",
     );

@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { AccountShell, Panel, Stat } from "@/components/account/AccountShell";
 import {
   AuctionControls,
-  AwardModeControl,
   EditLotForm,
   WinnerPicker,
   type LotFormValues,
@@ -26,11 +25,9 @@ export const metadata: Metadata = {
 /**
  * One lot, from the house's side.
  *
- * The place an admin comes to take a lot's winner into their own hands — the
- * switch is here rather than in the dashboard's table because it is a decision
- * about ONE sale, made before it closes, and it deserves a page that shows what
- * that sale currently is. When the lot is waiting on them, the same page holds
- * the decision itself.
+ * What the sale currently is, its details and controls, and — once bidding
+ * has stopped — the decision itself: an admin names the winner of every lot,
+ * here or from the dashboard's queue.
  */
 export default async function AdminLotPage(
   props: PageProps<"/admin/lots/[id]">,
@@ -84,21 +81,14 @@ export default async function AdminLotPage(
         <Stat label={t.lot.bidCount} value={row.bidCount} />
       </div>
 
-      <Panel heading={t.admin.awardMode} empty="—" isEmpty={false}>
-        <AwardModeControl
-          lotId={row.lotId}
-          manual={row.manualAward}
-          outcome={row.outcome}
-        />
-        {/* After the fact, the record of which way it went. */}
-        {row.outcome === "sold" && (
-          <p data-numerals className="text-faint mt-4 text-xs">
-            {row.awardedByPaddle
-              ? t.admin.awardedBy(row.awardedByPaddle)
-              : t.admin.awardedByClock}
-          </p>
-        )}
-      </Panel>
+      {/* After the fact, the record of who made the call. */}
+      {row.outcome === "sold" && (
+        <p data-numerals className="text-faint mt-6 text-xs">
+          {row.awardedByPaddle
+            ? t.admin.awardedBy(row.awardedByPaddle)
+            : t.admin.awardedByClock}
+        </p>
+      )}
 
       {pending && (
         <Panel heading={t.admin.reviewQueue} empty="—" isEmpty={false}>

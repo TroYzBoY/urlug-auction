@@ -3,7 +3,7 @@ import type { PoolClient } from "pg";
 import { getPool, transaction, tryAdvisoryLock } from "./db";
 import { settle, type EngineState } from "./auction-engine";
 import { persistSettlement } from "./repo/bids";
-import { awardAutomatically } from "./repo/award";
+import { awaitDecision } from "./repo/award";
 import { publish } from "./realtime";
 import { recordDetached } from "./audit";
 import { sweep as sweepRateLimits } from "./rate-limit";
@@ -162,28 +162,19 @@ export async function settleDueAuctions(now = Date.now()): Promise<string[]> {
         }
 
         /*
-         * Bidding is over.
+         * Bidding is over. The lot waits in `review` until an admin names its
+         * winner (`awardLot`); `awaitDecision` puts it in front of them.
          *
-         * Most lots are decided right here: `awardAutomatically` hands the lot
-         * to the standing leader in this same transaction, so it goes from
-         * running to sold in one commit and one push. A lot an admin has
-         * marked for deciding by hand is left in `review` for `awardLot`.
-         *
-         * Nobody is messaged at this point, in either case. The winner's text
-         * and everyone else's "decided" line are sent by the handover itself
-         * (`grantLot`), whenever it happens — so bidders on a hand-decided lot
-         * hear the same things, in the same order, as on any other, only
-         * later. A "bidding closed, we are checking" message sent only for the
-         * lots that wait would mark those lots out.
+         * No bidder is messaged at this point. The winner's text and
+         * everyone else's "decided" line are sent by the handover itself
+         * (`grantLot`), once there is a result to tell them.
          *
          * A lot with no bids at all skips review — there is nothing to choose
          * between — and goes straight to unsold.
          */
-        const awarded =
-          live.outcome === "review" &&
-          (await awardAutomatically(client, r.lot_id));
+        if (live.outcome === "review") await awaitDecision(client, r.lot_id);
 
-        if ((live.outcome === "review" && !awarded) || live.outcome === "unsold") {
+        if (live.outcome === "review" || live.outcome === "unsold") {
           recordDetached({
             action: `auction.${live.outcome}`,
             targetType: "lot",

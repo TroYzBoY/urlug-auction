@@ -35,7 +35,6 @@ process.env.DATABASE_URL = url;
 /* Imported after DATABASE_URL is set — see the note in bids.integration.test.ts. */
 let awardLot: typeof import("./admin-write").awardLot;
 let declareUnsold: typeof import("./admin-write").declareUnsold;
-let setManualAward: typeof import("./admin-write").setManualAward;
 let closeAuction: typeof import("./admin-write").closeAuction;
 let reviewQueue: typeof import("./admin").reviewQueue;
 let settleDueAuctions: typeof import("../ticker").settleDueAuctions;
@@ -46,7 +45,7 @@ const LOT = "900";
 
 beforeAll(async () => {
   await applySchema(url);
-  ({ awardLot, declareUnsold, setManualAward, closeAuction } = await import(
+  ({ awardLot, declareUnsold, closeAuction } = await import(
     "./admin-write"
   ));
   ({ reviewQueue } = await import("./admin"));
@@ -75,10 +74,6 @@ async function seedAdmin() {
 /**
  * A lot whose bid clock ran out a second ago in ROUND 6, with two bidders on it.
  *
- * Marked for an admin to decide unless told otherwise, because that is the
- * path most of this file is about. An automatic lot never waits for anyone:
- * the first thing to settle it sells it.
- *
  * Round 6 specifically, because that is now the only round an expiring clock
  * can end a sale in: in rounds 1–5 the same expiry just moves the lot up a
  * gear. A round-1 setup here would leave a lot that is still cheerfully
@@ -89,9 +84,8 @@ async function seedAdmin() {
  * only add its own clock rules to the setup.
  */
 async function seedClosedLot({
-  manual = true,
   bidClockMsFromNow = -1_000,
-}: { manual?: boolean; bidClockMsFromNow?: number } = {}): Promise<{
+}: { bidClockMsFromNow?: number } = {}): Promise<{
   top: number;
   second: number;
 }> {
@@ -106,8 +100,8 @@ async function seedClosedLot({
     leaderPaddle: top.paddle,
   });
   await query(
-    "UPDATE auctions SET leader_user_id = $2, manual_award = $3 WHERE lot_id = $1",
-    [LOT, top.id, manual],
+    "UPDATE auctions SET leader_user_id = $2 WHERE lot_id = $1",
+    [LOT, top.id],
   );
 
   for (const [userId, paddle, points] of [
@@ -331,54 +325,55 @@ describe("declaring a lot unsold", () => {
   });
 });
 
-describe("the clock naming the winner (the default)", () => {
-  it("sells an expired lot to the standing leader the moment the ticker settles it", async () => {
-    const { top } = await seedClosedLot({ manual: false });
-
-    expect(await reviewQueue()).toHaveLength(0);
+describe("when bidding stops", () => {
+  it("waits in review for an admin, however clear the standing leader is", async () => {
+    await seedClosedLot();
     await settleDueAuctions();
 
-    const [auction] = await query<{
-      outcome: string;
-      leader_user_id: number;
-      current_pts: number;
-      awarded_by: number | null;
-      manual_award: boolean;
-    }>(
-      `SELECT outcome, leader_user_id, current_pts, awarded_by, manual_award
-         FROM auctions WHERE lot_id = $1`,
+    const [auction] = await query<{ outcome: string; awarded_at: Date | null }>(
+      "SELECT outcome, awarded_at FROM auctions WHERE lot_id = $1",
       [LOT],
     );
-    expect(auction).toMatchObject({
-      outcome: "sold",
-      leader_user_id: top,
-      current_pts: 1300,
-      // NULL is how the record tells the clock's decision from a person's.
-      awarded_by: null,
-      manual_award: false,
-    });
+    expect(auction).toEqual({ outcome: "review", awarded_at: null });
+    expect(await reviewQueue()).toHaveLength(1);
 
-    // The same obligation an admin's award opens.
-    const [settlement] = await query<{ user_id: number; hammer_pts: number }>(
-      "SELECT user_id, hammer_pts FROM settlements WHERE lot_id = $1",
+    const settlements = await query(
+      "SELECT 1 FROM settlements WHERE lot_id = $1",
       [LOT],
     );
-    expect(settlement).toEqual({ user_id: top, hammer_pts: 1300 });
-
-    const audit = await query<{ action: string; actor_user_id: number | null }>(
-      "SELECT action, actor_user_id FROM audit_log WHERE action = 'auction.sold'",
-    );
-    expect(audit).toEqual([{ action: "auction.sold", actor_user_id: null }]);
-
-    expect(await reviewQueue()).toHaveLength(0);
+    expect(settlements).toHaveLength(0);
   });
 
-  it("tells the bidders exactly what an admin's award would", async () => {
-    const { top, second } = await seedClosedLot({ manual: false });
+  it("tells the admins, and no bidder, until there is a result", async () => {
+    const admin = await seedAdmin();
+    await seedClosedLot();
     await settleDueAuctions();
 
+    const sent = await query<{
+      user_id: number;
+      kind: string;
+      channel: string;
+      href: string;
+    }>("SELECT user_id, kind, channel, href FROM notifications");
+    expect(sent).toEqual([
+      {
+        user_id: admin.id,
+        kind: "lot.review",
+        channel: "inapp",
+        href: `/admin/lots/${LOT}`,
+      },
+    ]);
+  });
+
+  it("tells the bidders once an admin has decided", async () => {
+    const actor = await seedAdmin();
+    const { top, second } = await seedClosedLot();
+    await settleDueAuctions();
+    await awardLot(LOT, top, "Ердийн дуусгавар", actor);
+
     const sent = await query<{ user_id: number; kind: string }>(
-      "SELECT user_id, kind FROM notifications ORDER BY user_id, kind",
+      "SELECT user_id, kind FROM notifications WHERE user_id <> $1 ORDER BY user_id",
+      [actor.id],
     );
     expect(sent).toEqual(
       [
@@ -388,8 +383,11 @@ describe("the clock naming the winner (the default)", () => {
     );
   });
 
-  it("leaves a lot an admin is deciding in review, and sends nobody anything yet", async () => {
-    await seedClosedLot({ manual: true });
+  it("an emergency close is left for a person too", async () => {
+    const admin = await seedAdmin();
+    await seedClosedLot({ bidClockMsFromNow: 60_000 });
+
+    expect((await closeAuction(LOT, "Техникийн доголдол", admin)).ok).toBe(true);
     await settleDueAuctions();
 
     const [auction] = await query<{ outcome: string }>(
@@ -397,72 +395,6 @@ describe("the clock naming the winner (the default)", () => {
       [LOT],
     );
     expect(auction!.outcome).toBe("review");
-    expect(await reviewQueue()).toHaveLength(1);
-
-    /*
-     * No "bidding closed, we are checking" message. An automatic lot does not
-     * send one — it goes straight to the result — so sending it only for the
-     * lots that wait would mark them out.
-     */
-    const sent = await query("SELECT 1 FROM notifications");
-    expect(sent).toHaveLength(0);
-  });
-});
-
-describe("switching who names the winner", () => {
-  it("can be switched both ways while the lot is still taking bids", async () => {
-    const admin = await seedAdmin();
-    await seedClosedLot({ manual: false, bidClockMsFromNow: 60_000 });
-
-    expect(await setManualAward(LOT, true, "Шалгах шаардлагатай", admin)).toEqual({
-      ok: true,
-    });
-    let [row] = await query<{ manual_award: boolean }>(
-      "SELECT manual_award FROM auctions WHERE lot_id = $1",
-      [LOT],
-    );
-    expect(row!.manual_award).toBe(true);
-
-    expect(await setManualAward(LOT, false, null, admin)).toEqual({ ok: true });
-    [row] = await query<{ manual_award: boolean }>(
-      "SELECT manual_award FROM auctions WHERE lot_id = $1",
-      [LOT],
-    );
-    expect(row!.manual_award).toBe(false);
-
-    const audit = await query<{ action: string }>(
-      `SELECT action FROM audit_log WHERE action LIKE 'admin.award_%'
-        ORDER BY id`,
-    );
-    expect(audit.map((a) => a.action)).toEqual([
-      "admin.award_manual",
-      "admin.award_automatic",
-    ]);
-  });
-
-  it("cannot be switched once the lot has closed", async () => {
-    const admin = await seedAdmin();
-    await seedClosedLot({ manual: false });
-    await settleDueAuctions();
-
-    expect(await setManualAward(LOT, true, "Хэтэрхий оройтсон", admin)).toEqual({
-      ok: false,
-      reason: "already-closed",
-    });
-  });
-
-  it("an emergency close is left for a person, even on an automatic lot", async () => {
-    const admin = await seedAdmin();
-    await seedClosedLot({ manual: false, bidClockMsFromNow: 60_000 });
-
-    expect((await closeAuction(LOT, "Техникийн доголдол", admin)).ok).toBe(true);
-    await settleDueAuctions();
-
-    const [auction] = await query<{ outcome: string; manual_award: boolean }>(
-      "SELECT outcome, manual_award FROM auctions WHERE lot_id = $1",
-      [LOT],
-    );
-    expect(auction).toEqual({ outcome: "review", manual_award: true });
     expect(await reviewQueue()).toHaveLength(1);
   });
 });

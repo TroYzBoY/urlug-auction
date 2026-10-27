@@ -1,6 +1,5 @@
 import "server-only";
 import type { PoolClient } from "pg";
-import { record } from "../audit";
 import { enqueue } from "./notifications";
 import { openSettlement } from "./settlements";
 import { t } from "../copy";
@@ -9,19 +8,14 @@ import { t } from "../copy";
  * ─────────────────────────────────────────────────────────────────────────────
  * HANDING A LOT TO ITS WINNER
  *
- * Two ways a lot is decided, one way it is handed over.
+ * An admin names the winner of every lot. When bidding stops the lot waits in
+ * `review` — `awaitDecision` puts it in front of the admins — until `awardLot`
+ * or `declareUnsold` in admin-write.ts. A lot nobody bid on skips the wait and
+ * is simply unsold.
  *
- *   automatic — the default. When bidding stops, the standing leader takes the
- *               lot at the standing price, in the same transaction that closed
- *               it (`awardAutomatically`, called by the ticker and by the bid
- *               path whichever settles the lot first).
- *   by hand   — an admin switched the lot to `manual_award` before it closed.
- *               It waits in `review` until `awardLot` in admin-write.ts.
- *
- * Both end in `grantLot`, so the sale, the settlement and the messages to the
- * bidders are the same rows whichever way it went — only the timing differs,
- * at the close or when the admin decides. Who made the call lives in
- * `awarded_by` and the audit log.
+ * The handover itself is `grantLot`: the sale, the settlement and the messages
+ * to the bidders. Who made the call lives in `awarded_by` and the audit log.
+ * (Lots sold before this rule have `awarded_by` NULL: the clock chose then.)
  *
  * Every function here expects the caller to hold the auction row lock.
  * ─────────────────────────────────────────────────────────────────────────────
@@ -73,8 +67,8 @@ export interface Granted {
  * passes over the top bidder, the lot is sold at what the person who actually
  * gets it offered. For the standing leader the two are the same number.
  *
- * The audit row is the caller's, because what it should say — a clock closed
- * this, or a named admin chose — is the one thing that differs.
+ * The audit row is the caller's: what it should say — which admin chose, and
+ * why — is theirs to write.
  */
 export async function grantLot(
   client: PoolClient,
@@ -146,58 +140,38 @@ export async function grantLot(
 }
 
 /**
- * Hands a lot that has just stopped taking bids to its standing leader — unless
- * an admin has said they will decide this one.
+ * Tells every admin that a lot has stopped taking bids and is waiting for them
+ * to name its winner.
  *
  * Call it straight after persisting a settlement into `review`, inside the same
- * transaction. True when it sold the lot; false when the lot is left waiting:
- * marked for a person, or with no leader on record to give it to.
+ * transaction — whichever of the ticker and the bid path settles the lot first.
+ * In-app, in the bell: the dashboard's queue is where the decision is made,
+ * and this is what sends an admin there without them refreshing it.
+ *
+ * Bidders hear nothing at this point. Their messages are sent by the handover
+ * (`grantLot`, `declareUnsold`), once there is a result to tell them.
  */
-export async function awardAutomatically(
+export async function awaitDecision(
   client: PoolClient,
   lotId: string,
-): Promise<boolean> {
-  const res = await client.query<{
-    outcome: string;
-    manual_award: boolean;
-    leader_user_id: number | null;
-    leader_paddle: string | null;
-    current_pts: number;
-    code: string;
-  }>(
-    `SELECT a.outcome, a.manual_award, a.leader_user_id, a.leader_paddle,
-            a.current_pts, l.code
-       FROM auctions a JOIN lots l ON l.id = a.lot_id
-      WHERE a.lot_id = $1
-      FOR UPDATE OF a`,
+): Promise<void> {
+  const res = await client.query<{ code: string }>(
+    "SELECT code FROM lots WHERE id = $1",
     [lotId],
   );
-  const lot = res.rows[0];
-  if (!lot || lot.outcome !== "review" || lot.manual_award) return false;
-  if (lot.leader_user_id === null) return false;
+  const code = res.rows[0]?.code ?? lotId;
 
-  const granted = await grantLot(
-    client,
-    lotId,
-    lot.code,
-    lot.leader_user_id,
-    null,
+  const admins = await client.query<{ id: number }>(
+    "SELECT id FROM users WHERE role = 'admin' AND status = 'active'",
   );
-  if (!granted) return false;
-
-  await record(client, {
-    actorUserId: null,
-    action: "auction.sold",
-    targetType: "lot",
-    targetId: lotId,
-    detail: {
-      automatic: true,
-      winnerUserId: lot.leader_user_id,
-      winnerPaddle: granted.paddle,
-      hammerPts: granted.hammerPts,
-      hammerRound: granted.hammerRound,
-    },
-  });
-
-  return true;
+  for (const admin of admins.rows) {
+    await enqueue(client, {
+      userId: admin.id,
+      channel: "inapp",
+      kind: "lot.review",
+      body: `${t.brand.name}: ${code} — лотын хаялт хаагдлаа. Ялагчийг тодруулна уу.`,
+      href: `/admin/lots/${encodeURIComponent(lotId)}`,
+      dedupeKey: `review:${lotId}`,
+    });
+  }
 }

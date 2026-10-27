@@ -179,23 +179,14 @@ ALTER TABLE auctions ADD COLUMN IF NOT EXISTS awarded_at TIMESTAMPTZ;
 ALTER TABLE auctions ADD COLUMN IF NOT EXISTS awarded_by BIGINT
   REFERENCES users (id) ON DELETE SET NULL;
 
--- Who names the winner of this lot.
+-- An admin names the winner of every lot: it waits in `review` until
+-- `awardLot` or `declareUnsold` in src/lib/repo/admin-write.ts.
 --
--- false (the default): nobody has to. The moment bidding stops the lot goes to
--- the standing leader at the standing price, in the same transaction that
--- closed it — `awardAutomatically` in src/lib/repo/award.ts — and `review` is
--- passed through rather than waited in. `awarded_by` stays NULL, which is how
--- the record tells a clock's decision from a person's.
---
--- true: an admin switched this lot to deciding by hand, from its page on the
--- dashboard, before it closed. It then waits in `review` until `awardLot`.
--- An operator's emergency close sets it too: stopping a sale early and handing
--- it to whoever happened to be leading are separate decisions.
---
--- Server-side only: no state a bidder can read carries the flag itself. What
--- they do see is the consequence — an automatic lot shows its winner the moment
--- it closes, a hand-decided one shows the wait until the admin decides.
-ALTER TABLE auctions ADD COLUMN IF NOT EXISTS manual_award BOOLEAN NOT NULL DEFAULT false;
+-- `manual_award` used to choose, per lot, between that and the clock handing
+-- the lot to the standing leader. With every lot decided by hand it means
+-- nothing, so it goes. Lots the clock already sold keep `awarded_by` NULL,
+-- which is how the record still tells them apart.
+ALTER TABLE auctions DROP COLUMN IF EXISTS manual_award;
 
 -- ── Bids — APPEND ONLY ───────────────────────────────────────────────────────
 

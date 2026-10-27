@@ -149,10 +149,8 @@ export function AuctionRoom({
     (expiredBidClock === state.bidClockEndsAt ||
       expiredRound === state.roundEndsAt);
   /*
-   * The result is shown the moment it arrives. An automatic lot is sold in the
-   * same transaction that closes it, so after the last clock the room goes
-   * straight to the winner; only a lot an admin decides waits here, and only
-   * until they do.
+   * The result is shown the moment it arrives. After the last clock the lot
+   * waits here until an admin names its winner, and only until they do.
    */
   const deciding = underReview || closing;
 

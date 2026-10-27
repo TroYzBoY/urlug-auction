@@ -10,7 +10,7 @@ import {
 import { settle, type EngineState, type SettledState } from "../auction-engine";
 import { record } from "../audit";
 import { enqueue } from "./notifications";
-import { awardAutomatically } from "./award";
+import { awaitDecision } from "./award";
 import { t } from "../copy";
 import type { Bid } from "../types";
 
@@ -156,13 +156,13 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
       if (live.changed) {
         await persistSettlement(client, args.lotId, live);
         /*
-         * And decide it, if it is the clock's to decide. Whichever of this and
-         * the ticker settles the lot first must also hand it over: the ticker
-         * only revisits lots that are still running, so a lot this left in
-         * `review` would wait there for a person nobody asked for.
+         * And tell the admins it is theirs to decide. Whichever of this and
+         * the ticker settles the lot first must do it: the ticker only
+         * revisits lots that are still running, so a lot this left in
+         * `review` would otherwise wait there with nobody told.
          */
         if (live.outcome === "review") {
-          await awardAutomatically(client, args.lotId);
+          await awaitDecision(client, args.lotId);
         }
       }
       return { ok: false, reason: "round-closed" };

@@ -1,5 +1,5 @@
 import { Client } from "pg";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { makeAdmin, makeBidder, makeLiveLot, reset, signIn } from "./fixtures";
 
 const LOT = "E91";
@@ -55,7 +55,17 @@ async function seedFinalRound(clock: string): Promise<void> {
   });
 }
 
-test("a lot left to the clock shows the standing leader as winner the moment it closes", async ({
+/** Names the standing leader on the dashboard, as the signed-in admin page. */
+async function awardStandingLeader(page: Page): Promise<void> {
+  expect((await page.goto("/admin"))?.status()).toBe(200);
+  await page
+    .getByPlaceholder("Тайлбар (аудитад үлдэнэ)")
+    .fill("Браузерын шалгалтын шийдвэр");
+  await page.getByRole("button", { name: "Ялагчийг зарлах", exact: true }).click();
+  await expect(page.getByText("Шалгах хүлээгдэж буй лот алга.")).toBeVisible();
+}
+
+test("a closed lot waits for an admin instead of selling itself", async ({
   page,
 }) => {
   test.setTimeout(60_000);
@@ -71,44 +81,34 @@ test("a lot left to the clock shows the standing leader as winner the moment it 
   await expect(page.getByRole("timer")).toHaveCount(2);
 
   /*
-   * The server sells it in the same transaction that closes it, and the room
-   * shows that straight away: no admin, no wait. Two seconds of slack past the
-   * clock covers the ticker's quarter-second cadence and the push.
+   * The clock runs out and the room goes to the wait — and stays there. Two
+   * seconds past the close is long enough for the ticker to have sold it, if
+   * anything still did.
    */
   await expect(page.getByRole("timer")).toHaveCount(0, { timeout: 10_000 });
-  await expect(
-    page.getByText("ЯЛАГЧ ТОДОРЛОО", { exact: true }).first(),
-  ).toBeVisible({
-    timeout: 2_000,
-  });
-  await expect(page.getByText("Loading…")).toHaveCount(0);
-  await expect(page.locator('dt:has-text("Ялагч") + dd')).toHaveText(
-    "Тэргүүлсэн оролцогч",
-  );
+  await expect(page.getByText("LOADING", { exact: true })).toBeVisible();
+  await page.waitForTimeout(2_000);
+  await expect(page.getByText("ЯЛАГЧ ТОДОРЛОО", { exact: true })).toHaveCount(0);
 
   const result = await withDatabase(async (client) => {
     const rows = await client.query(
-      `SELECT a.outcome, a.current_pts, a.awarded_by, u.phone, s.hammer_pts
-         FROM auctions a JOIN users u ON u.id = a.leader_user_id
-         JOIN settlements s ON s.lot_id = a.lot_id WHERE a.lot_id = $1`,
+      `SELECT a.outcome, a.awarded_by,
+              (SELECT count(*)::int FROM settlements s WHERE s.lot_id = a.lot_id) AS settlements
+         FROM auctions a WHERE a.lot_id = $1`,
       [LOT],
     );
     return rows.rows[0];
   });
-  expect(result).toEqual({
-    outcome: "sold",
-    current_pts: 1300,
-    awarded_by: null,
-    phone: "99110093",
-    hammer_pts: 1300,
-  });
+  expect(result).toEqual({ outcome: "review", awarded_by: null, settlements: 0 });
   expect(errors).toEqual([]);
 });
 
 test("on a phone, the bid history appears once the lot is sold, winner first", async ({
   page,
+  browser,
 }) => {
   test.setTimeout(60_000);
+  const admin = await makeAdmin("99110091", "Т-291");
   await makeBidder("99110092", "Т-292");
   await makeBidder("99110093", "Т-293");
   await makeLiveLot(LOT);
@@ -120,9 +120,18 @@ test("on a phone, the bid history appears once the lot is sold, winner first", a
   const feed = page.getByRole("region", { name: "Хаялтын урсгал" });
   await expect(page.getByRole("timer")).toHaveCount(2);
   await expect(feed).toBeHidden();
-
   await expect(page.getByRole("timer")).toHaveCount(0, { timeout: 10_000 });
-  await expect(feed).toBeVisible({ timeout: 2_000 });
+
+  const desk = await browser.newContext();
+  try {
+    const adminPage = await desk.newPage();
+    await signIn(adminPage, admin);
+    await awardStandingLeader(adminPage);
+  } finally {
+    await desk.close();
+  }
+
+  await expect(feed).toBeVisible({ timeout: 5_000 });
   await expect(feed.getByText("Ялагч", { exact: true }).first()).toBeVisible();
   await expect(
     feed.getByText("Тэргүүлсэн оролцогч", { exact: true }).first(),
@@ -145,30 +154,10 @@ for (const override of [false, true]) {
     await makeBidder("99110093", "Т-293");
     await makeLiveLot(LOT);
 
-    /*
-     * Take the decision before the lot closes, from the lot's own page — the
-     * only way in. Left alone, the ticker would sell it to the standing leader
-     * the moment the clock below runs out.
-     */
-    await signIn(page, admin);
-    expect((await page.goto(`/admin/lots/${LOT}`))?.status()).toBe(200);
-    await expect(page.getByText("Автомат", { exact: true })).toBeVisible();
-    await page
-      .getByRole("button", { name: "Ялагчийг админ тодруулна", exact: true })
-      .click();
-    await page
-      .getByPlaceholder("Шалтгаан (аудитад үлдэнэ)")
-      .fill("Браузерын шалгалт");
-    await page
-      .getByRole("button", { name: "Тийм, би тодруулна", exact: true })
-      .click();
-    await expect(
-      page.getByText("Админ тодруулна", { exact: true }),
-    ).toBeVisible();
-
     // Expire the final round with two real bid records. The ticker and the
     // decision action must turn this running row into review themselves.
     await seedFinalRound("-1 second");
+    await signIn(page, admin);
 
     const viewer = await browser.newContext();
     const room = await viewer.newPage();
