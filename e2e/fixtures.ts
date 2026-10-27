@@ -264,3 +264,15 @@ export async function currentPts(lotId: string): Promise<number> {
     return res.rows[0]?.current_pts ?? 0;
   });
 }
+
+/** One bidder's prices on a lot, in the order they landed. */
+export async function bidsOf(lotId: string, phone: string): Promise<number[]> {
+  return withClient(async (c) => {
+    const res = await c.query<{ points: number }>(
+      `SELECT b.points FROM bids b JOIN users u ON u.id = b.user_id
+        WHERE b.lot_id = $1 AND u.phone = $2 ORDER BY b.id`,
+      [lotId, phone],
+    );
+    return res.rows.map((r) => r.points);
+  });
+}

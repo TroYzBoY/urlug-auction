@@ -135,7 +135,7 @@ describe("the happy path", () => {
 });
 
 describe("the rules, re-enforced server-side", () => {
-  it("rejects a bid below the minimum even though the client sent it", async () => {
+  it("raises a bid below the bidder's own minimum, rather than refusing it", async () => {
     await seedRunningLot(url, { lotId: LOT, currentPts: 1200, round: 4 });
     const user = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
 
@@ -143,52 +143,85 @@ describe("the rules, re-enforced server-side", () => {
      * Enter the lot first. A bidder with no history on it is a LATE ENTRANT,
      * and their floor is round × 10 rather than the round's increment — so a
      * fixture user who has never bid tests the late-entry rule, not this one.
-     * That mistake is what the first run of this test actually caught.
      */
     const entry = await placeBid(
       args({ userId: user.id, paddle: user.paddle, points: 1240 }),
     );
     expect(entry.ok).toBe(true);
 
-    // Now they are in, round 4's increment is 2 — so 1241 is one point short.
+    /*
+     * Round 4's increment is 2, so 1241 is one point short of their own price
+     * plus a step — what a double tap sends before the room has shown the
+     * first. It is a step on their price, not a refusal.
+     */
     const res = await placeBid(
       args({ userId: user.id, paddle: user.paddle, points: 1241 }),
     );
-
-    expect(res.ok).toBe(false);
-    if (res.ok) return;
-    expect(res.reason).toBe("too-low");
-    expect(res.minNextPts).toBe(1242);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.acceptedPts).toBe(1242);
   });
 
-  it("charges a late entrant the round × 10 floor, not the increment", async () => {
-    await seedRunningLot(url, { lotId: LOT, currentPts: 1200, round: 4 });
-    const user = await seedUser(url, { phone: "99110002", paddle: "Т-101" });
-
-    const res = await placeBid(
-      args({ userId: user.id, paddle: user.paddle, points: 1202 }),
-    );
-
-    expect(res.ok).toBe(false);
-    if (res.ok) return;
-    // 1200 + (4 × 10), not 1200 + 2.
-    expect(res.minNextPts).toBe(1240);
-  });
-
-  it("applies the late-entry floor to a bidder new to the lot", async () => {
-    await seedRunningLot(url, { lotId: LOT, currentPts: 1200, round: 6 });
+  it("starts a late entrant at the opening price plus round × 10", async () => {
+    await seedRunningLot(url, { lotId: LOT, round: 6 });
     const user = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
 
-    // Round 6, no prior bid: the floor is +60, not +2.
-    const low = await placeBid(
+    // Round 6, no prior bid: the opening 1200 plus 60, not plus 2.
+    const first = await placeBid(
       args({ userId: user.id, paddle: user.paddle, points: 1202 }),
     );
-    expect(low.ok).toBe(false);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.acceptedPts).toBe(1260);
 
-    const ok = await placeBid(
-      args({ userId: user.id, paddle: user.paddle, points: 1260 }),
+    // In now: the round's own step, on their price.
+    const next = await placeBid(
+      args({ userId: user.id, paddle: user.paddle, points: 1262 }),
     );
-    expect(ok.ok).toBe(true);
+    expect(next.ok).toBe(true);
+    if (next.ok) expect(next.acceptedPts).toBe(1262);
+  });
+
+  it("builds each bidder's price on their own, not on the lot's", async () => {
+    await seedRunningLot(url, { lotId: LOT });
+    const a = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
+    const b = await seedUser(url, { phone: "99110002", paddle: "Т-200" });
+
+    for (const points of [1201, 1202, 1203]) {
+      await placeBid(args({ userId: a.id, paddle: a.paddle, points }));
+    }
+
+    // Т-200's first bid is the opening plus one, whatever Т-100 has reached.
+    const own = await placeBid(
+      args({ userId: b.id, paddle: b.paddle, points: 1201 }),
+    );
+    expect(own.ok).toBe(true);
+    if (own.ok) expect(own.acceptedPts).toBe(1201);
+
+    async function lot() {
+      const [row] = await query<{
+        current_pts: number;
+        leader_paddle: string;
+        bid_count: number;
+      }>(
+        "SELECT current_pts, leader_paddle, bid_count FROM auctions WHERE lot_id = $1",
+        [LOT],
+      );
+      return row!;
+    }
+    // Below the lot's price it stands as their own; the lead stays put.
+    expect(await lot()).toEqual({
+      current_pts: 1203,
+      leader_paddle: "Т-100",
+      bid_count: 4,
+    });
+
+    // Past it, it takes the lead.
+    await placeBid(args({ userId: b.id, paddle: b.paddle, points: 1204 }));
+    expect(await lot()).toMatchObject({
+      current_pts: 1204,
+      leader_paddle: "Т-200",
+    });
   });
 
   it("refuses an unverified bidder", async () => {
@@ -475,7 +508,7 @@ describe("idempotency", () => {
 });
 
 describe("concurrency — the reason for the row lock", () => {
-  it("produces exactly one winner from a burst of simultaneous bids", async () => {
+  it("accepts every bid of a simultaneous burst, each on its bidder's own price", async () => {
     await seedRunningLot(url, { lotId: LOT, currentPts: 1200, round: 1 });
 
     const bidders = await Promise.all(
@@ -489,31 +522,40 @@ describe("concurrency — the reason for the row lock", () => {
     );
 
     /*
-     * Every bidder fires at the same price in the same instant. Without the
-     * lock, several would read 1200, all pass validation, and all write —
-     * leaving a price that went up by one and several bidders each believing
-     * they lead. With it, exactly one wins and the rest are told they are low.
+     * Every bidder fires at the same price in the same instant. Each bids on
+     * their OWN price, so nobody's bid is made stale by anybody else's: all
+     * twenty land, and nobody is told they are low. The lock still decides who
+     * reached the price first — that one leads.
      */
     const results = await Promise.all(
       bidders.map((b) =>
         placeBid(args({ userId: b.id, paddle: b.paddle, points: 1201 })),
       ),
     );
+    expect(results.every((r) => r.ok)).toBe(true);
 
-    const accepted = results.filter((r) => r.ok);
-    expect(accepted).toHaveLength(1);
+    const bids = await query<{ paddle: string }>(
+      "SELECT paddle FROM bids WHERE lot_id = $1 ORDER BY id",
+      [LOT],
+    );
+    expect(bids).toHaveLength(20);
 
-    const rejected = results.filter((r) => !r.ok);
-    expect(rejected).toHaveLength(19);
-    for (const r of rejected) {
-      if (!r.ok) expect(r.reason).toBe("too-low");
-    }
-
-    const bids = await query("SELECT 1 FROM bids WHERE lot_id = $1", [LOT]);
-    expect(bids).toHaveLength(1);
+    const [auction] = await query<{
+      current_pts: number;
+      leader_paddle: string;
+      bid_count: number;
+    }>(
+      "SELECT current_pts, leader_paddle, bid_count FROM auctions WHERE lot_id = $1",
+      [LOT],
+    );
+    expect(auction).toEqual({
+      current_pts: 1201,
+      leader_paddle: bids[0]!.paddle,
+      bid_count: 20,
+    });
   });
 
-  it("keeps the price strictly increasing under a sustained burst", async () => {
+  it("prices one bidder's simultaneous taps one after another", async () => {
     await seedRunningLot(url, { lotId: LOT, currentPts: 1200, round: 1 });
 
     const bidders = await Promise.all(
@@ -526,35 +568,34 @@ describe("concurrency — the reason for the row lock", () => {
       ),
     );
 
-    // Each bidder tries five escalating prices, all at once.
-    await Promise.all(
-      bidders.flatMap((b, i) =>
-        Array.from({ length: 5 }, (_, n) =>
-          placeBid(
-            args({ userId: b.id, paddle: b.paddle, points: 1201 + i + n * 8 }),
-          ),
+    // Each bidder taps five times at once, every tap sent at the same price.
+    const results = await Promise.all(
+      bidders.flatMap((b) =>
+        Array.from({ length: 5 }, () =>
+          placeBid(args({ userId: b.id, paddle: b.paddle, points: 1201 })),
         ),
       ),
     );
+    expect(results.every((r) => r.ok)).toBe(true);
 
-    const bids = await query<{ points: number; id: number }>(
-      "SELECT id, points FROM bids WHERE lot_id = $1 ORDER BY id ASC",
-      [LOT],
-    );
-
-    expect(bids.length).toBeGreaterThan(1);
-    for (let i = 1; i < bids.length; i++) {
-      // A bid recorded later must be higher. The unique index on
-      // (lot_id, points) backs this up at the storage layer.
-      expect(bids[i]!.points).toBeGreaterThan(bids[i - 1]!.points);
+    /*
+     * Five steps on each bidder's own price, in the order they landed. The
+     * unique index on (lot_id, user_id, points) backs this up at the storage
+     * layer.
+     */
+    for (const b of bidders) {
+      const own = await query<{ points: number }>(
+        "SELECT points FROM bids WHERE lot_id = $1 AND user_id = $2 ORDER BY id",
+        [LOT, b.id],
+      );
+      expect(own.map((r) => r.points)).toEqual([1201, 1202, 1203, 1204, 1205]);
     }
 
     const [auction] = await query<{ current_pts: number; bid_count: number }>(
       "SELECT current_pts, bid_count FROM auctions WHERE lot_id = $1",
       [LOT],
     );
-    expect(auction!.current_pts).toBe(bids[bids.length - 1]!.points);
-    expect(auction!.bid_count).toBe(bids.length);
+    expect(auction).toEqual({ current_pts: 1205, bid_count: 40 });
   });
 });
 
@@ -597,7 +638,13 @@ describe("the audit trail", () => {
       detail: Record<string, unknown>;
     }>("SELECT action, detail FROM audit_log WHERE action = 'bid.placed'");
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.detail.points).toBe(1201);
-    expect(rows[0]!.detail.previousPts).toBe(1200);
+    expect(rows[0]!.detail).toMatchObject({
+      points: 1201,
+      requestedPts: 1201,
+      // Their own price before it — the opening, on a first bid — and the lot's.
+      ownPreviousPts: 1200,
+      standingPts: 1200,
+      tookLead: true,
+    });
   });
 });

@@ -77,7 +77,6 @@ export type BidResult =
   | {
       ok: false;
       reason:
-        | "too-low"
         | "round-closed"
         | "not-registered"
         | "not-verified"

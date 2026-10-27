@@ -58,24 +58,31 @@ interface State {
 /**
  * The server state with any unconfirmed local bids laid over it.
  *
- * A pending bid is dropped once the server's price has reached or passed it:
- * that is the confirmation. Matching on id would not work — the server assigns
- * its own — and matching on the feed would fail whenever the bid fell outside
- * the 40 most recent.
+ * A pending bid is dropped once the server's figure for THIS bidder's own price
+ * has reached or passed it: that is the confirmation. Not the lot's price — a
+ * bidder's price is their own, and a bid of theirs below the lot's price is
+ * still a bid. Matching on id would not work either — the server assigns its
+ * own — and matching on the feed would fail whenever the bid fell outside the
+ * 40 most recent.
  */
+function confirmed(bid: Bid, server: RoomState): boolean {
+  return server.yourPts !== null && server.yourPts >= bid.points;
+}
+
 function project(state: State): RoomState {
-  const live = state.pending.filter(
-    (p) => p.bid.points > state.server.currentPts,
-  );
+  const live = state.pending.filter((p) => !confirmed(p.bid, state.server));
   if (live.length === 0) return state.server;
 
+  // The bidder's own bids only rise, so the newest is their price.
   const top = live[live.length - 1]!;
+  const leads = top.bid.points > state.server.currentPts;
   return {
     ...state.server,
-    currentPts: top.bid.points,
-    leader: top.bid.paddle,
+    currentPts: leads ? top.bid.points : state.server.currentPts,
+    leader: leads ? top.bid.paddle : state.server.leader,
     bidClockEndsAt: top.bidClockEndsAt,
     hasBid: true,
+    yourPts: top.bid.points,
     bids: [...live.map((p) => p.bid).reverse(), ...state.server.bids].slice(
       0,
       40,
@@ -88,11 +95,9 @@ function reducer(state: State, action: Action): State {
     case "sync":
       return {
         server: action.state,
-        // Anything the server has now priced past is confirmed and no longer
-        // needs to be projected.
-        pending: state.pending.filter(
-          (p) => p.bid.points > action.state.currentPts,
-        ),
+        // Anything the server now counts in this bidder's own price is
+        // confirmed and no longer needs to be projected.
+        pending: state.pending.filter((p) => !confirmed(p.bid, action.state)),
       };
 
     case "optimistic":
@@ -268,11 +273,10 @@ export function useAuctionRoom(
       roundsTotal: ROUNDS.length,
       isYourLead: viewerPaddle !== null && state.leader === viewerPaddle,
       /*
-       * The leader's name for display. The lead is the author of the current
-       * top bid, and every accepted bid is higher than the last, so the leader
-       * is always the newest bid — always inside the 40-item feed. Matched on
-       * paddle (the identity) and shown as the name; falls back to the paddle
-       * only if the feed somehow does not carry the leader's bid.
+       * The leader's name for display. The lead is the author of the lot's top
+       * bid, which is nearly always inside the 40-item feed. Matched on paddle
+       * (the identity) and shown as the name; falls back to the paddle when
+       * enough lower bids since have pushed the leader's out of the feed.
        */
       leaderName: state.leader
         ? (state.bids.find((b) => b.paddle === state.leader)?.name ??

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LATE_JOIN_PENALTY_PTS,
+  bidBasePts,
   isLegalBid,
   minIncrementPts,
   minNextBidPts,
@@ -52,10 +53,15 @@ export function BidPanel({
   rejection: string | null;
   onBid: (points: number) => void;
 }) {
-  const { currentPts, round, hasBid, outcome, leader } = state;
+  const { currentPts, round, hasBid, outcome, leader, yourPts } = state;
 
+  /*
+   * Built on the bidder's OWN price, not the lot's: every bidder raises their
+   * own, from the opening price. The server prices it the same way.
+   */
+  const basePts = bidBasePts(yourPts, state.lot.openingPts);
   const minStep = minIncrementPts(round, hasBid);
-  const minTotal = minNextBidPts(currentPts, round, hasBid);
+  const minTotal = minNextBidPts(basePts, round, hasBid);
   const steps = quickStepsPts(round, hasBid);
   const isLateEntry = !hasBid && round >= 2;
 
@@ -68,7 +74,7 @@ export function BidPanel({
   const step =
     chosenStep !== null && chosenStep >= minStep ? chosenStep : minStep;
 
-  const total = currentPts + step;
+  const total = basePts + step;
 
   /*
    * The result.
@@ -132,7 +138,7 @@ export function BidPanel({
      * obviously low bid and gives immediate feedback. The server runs the same
      * function under a row lock and its answer is the one that counts.
      */
-    if (!isLegalBid(points, currentPts, round, hasBid)) {
+    if (!isLegalBid(points, basePts, round, hasBid)) {
       setError(t.room.tooLow(minTotal));
       return;
     }
@@ -171,6 +177,19 @@ export function BidPanel({
           </span>
         </p>
       </div>
+
+      {yourPts !== null && (
+        <div className="mt-1.5 flex items-baseline justify-between gap-2">
+          <p className="eyebrow min-w-0">{t.room.yourPrice}</p>
+          <p
+            data-numerals
+            className="shrink-0 text-sm font-semibold text-flare whitespace-nowrap"
+          >
+            {pts(yourPts)}{" "}
+            <span className="font-normal text-muted">{t.common.point}</span>
+          </p>
+        </div>
+      )}
 
       {isYourLead && (
         <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-olive">

@@ -6,6 +6,7 @@ import {
   ROUNDS,
   TOTAL_MINUTES,
   TOTAL_ROUNDS,
+  bidBasePts,
   bidClockMs,
   isLegalBid,
   minIncrementPts,
@@ -107,8 +108,18 @@ describe("minimum increments", () => {
   });
 });
 
+describe("bidBasePts", () => {
+  it("is the bidder's own price once they have one", () => {
+    expect(bidBasePts(1240, 1200)).toBe(1240);
+  });
+
+  it("is the opening price before their first bid, whatever the lot's price", () => {
+    expect(bidBasePts(null, 1200)).toBe(1200);
+  });
+});
+
 describe("minNextBidPts", () => {
-  it("adds the increment to the standing price", () => {
+  it("adds the increment to the bidder's price", () => {
     expect(minNextBidPts(1200, 1, true)).toBe(1201);
     expect(minNextBidPts(1200, 4, true)).toBe(1202);
   });

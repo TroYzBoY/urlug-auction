@@ -218,6 +218,8 @@ export const t = {
     feedWinner: "Ялагч",
     you: "Та",
     minNext: "Дараагийн доод үнэ",
+    /* Хүн бүрийн үнэ тусдаа — дараагийн хаялт үүн дээр нэмэгдэнэ. */
+    yourPrice: "Таны үнэ",
     minIncrement: "Хаялтын доод хэмжээ",
     lateEntry: "Дундаас нэгдэх",
     lateEntryHint: (round: number, step: number) =>
@@ -274,7 +276,6 @@ export const t = {
      * "top up", not "unauthorised", "insufficient funds".
      */
     signInToBid: "Хаялт хийхийн тулд нэвтэрнэ үү",
-    rejectTooLow: "Үнэ хэтэрхий бага байна. Дахин оролдоно уу.",
     rejectClosed: "Энэ лотын хугацаа дууссан байна.",
     rejectSignIn: "Хаялт хийхийн тулд нэвтэрнэ үү.",
     rejectVerify: "Утасны дугаараа баталгаажуулсны дараа хаялт хийх боломжтой.",

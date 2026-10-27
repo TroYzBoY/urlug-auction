@@ -323,16 +323,17 @@ export async function getRoomSnapshot(
 /**
  * Turns a shared snapshot into one viewer's `RoomState`. Pure, no I/O.
  *
- * `hasBid` is passed in rather than looked up: it is sticky — a bidder who has
- * bid on a lot cannot un-bid — so the stream reads it once at connect and flips
- * it to true when a bid of theirs appears. That keeps the per-push cost at zero
- * queries without ever reporting it wrongly, which matters because `hasBid`
- * decides whether the late-entry floor applies.
+ * `yourPts` — the viewer's own top bid — is passed in rather than looked up. A
+ * bidder's own price only ever rises, and each new bid of theirs is the newest
+ * in the feed when it is pushed, so the stream reads it once at connect and
+ * raises it from the feed (`viewerTopPts`). That keeps the per-push cost at
+ * zero queries. `hasBid` follows from it, and matters: it decides whether the
+ * late-entry floor applies.
  */
 export function projectForViewer(
   snapshot: RoomSnapshot,
   viewerUserId: number | null,
-  hasBid: boolean,
+  yourPts: number | null,
 ): RoomState {
   return {
     serverNow: Date.now(),
@@ -346,27 +347,47 @@ export function projectForViewer(
       ...bid,
       isYou: viewerUserId !== null && userId === viewerUserId,
     })),
-    hasBid,
+    hasBid: yourPts !== null,
+    yourPts,
     outcome: snapshot.outcome,
   };
 }
 
-/** Whether this viewer has bid on this lot. Read once, at connect. */
-export async function hasBidOnLot(
+/**
+ * The viewer's own price after this push: what they had, raised by any bid of
+ * theirs in the snapshot's feed.
+ */
+export function viewerTopPts(
+  snapshot: RoomSnapshot,
+  viewerUserId: number | null,
+  previous: number | null,
+): number | null {
+  if (viewerUserId === null) return null;
+  let top = previous;
+  for (const bid of snapshot.bids) {
+    if (bid.userId === viewerUserId && (top === null || bid.points > top)) {
+      top = bid.points;
+    }
+  }
+  return top;
+}
+
+/** This viewer's highest bid on this lot, null before their first. */
+export async function yourTopBid(
   lotId: string,
   viewerUserId: number,
-): Promise<boolean> {
-  const row = await queryOne<{ first_bid_at: Date | null }>(
-    "SELECT first_bid_at FROM lot_participants WHERE lot_id = $1 AND user_id = $2",
+): Promise<number | null> {
+  const row = await queryOne<{ top: number | null }>(
+    "SELECT max(points) AS top FROM bids WHERE lot_id = $1 AND user_id = $2",
     [lotId, viewerUserId],
   );
-  return row?.first_bid_at != null;
+  return row?.top ?? null;
 }
 
 /**
  * Everything the room renders from, for one viewer.
  *
- * `viewerUserId` is what makes `hasBid` and `isYou` correct, and it is read
+ * `viewerUserId` is what makes `hasBid`, `yourPts` and `isYou` correct, and it is read
  * from the session on the server — never accepted as an argument from the
  * client. `hasBid` decides whether the late-entry floor applies, so a client
  * able to assert it could enter round 6 at +2 points instead of +60.
@@ -395,14 +416,11 @@ export async function getRoomState(
    */
   if (live.outcome === "scheduled") return null;
 
-  const [bids, participant] = await Promise.all([
+  const [bids, yourPts] = await Promise.all([
     recentBids(lotId, viewerUserId),
     viewerUserId === null
       ? Promise.resolve(null)
-      : queryOne<{ first_bid_at: Date | null }>(
-          "SELECT first_bid_at FROM lot_participants WHERE lot_id = $1 AND user_id = $2",
-          [lotId, viewerUserId],
-        ),
+      : yourTopBid(lotId, viewerUserId),
   ]);
 
   return {
@@ -414,7 +432,8 @@ export async function getRoomState(
     bidClockEndsAt: live.bidClockEndsAt,
     roundEndsAt: live.roundEndsAt,
     bids,
-    hasBid: participant?.first_bid_at != null,
+    hasBid: yourPts !== null,
+    yourPts,
     outcome: live.outcome,
   };
 }

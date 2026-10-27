@@ -27,7 +27,6 @@ import { useFocusMode } from "./useFocusMode";
 
 /** What the bidder is told when the server turns a bid down. */
 const REJECTION_COPY: Record<string, string> = {
-  "too-low": t.room.rejectTooLow,
   "round-closed": t.room.rejectClosed,
   "not-registered": t.room.rejectSignIn,
   "not-verified": t.room.rejectVerify,

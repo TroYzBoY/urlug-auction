@@ -45,6 +45,15 @@
  *
  * The hard clock is what keeps that bounded: however the bidding goes, the sale
  * is over by 2h45m.
+ *
+ * ── Every bidder has their own price ─────────────────────────────────────────
+ *
+ * A bid raises the BIDDER'S OWN price, not the room's: each one is their own
+ * last bid plus the step (`bidBasePts`), starting from the opening price. Two
+ * bidders tapping at once therefore never collide — neither one's bid is made
+ * stale by the other's, so neither is refused as too low. Everybody still sees
+ * every bid, and the lot's price is the highest of them; the admin names the
+ * winner from the bidders when it ends.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -112,7 +121,7 @@ export const ROUNDS: readonly RoundSpec[] = [
 
 /**
  * Late-entry floor. A bidder who has not yet bid on this lot must enter at
- * `round × LATE_ENTRY_MULTIPLIER` points above the standing price — so joining
+ * `round × LATE_ENTRY_MULTIPLIER` points above the opening price — so joining
  * in round 3 costs at least +30 pts, and round 6 at least +60 pts. Applies
  * from round 2 onward; round 1 is open at the normal increment because nobody
  * is "joining from the middle" yet.
@@ -129,7 +138,7 @@ export const LATE_ENTRY_FROM_ROUND = 2;
  * exist to price joining late:
  *
  *   • LATE_ENTRY_MULTIPLIER raises the floor of your first *bid* on that lot
- *     (round × 10 above the standing price). It costs you nothing unless you bid.
+ *     (round × 10 above the opening price). It costs you nothing unless you bid.
  *   • LATE_JOIN_PENALTY_PTS is deducted from your own balance for entering a
  *     running lot at all, whether or not you go on to bid.
  *
@@ -173,13 +182,22 @@ export function bidClockMs(n: number): number {
 }
 
 /**
- * The smallest legal next bid, in points.
+ * What a bidder's next bid is built on: their own highest bid on the lot, or
+ * the opening price before their first.
+ */
+export function bidBasePts(yourPts: number | null, openingPts: number): number {
+  return yourPts ?? openingPts;
+}
+
+/**
+ * The smallest legal next bid, in points, on top of `basePts` — the bidder's
+ * own price, from `bidBasePts`.
  *
  * `hasBid` is the signed-in bidder's own history on this lot — it is what
  * separates a regular raise from a late entry.
  */
 export function minNextBidPts(
-  currentPts: number,
+  basePts: number,
   round: number,
   hasBid: boolean,
 ): number {
@@ -188,7 +206,7 @@ export function minNextBidPts(
     !hasBid && round >= LATE_ENTRY_FROM_ROUND
       ? round * LATE_ENTRY_MULTIPLIER
       : spec.minIncrementPts;
-  return currentPts + step;
+  return basePts + step;
 }
 
 /** The raise itself, in points — what the button label needs. */
@@ -207,11 +225,11 @@ export function quickStepsPts(round: number, hasBid: boolean): number[] {
 
 export function isLegalBid(
   points: number,
-  currentPts: number,
+  basePts: number,
   round: number,
   hasBid: boolean,
 ): boolean {
-  return Number.isFinite(points) && points >= minNextBidPts(currentPts, round, hasBid);
+  return Number.isFinite(points) && points >= minNextBidPts(basePts, round, hasBid);
 }
 
 export type Urgency = "calm" | "warm" | "hot";

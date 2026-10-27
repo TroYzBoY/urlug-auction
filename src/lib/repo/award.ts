@@ -84,8 +84,8 @@ export async function grantLot(
   awardedBy: number | null,
 ): Promise<Granted | null> {
   /*
-   * Their highest bid on THIS lot. `bids` is append-only and prices strictly
-   * increase, so this row is a fact nobody — this function included — can have
+   * Their highest bid on THIS lot. `bids` is append-only and each bidder's
+   * price strictly increases, so this row is a fact nobody — this function included — can have
    * edited into existence.
    */
   const bid = await client.query<{

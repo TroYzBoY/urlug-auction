@@ -217,8 +217,11 @@ CREATE TABLE IF NOT EXISTS bids (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS bids_idempotency_idx ON bids (lot_id, idempotency_key);
--- Two bids can never share a price on one lot: the price strictly increases.
-CREATE UNIQUE INDEX IF NOT EXISTS bids_price_idx      ON bids (lot_id, points);
+-- Each bidder's price is their own and strictly increases, so ONE bidder can
+-- never bid the same price twice on a lot — two different bidders can, and
+-- often will. (It was (lot_id, points) while the lot had one shared price.)
+DROP INDEX IF EXISTS bids_price_idx;
+CREATE UNIQUE INDEX IF NOT EXISTS bids_user_price_idx ON bids (lot_id, user_id, points);
 CREATE INDEX        IF NOT EXISTS bids_feed_idx       ON bids (lot_id, id DESC);
 CREATE INDEX        IF NOT EXISTS bids_user_idx       ON bids (user_id, placed_at DESC);
 

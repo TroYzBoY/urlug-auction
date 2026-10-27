@@ -136,6 +136,12 @@ export interface RoomState {
   /** False until the signed-in bidder has placed their first bid on this lot. */
   hasBid: boolean;
   /**
+   * The signed-in bidder's own highest bid on this lot — their price, which
+   * their next bid is built on (`bidBasePts`). Null before their first, or
+   * when signed out.
+   */
+  yourPts: number | null;
+  /**
    * `review` means bidding is over and an admin is deciding the winner. The
    * room keeps its stream open through it — the award arrives as another push,
    * so a bidder watching sees the result without reloading.

@@ -1,6 +1,10 @@
 import type { NextRequest } from "next/server";
 import { ON_VERCEL } from "@/lib/env";
-import { hasBidOnLot, projectForViewer } from "@/lib/repo/lots";
+import {
+  projectForViewer,
+  viewerTopPts,
+  yourTopBid,
+} from "@/lib/repo/lots";
 import { subscribe } from "@/lib/realtime";
 import { readRoom } from "@/lib/room-cache";
 import { currentUser } from "@/lib/session";
@@ -79,7 +83,7 @@ export async function GET(
   const { lotId } = await ctx.params;
 
   /*
-   * Read on the server, never from a query parameter. `hasBid` and `isYou` are
+   * Read on the server, never from a query parameter. `hasBid`, `yourPts` and `isYou` are
    * per-viewer, and a client that could name its own viewer id would see
    * another bidder's participation state — and, through `hasBid`, could dodge
    * the late-entry floor.
@@ -93,15 +97,13 @@ export async function GET(
   }
 
   /*
-   * Read once, here. `hasBid` is sticky — a bidder cannot un-bid a lot — so it
-   * is flipped to true below when a bid of theirs appears in the feed rather
-   * than re-queried on every push. That is what keeps a push at zero
-   * per-subscriber queries without ever reporting it wrongly, and reporting it
-   * wrongly would matter: `hasBid` decides whether the late-entry floor
-   * applies.
+   * Read once, here. A bidder's own price only rises, and each new bid of
+   * theirs is the newest in the feed when it is pushed, so it is raised from
+   * the feed below rather than re-queried on every push. That is what keeps a
+   * push at zero per-subscriber queries. It matters: their next bid is built
+   * on it, and whether they have bid decides the late-entry floor.
    */
-  let viewerHasBid =
-    viewerId !== null ? await hasBidOnLot(lotId, viewerId) : false;
+  let viewerPts = viewerId !== null ? await yourTopBid(lotId, viewerId) : null;
 
   const encoder = new TextEncoder();
   let unsubscribe: (() => void) | null = null;
@@ -138,7 +140,8 @@ export async function GET(
         }
       };
 
-      send("state", projectForViewer(snapshot, viewerId, viewerHasBid));
+      viewerPts = viewerTopPts(snapshot, viewerId, viewerPts);
+      send("state", projectForViewer(snapshot, viewerId, viewerPts));
 
       const push = async () => {
         try {
@@ -150,11 +153,9 @@ export async function GET(
           const next = await readRoom(lotId, true);
           if (!next) return;
 
-          if (viewerId !== null && !viewerHasBid) {
-            viewerHasBid = next.bids.some((b) => b.userId === viewerId);
-          }
+          viewerPts = viewerTopPts(next, viewerId, viewerPts);
 
-          send("state", projectForViewer(next, viewerId, viewerHasBid));
+          send("state", projectForViewer(next, viewerId, viewerPts));
         } catch (err) {
           console.error("[stream] read failed", lotId, err);
         }

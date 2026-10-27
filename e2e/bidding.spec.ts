@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  bidsOf,
   currentPts,
   makeBidder,
   makeLiveLot,
@@ -74,7 +75,9 @@ test("a signed-in bidder can place a bid and the price moves", async ({
   await page.goto("/auction/E01");
 
   // The room, not the catalogue preview — the lot is live.
-  await expect(page.getByRole("heading", { name: "Хүрэл цоморлиг" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Хүрэл цоморлиг" }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: /Үнэ хаях/ }).click();
 
@@ -147,6 +150,62 @@ test("a second tab sees the bid without reloading", async ({ browser }) => {
   await bidderContext.close();
 });
 
+test("each bidder raises their own price, and a double tap is two steps", async ({
+  browser,
+}) => {
+  /*
+   * No increments are hard-coded. The test server compresses time, so the
+   * round — and with it the step and the late-entry floor — moves while this
+   * runs. What is asserted is the rule: Bob's price is built on his own, far
+   * below the lot's, and each of his taps is one step on it.
+   */
+  await makeLiveLot("E05", 1200);
+  const alice = await makeBidder("99110005", "Т-205");
+  const bob = await makeBidder("99110006", "Т-206");
+
+  const aliceContext = await browser.newContext();
+  const alicePage = await aliceContext.newPage();
+  await signIn(alicePage, alice);
+  await alicePage.goto("/auction/E05");
+  await alicePage.getByRole("button", { name: /Өөр дүн/ }).click();
+  await alicePage.getByLabel("Өөр дүн").fill("1500");
+  await alicePage.getByRole("button", { name: /^Хаях$/ }).click();
+  await expect.poll(() => currentPts("E05")).toBe(1500);
+
+  const bobContext = await browser.newContext();
+  const bobPage = await bobContext.newPage();
+  await signIn(bobPage, bob);
+  await bobPage.goto("/auction/E05");
+  await expect(bobPage.locator(PRICE)).toHaveText(`1${THIN}500`);
+
+  // Two taps without waiting for the first.
+  const bobBid = bobPage.getByRole("button", { name: /Үнэ хаях/ });
+  await bobBid.click();
+  await bobBid.click();
+  await expect
+    .poll(() => bidsOf("E05", "99110006"), { timeout: 10_000 })
+    .toHaveLength(2);
+  const [first, second] = await bidsOf("E05", "99110006");
+
+  // Built on his own price — the opening — not on Alice's 1 500.
+  expect(first!).toBeGreaterThan(1200);
+  expect(first!).toBeLessThan(1500);
+  // The second tap is a step on the first, not a refusal.
+  expect(second!).toBeGreaterThan(first!);
+  expect(second! - first!).toBeLessThanOrEqual(2);
+  await expect(bobPage.getByText(/хэтэрхий бага/)).toHaveCount(0);
+
+  // His price is shown as his, and the lot's is still Alice's.
+  await expect(
+    bobPage.getByText("Таны үнэ", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(bobPage.locator(PRICE)).toHaveText(`1${THIN}500`);
+  expect(await currentPts("E05")).toBe(1500);
+
+  await aliceContext.close();
+  await bobContext.close();
+});
+
 test("a custom amount below the minimum is refused and nothing moves", async ({
   page,
 }) => {
@@ -166,10 +225,10 @@ test("a custom amount below the minimum is refused and nothing moves", async ({
   expect(await currentPts("E04")).toBe(1200);
 
   /*
-   * This covers the panel refusing. That the SERVER also refuses — the check
-   * that actually matters, since the panel is reachable only by people using
-   * the panel — is proved in src/lib/repo/bids.integration.test.ts, which calls
-   * `placeBid` directly with no client in the way.
+   * This covers the panel refusing a typed amount. The SERVER never refuses
+   * for price — it raises a low bid to the bidder's own minimum instead, so a
+   * double tap is two steps — which is proved in
+   * src/lib/repo/bids.integration.test.ts, calling `placeBid` directly.
    */
 });
 

@@ -3,8 +3,8 @@ import type { PoolClient } from "pg";
 import { transaction } from "../db";
 import {
   LATE_JOIN_PENALTY_PTS,
+  bidBasePts,
   bidClockMs,
-  isLegalBid,
   minNextBidPts,
 } from "../auction";
 import { settle, type EngineState, type SettledState } from "../auction-engine";
@@ -30,21 +30,23 @@ import type { Bid } from "../types";
  *   3. SETTLE the clocks                 ← the bid lands in the real round,
  *                                          and a lot whose clock expired
  *                                          during the request is already over
- *   4. Validate against auction.ts       ← the same functions the client used,
- *                                          re-run where the client cannot reach
+ *   4. Price it from auction.ts          ← the bidder's OWN price plus at least
+ *                                          the step, re-run where the client
+ *                                          cannot reach
  *   5. Charge the join fee if first time ← from the balance, not from a number
  *                                          the browser sent
  *   6. INSERT the bid, UPDATE the row
  *   7. Audit
  *
- * Steps 3 and 4 are what `isLegalBid` in BidPanel is not. That call is a UX
- * affordance — it stops a bidder wasting a round trip on an obviously low bid.
- * This is the control.
+ * Step 4 never refuses a bid for its price. Each bidder's price is their own,
+ * so nobody else's bid can make theirs stale; a bid below the bidder's own
+ * minimum — a double tap that reached here before the room had shown the
+ * first — is raised to that minimum, which is what the tap asked for: one more
+ * step on their price. Bidders are never told "too low".
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 export type BidRejection =
-  | "too-low"
   | "round-closed"
   | "not-registered"
   | "not-verified"
@@ -59,7 +61,7 @@ export type PlaceBidOutcome =
       bid: Bid;
       duplicate: boolean;
     }
-  | { ok: false; reason: BidRejection; minNextPts?: number };
+  | { ok: false; reason: BidRejection };
 
 interface AuctionRow {
   lot_id: string;
@@ -70,6 +72,7 @@ interface AuctionRow {
   leader_user_id: number | null;
   bid_clock_ends_at: Date;
   outcome: EngineState["outcome"];
+  opening_pts: number;
 }
 
 export interface PlaceBidArgs {
@@ -78,6 +81,10 @@ export interface PlaceBidArgs {
   paddle: string;
   /** The bidder's real name — carried onto the returned Bid for the feed. */
   name: string;
+  /**
+   * The price the bidder asked for. Raised to their own minimum if it is below
+   * it (see step 4) — never refused for it.
+   */
   points: number;
   idempotencyKey: string;
   ip: string | null;
@@ -88,9 +95,10 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
   return transaction(async (client) => {
     /* ── 1. Lock ────────────────────────────────────────────────────────── */
     const auctionRes = await client.query<AuctionRow>(
-      `SELECT lot_id, opens_at, round, current_pts, leader_paddle, leader_user_id,
-              bid_clock_ends_at, outcome
-         FROM auctions WHERE lot_id = $1 FOR UPDATE`,
+      `SELECT a.lot_id, a.opens_at, a.round, a.current_pts, a.leader_paddle,
+              a.leader_user_id, a.bid_clock_ends_at, a.outcome, l.opening_pts
+         FROM auctions a JOIN lots l ON l.id = a.lot_id
+        WHERE a.lot_id = $1 FOR UPDATE OF a`,
       [args.lotId],
     );
     const row = auctionRes.rows[0];
@@ -169,7 +177,7 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
     }
     if (live.changed) await persistSettlement(client, args.lotId, live);
 
-    /* ── 4. Eligibility and the rules ───────────────────────────────────── */
+    /* ── 4. Eligibility ─────────────────────────────────────────────────── */
     const userRes = await client.query<{
       status: string;
       phone_verified_at: Date | null;
@@ -188,15 +196,25 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
     const hasBid = participantRes.rows[0]?.first_bid_at != null;
     const isFirstEntry = participantRes.rows.length === 0;
 
-    if (!isLegalBid(args.points, live.currentPts, live.round, hasBid)) {
-      return {
-        ok: false,
-        reason: "too-low",
-        minNextPts: minNextBidPts(live.currentPts, live.round, hasBid),
-      };
-    }
+    /* ── 5. Price it ────────────────────────────────────────────────────── */
+    /*
+     * On the bidder's own price, under the lock, so two of their own bids in
+     * flight are priced one after the other: the second builds on the first.
+     */
+    const ownRes = await client.query<{ top: number | null }>(
+      "SELECT max(points) AS top FROM bids WHERE lot_id = $1 AND user_id = $2",
+      [args.lotId, args.userId],
+    );
+    const basePts = bidBasePts(ownRes.rows[0]?.top ?? null, row.opening_pts);
+    const points = Math.max(
+      args.points,
+      minNextBidPts(basePts, live.round, hasBid),
+    );
+    // A bid above the lot's price takes the lead; one below it stands as this
+    // bidder's own, and the leader keeps the lead.
+    const takesLead = points > live.currentPts;
 
-    /* ── 5. The join fee ────────────────────────────────────────────────── */
+    /* ── 6. The join fee ────────────────────────────────────────────────── */
     /*
      * LATE_JOIN_PENALTY_PTS, charged once per lot on first entry. The comment
      * on that constant says the back end must own the deduction — this is that
@@ -237,7 +255,7 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
       );
     }
 
-    /* ── 6. Record ──────────────────────────────────────────────────────── */
+    /* ── 7. Record ──────────────────────────────────────────────────────── */
     /*
      * What was left on the bid clock at `now` — the instant settle() judged
      * this bid in time — kept on the row for disputes and never sent to the
@@ -254,7 +272,7 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
         args.lotId,
         args.userId,
         args.paddle,
-        args.points,
+        points,
         live.round,
         args.idempotencyKey,
         args.ip,
@@ -274,12 +292,16 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
      * the client supplied. Client clocks are wrong often enough — and are
      * trivially settable — that accepting one would hand every bidder a dial
      * for how long their own lead lasts.
+     *
+     * Every bid resets the clock; only one above the lot's price moves it and
+     * the lead. `takesLead` is passed in rather than re-derived in SQL, so the
+     * row and the decision below cannot disagree.
      */
     await client.query(
       `UPDATE auctions
-          SET current_pts       = $2,
-              leader_user_id    = $3,
-              leader_paddle     = $4,
+          SET current_pts       = CASE WHEN $7::boolean THEN $2::int ELSE current_pts END,
+              leader_user_id    = CASE WHEN $7::boolean THEN $3::bigint ELSE leader_user_id END,
+              leader_paddle     = CASE WHEN $7::boolean THEN $4::text ELSE leader_paddle END,
               round             = $5,
               bid_clock_ends_at = now() + ($6 || ' milliseconds')::interval,
               bid_count         = bid_count + 1,
@@ -289,15 +311,16 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
         WHERE lot_id = $1`,
       [
         args.lotId,
-        args.points,
+        points,
         args.userId,
         args.paddle,
         live.round,
         String(bidClockMs(live.round)),
+        takesLead,
       ],
     );
 
-    /* ── 7. Tell whoever was outbid ─────────────────────────────────────── */
+    /* ── 8. Tell whoever was outbid ─────────────────────────────────────── */
     /*
      * Queued inside this transaction, so a bid that rolls back cannot leave
      * somebody a message about it.
@@ -308,6 +331,7 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
      * per round is enough to say "you are no longer winning this".
      */
     if (
+      takesLead &&
       row.leader_user_id !== null &&
       row.leader_user_id !== args.userId &&
       live.currentPts > 0
@@ -316,13 +340,13 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
         userId: row.leader_user_id,
         channel: "sms",
         kind: "bid.outbid",
-        body: `${t.brand.name}: ${args.lotId} лот дээр таны үнэ давагдлаа. Одоогийн үнэ ${args.points} оноо.`,
+        body: `${t.brand.name}: ${args.lotId} лот дээр таны үнэ давагдлаа. Одоогийн үнэ ${points} оноо.`,
         href: `/auction/${args.lotId}`,
         dedupeKey: `outbid:${args.lotId}:${live.round}`,
       });
     }
 
-    /* ── 8. Audit ───────────────────────────────────────────────────────── */
+    /* ── 9. Audit ───────────────────────────────────────────────────────── */
     await record(client, {
       actorUserId: args.userId,
       action: "bid.placed",
@@ -330,8 +354,11 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
       targetId: args.lotId,
       detail: {
         bidId: bidRow.id,
-        points: args.points,
-        previousPts: live.currentPts,
+        points,
+        requestedPts: args.points,
+        ownPreviousPts: basePts,
+        standingPts: live.currentPts,
+        tookLead: takesLead,
         round: live.round,
         hasBid,
         joinFeeCharged:
@@ -343,14 +370,14 @@ export async function placeBid(args: PlaceBidArgs): Promise<PlaceBidOutcome> {
 
     return {
       ok: true,
-      acceptedPts: args.points,
+      acceptedPts: points,
       round: live.round,
       duplicate: false,
       bid: {
         id: String(bidRow.id),
         paddle: args.paddle,
         name: args.name,
-        points: args.points,
+        points,
         round: live.round,
         at: bidRow.placed_at.getTime(),
         isYou: true,

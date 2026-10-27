@@ -22,13 +22,14 @@ import type { BidResult } from "@/lib/api";
  *   which paddle       → the users row, never an argument
  *   whether you have bid on this lot before → lot_participants
  *   which round it is  → the auction row, settled against the server clock
- *   whether the bid is legal → auction.ts, re-run under the row lock
+ *   what the bid costs → auction.ts, on the bidder's own price, under the row
+ *                        lock
  *
  * What it does NOT do is rate limit. See the note where the limiter used to be.
  *
- * The client's `isLegalBid` check in BidPanel remains, and remains a UX
- * affordance: it saves a round trip on an obviously low bid. It is not what
- * stops one.
+ * A bid is never refused for its price: each bidder's price is their own, so
+ * no rival's bid can make it stale, and one below their own minimum is raised
+ * to it (see `placeBid`).
  * ─────────────────────────────────────────────────────────────────────────────
  */
 export async function placeBid(
@@ -37,7 +38,8 @@ export async function placeBid(
   idempotencyKey: string,
 ): Promise<BidResult> {
   const parsed = bidSchema.safeParse({ lotId, points, idempotencyKey });
-  if (!parsed.success) return { ok: false, reason: "too-low" };
+  // Only a hand-made request fails this; the room always sends a whole price.
+  if (!parsed.success) return { ok: false, reason: "error" };
 
   const user = await currentUser();
   if (!user) return { ok: false, reason: "not-registered" };
@@ -61,9 +63,10 @@ export async function placeBid(
    *
    *   • the row lock in `placeBid` serialises every bid on a lot, so a flood
    *     queues rather than racing
-   *   • the price must strictly increase, so N bids cost N × the increment —
-   *     a script cannot bid a thousand times without spending a thousand times
-   *   • `bids_price_idx` refuses two bids at one price on one lot
+   *   • each bidder's own price must strictly increase, so N bids cost N × the
+   *     increment — a script cannot bid a thousand times without spending a
+   *     thousand times
+   *   • `bids_user_price_idx` refuses one bidder two bids at one price
    *   • the join fee and the balance are charged from the server's numbers
    *
    * If a flood ever does become a problem, put the per-LOT bucket back first —
