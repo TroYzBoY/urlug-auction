@@ -102,8 +102,12 @@ to match. Never put the two in different regions.
    | `QPAY_API_URL`, `QPAY_USERNAME`, `QPAY_PASSWORD`, `QPAY_INVOICE_CODE`, `QPAY_CALLBACK_SECRET` | to take money |
 
    - The server **refuses to boot** without `SMS_API_URL`, or without
-     `CRON_SECRET` on Vercel. `ALLOW_UNVERIFIED_SIGNUP=1` is the documented
-     stopgap while there is no gateway yet (see `.env.example`).
+     `CRON_SECRET` on Vercel.
+   - **No gateway yet?** `ALLOW_UNVERIFIED_SIGNUP=1` boots without
+     `SMS_API_URL`. Registration skips the code, and **no text is sent at
+     all**: winners are not told, and a forgotten password cannot be reset.
+     Anyone can also register on a number they do not own. Remove it once a
+     gateway works, and before real money.
    - **Never** set `DEV_SKIP_OTP`. Set `ENABLE_HSTS=1` only once the final
      domain serves HTTPS.
    - `NEXT_PUBLIC_*` values are baked in at build time, which Vercel handles

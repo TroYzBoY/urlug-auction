@@ -120,6 +120,22 @@ describe("ALLOW_UNVERIFIED_SIGNUP", () => {
     },
   );
 
+  /*
+   * The window it exists for: a site live before its gateway. Without this the
+   * only way to boot was a placeholder SMS_API_URL — which reads as a gateway.
+   */
+  it("boots without SMS_API_URL, which nothing else can", async () => {
+    const { env } = await load("production", undefined, "1");
+    vi.stubEnv("SMS_API_URL", "");
+    expect(() => env.assertRuntimeEnv()).not.toThrow();
+  });
+
+  it("leaves SMS_API_URL required when it is off", async () => {
+    const { env } = await load("production", undefined);
+    vi.stubEnv("SMS_API_URL", "");
+    expect(() => env.assertRuntimeEnv()).toThrow(/SMS_API_URL/);
+  });
+
   it("does not rescue DEV_SKIP_OTP from its production refusal", async () => {
     /*
      * The two must stay independent. If setting the deliberate flag also made

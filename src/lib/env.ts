@@ -168,10 +168,18 @@ export function assertRuntimeEnv(): void {
     }
   }
 
-  if (IS_PRODUCTION && !env.smsApiUrl) {
+  /*
+   * Unless registration has been told not to wait for a code. That is the
+   * window ALLOW_UNVERIFIED_SIGNUP exists for — a site live before its gateway
+   * — and requiring a gateway URL during it only forced a placeholder into the
+   * environment, which reads as a gateway that works. Its banner below says
+   * that no text will be sent.
+   */
+  if (IS_PRODUCTION && !env.smsApiUrl && !env.allowUnverifiedSignup) {
     problems.push(
       "SMS_API_URL is required in production — without it phone verification " +
-        "codes are never delivered and nobody can complete registration.",
+        "codes are never delivered and nobody can complete registration. " +
+        "(ALLOW_UNVERIFIED_SIGNUP=1 boots without one, as a stopgap.)",
     );
   }
 
@@ -212,8 +220,15 @@ export function assertRuntimeEnv(): void {
         "  \u26a0  ALLOW_UNVERIFIED_SIGNUP=1 - PHONE VERIFICATION IS OFF.",
         "     Anyone can register on this public URL without receiving a code.",
         "     Intended as a stopgap while an SMS gateway is being connected.",
-        "     Remove it as soon as one is:",
+        ...(env.smsApiUrl
+          ? []
+          : [
+              "     No SMS_API_URL either: NO TEXT IS SENT. Winners are not told,",
+              "     and a forgotten password cannot be reset.",
+            ]),
+        "     Remove it as soon as a gateway works:",
         "       fly secrets unset ALLOW_UNVERIFIED_SIGNUP",
+        "       (on Vercel: Settings → Environment Variables)",
         "",
       ].join("\n"),
     );
