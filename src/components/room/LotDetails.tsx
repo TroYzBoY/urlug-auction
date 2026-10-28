@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "@/lib/copy";
-import { pts, ptsToMnt } from "@/lib/format";
+import { byline, estimateText, pts } from "@/lib/format";
 import type { Lot } from "@/lib/types";
 
 /**
@@ -93,9 +93,9 @@ export function LotDetails({
               >
                 {lot.title}
               </h2>
-              <p className="text-muted mt-1 text-sm">
-                {lot.maker} · {lot.year}
-              </p>
+              {byline(lot) && (
+                <p className="text-muted mt-1 text-sm">{byline(lot)}</p>
+              )}
 
               {/* The description first: it is what the button was pressed for. */}
               {lot.note && (
@@ -105,15 +105,18 @@ export function LotDetails({
               )}
 
               <dl className="border-line mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t pt-4">
-                <Fact label={t.lot.estimate}>
+                <Fact label={t.lot.pressCost}>
                   <span data-numerals>
-                    {pts(lot.estimateLowPts)} – {pts(lot.estimateHighPts)}{" "}
-                    {t.common.point}
+                    {pts(lot.pressCostPts)} {t.common.point}
                   </span>
                 </Fact>
-                <Fact label={t.lot.opening}>
-                  <span data-numerals>{ptsToMnt(lot.openingPts)}</span>
-                </Fact>
+                {estimateText(lot) && (
+                  <Fact label={t.lot.estimate}>
+                    <span data-numerals>
+                      {estimateText(lot)} {t.common.point}
+                    </span>
+                  </Fact>
+                )}
                 {lot.dimensions && (
                   <Fact label={t.lot.dimensions}>{lot.dimensions}</Fact>
                 )}

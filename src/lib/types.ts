@@ -49,10 +49,16 @@ export interface Lot {
   provenance: string;
   condition: string;
   dimensions: string;
-  /** Estimates and opening price are held in POINTS, never in ₮. */
+  /**
+   * What the item is reckoned to be worth, in POINTS — 0 and 0 when the admin
+   * left it out, which every display reads as "not given".
+   */
   estimateLowPts: number;
   estimateHighPts: number;
+  /** Left from the auction format; nothing shows it. */
   openingPts: number;
+  /** What one press of the lot's button costs, in points (auction.ts). */
+  pressCostPts: number;
   /**
    * Catalogue photographs, in gallery order. Position 0 is the cover — the one
    * a card in the grid shows.
@@ -71,17 +77,17 @@ export interface Lot {
   /** ISO timestamp — when this lot's 2h45m session opens. */
   startsAt: string;
   /**
-   * The standing price, in points, for a lot that is live.
+   * How many times the lot's button has been pressed, by everyone.
    *
-   * Equal to `openingPts` until somebody bids. Present so a summary — the hero
-   * ticker, a card — can show what a lot is ACTUALLY at rather than what it
-   * opened at. It is a snapshot as of the render; the room's SSE stream is what
-   * keeps a price live.
+   * The name is left from the auction format, when this was the standing
+   * price; it is a COUNT now, never points. A snapshot as of the render — the
+   * room's SSE stream is what keeps it live.
    */
   currentPts?: number;
 
   /* ── Result, present only once a lot has been through the room ─────────── */
-  /** Hammer price in points. Set when status is "sold". */
+  /** The total presses when it closed — a count, like `currentPts`. Set when
+      status is "sold". */
   hammerPts?: number;
   /** Which round the hammer fell in — the format's most telling statistic. */
   hammerRound?: number;
@@ -101,6 +107,10 @@ export interface Bid {
   paddle: string;
   /** The bidder's real name — what the feed and the leader display. */
   name: string;
+  /**
+   * The presser's own running count on the lot after this press: 1, 2, 3 …
+   * (A price, on bids from the auction format.)
+   */
   points: number;
   /** Which of the six rounds this bid landed in. */
   round: number;
@@ -124,8 +134,12 @@ export interface RoomState {
   serverNow: number;
   lot: Lot;
   round: number;
+  /** Total presses on the lot, by everyone — see `Lot.currentPts`. */
   currentPts: number;
-  /** Paddle currently in the lead, null before the first bid. */
+  /**
+   * Paddle of whoever pressed LAST — who takes the lot if the clock runs out
+   * now. Null before the first press.
+   */
   leader: string | null;
   /** Epoch ms the bid clock expires. Resets on every accepted bid. */
   bidClockEndsAt: number;
@@ -136,11 +150,10 @@ export interface RoomState {
   /** False until the signed-in bidder has placed their first bid on this lot. */
   hasBid: boolean;
   /**
-   * The signed-in bidder's own highest bid on this lot — their price, which
-   * their next bid is built on (`bidBasePts`). Null before their first, or
-   * when signed out.
+   * How many times the signed-in bidder has pressed on this lot. Null before
+   * their first press, or when signed out.
    */
-  yourPts: number | null;
+  yourCount: number | null;
   /**
    * `review` means bidding is over and an admin is deciding the winner. The
    * room keeps its stream open through it — the award arrives as another push,

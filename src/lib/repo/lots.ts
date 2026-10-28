@@ -20,7 +20,7 @@ import type { Bid, Lot, LotCategory, LotStatus, RoomState } from "../types";
 const LOT_COLUMNS = `
   l.id, l.code, l.title, l.maker, l.year, l.category, l.note, l.provenance,
   l.condition, l.dimensions, l.estimate_low_pts, l.estimate_high_pts,
-  l.opening_pts, l.starts_at,
+  l.opening_pts, l.press_cost_pts, l.starts_at,
   /*
    * The gallery, aggregated in the same query rather than fetched per lot.
    * A catalogue page renders a dozen lots; a second round trip each would be a
@@ -58,6 +58,7 @@ interface LotRow {
   estimate_low_pts: number;
   estimate_high_pts: number;
   opening_pts: number;
+  press_cost_pts: number;
   images: { url: string; alt: string }[];
   starts_at: Date;
   opens_at: Date;
@@ -106,6 +107,7 @@ function toLot(row: LotRow, live: SettledState): Lot {
     estimateLowPts: row.estimate_low_pts,
     estimateHighPts: row.estimate_high_pts,
     openingPts: row.opening_pts,
+    pressCostPts: row.press_cost_pts,
     images: row.images ?? [],
     status: STATUS_OF[live.outcome],
     startsAt: row.starts_at.toISOString(),
@@ -323,17 +325,16 @@ export async function getRoomSnapshot(
 /**
  * Turns a shared snapshot into one viewer's `RoomState`. Pure, no I/O.
  *
- * `yourPts` — the viewer's own top bid — is passed in rather than looked up. A
- * bidder's own price only ever rises, and each new bid of theirs is the newest
- * in the feed when it is pushed, so the stream reads it once at connect and
- * raises it from the feed (`viewerTopPts`). That keeps the per-push cost at
- * zero queries. `hasBid` follows from it, and matters: it decides whether the
- * late-entry floor applies.
+ * `yourCount` — how many times the viewer has pressed — is passed in rather
+ * than looked up. It only ever rises, and each new press of theirs is the
+ * newest in the feed when it is pushed, carrying their count, so the stream
+ * reads it once at connect and raises it from the feed (`viewerCount`). That
+ * keeps the per-push cost at zero queries.
  */
 export function projectForViewer(
   snapshot: RoomSnapshot,
   viewerUserId: number | null,
-  yourPts: number | null,
+  yourCount: number | null,
 ): RoomState {
   return {
     serverNow: Date.now(),
@@ -347,17 +348,17 @@ export function projectForViewer(
       ...bid,
       isYou: viewerUserId !== null && userId === viewerUserId,
     })),
-    hasBid: yourPts !== null,
-    yourPts,
+    hasBid: yourCount !== null,
+    yourCount,
     outcome: snapshot.outcome,
   };
 }
 
 /**
- * The viewer's own price after this push: what they had, raised by any bid of
- * theirs in the snapshot's feed.
+ * The viewer's count after this push: what they had, raised by any press of
+ * theirs in the snapshot's feed — each carries the presser's count.
  */
-export function viewerTopPts(
+export function viewerCount(
   snapshot: RoomSnapshot,
   viewerUserId: number | null,
   previous: number | null,
@@ -372,22 +373,22 @@ export function viewerTopPts(
   return top;
 }
 
-/** This viewer's highest bid on this lot, null before their first. */
-export async function yourTopBid(
+/** How many times this viewer has pressed on this lot, null before their first. */
+export async function yourPressCount(
   lotId: string,
   viewerUserId: number,
 ): Promise<number | null> {
-  const row = await queryOne<{ top: number | null }>(
-    "SELECT max(points) AS top FROM bids WHERE lot_id = $1 AND user_id = $2",
+  const row = await queryOne<{ n: number }>(
+    "SELECT count(*)::int AS n FROM bids WHERE lot_id = $1 AND user_id = $2",
     [lotId, viewerUserId],
   );
-  return row?.top ?? null;
+  return row && row.n > 0 ? row.n : null;
 }
 
 /**
  * Everything the room renders from, for one viewer.
  *
- * `viewerUserId` is what makes `hasBid`, `yourPts` and `isYou` correct, and it is read
+ * `viewerUserId` is what makes `hasBid`, `yourCount` and `isYou` correct, and it is read
  * from the session on the server — never accepted as an argument from the
  * client. `hasBid` decides whether the late-entry floor applies, so a client
  * able to assert it could enter round 6 at +2 points instead of +60.
@@ -416,11 +417,11 @@ export async function getRoomState(
    */
   if (live.outcome === "scheduled") return null;
 
-  const [bids, yourPts] = await Promise.all([
+  const [bids, yourCount] = await Promise.all([
     recentBids(lotId, viewerUserId),
     viewerUserId === null
       ? Promise.resolve(null)
-      : yourTopBid(lotId, viewerUserId),
+      : yourPressCount(lotId, viewerUserId),
   ]);
 
   return {
@@ -432,8 +433,8 @@ export async function getRoomState(
     bidClockEndsAt: live.bidClockEndsAt,
     roundEndsAt: live.roundEndsAt,
     bids,
-    hasBid: yourPts !== null,
-    yourPts,
+    hasBid: yourCount !== null,
+    yourCount,
     outcome: live.outcome,
   };
 }

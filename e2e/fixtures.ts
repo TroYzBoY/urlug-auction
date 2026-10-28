@@ -117,27 +117,27 @@ export async function makeAdmin(
   return makeBidder(phone, paddle, 0, "admin");
 }
 
-/** A lot that is open and taking bids right now. */
+/** A lot that is open and taking presses right now, nobody having pressed. */
 export async function makeLiveLot(
   lotId: string,
-  openingPts = 1200,
+  pressCostPts = 1,
 ): Promise<void> {
   await withClient(async (c) => {
     const opensAt = new Date(Date.now() - 30_000);
     await c.query(
       `INSERT INTO lots (id, code, title, maker, year, category, note, provenance,
                          condition, dimensions, estimate_low_pts, estimate_high_pts,
-                         opening_pts, starts_at)
+                         opening_pts, press_cost_pts, starts_at)
        VALUES ($1, $2, 'Хүрэл цоморлиг', 'Тодорхойгүй', 'XVIII зуун', 'antique',
-               'Тест лот.', '', '', '', $3, $4, $3, $5)`,
-      [lotId, `ЛОТ ${lotId}`, openingPts, openingPts * 2, opensAt],
+               'Тест лот.', '', '', '', 1200, 2400, 0, $3, $4)`,
+      [lotId, `ЛОТ ${lotId}`, pressCostPts, opensAt],
     );
     await c.query(
       `INSERT INTO auctions (lot_id, opens_at, round, current_pts,
                              bid_clock_ends_at, round_ends_at, outcome)
-       VALUES ($1, $2, 1, $3, now() + interval '5 minutes',
+       VALUES ($1, $2, 1, 0, now() + interval '5 minutes',
                now() + interval '1 hour', 'running')`,
-      [lotId, opensAt, openingPts],
+      [lotId, opensAt],
     );
   });
 }
@@ -254,7 +254,7 @@ export async function balanceFor(phone: string): Promise<number> {
   });
 }
 
-/** The current price on a lot, read from the database rather than the DOM. */
+/** A lot's total presses, read from the database rather than the DOM. */
 export async function currentPts(lotId: string): Promise<number> {
   return withClient(async (c) => {
     const res = await c.query<{ current_pts: number }>(
@@ -265,7 +265,7 @@ export async function currentPts(lotId: string): Promise<number> {
   });
 }
 
-/** One bidder's prices on a lot, in the order they landed. */
+/** One presser's running counts on a lot — 1, 2, 3 … — in the order they landed. */
 export async function bidsOf(lotId: string, phone: string): Promise<number[]> {
   return withClient(async (c) => {
     const res = await c.query<{ points: number }>(

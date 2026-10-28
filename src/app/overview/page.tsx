@@ -15,7 +15,7 @@ import {
   getUpcomingLots,
 } from "@/lib/api";
 import { POINT_MNT, ROUNDS, TOTAL_ROUNDS } from "@/lib/auction";
-import { bidClockLabel, groupNumber, pts, ptsToMnt } from "@/lib/format";
+import { bidClockLabel, byline, groupNumber, pts } from "@/lib/format";
 import { t } from "@/lib/copy";
 import { coverOf } from "@/lib/types";
 
@@ -121,15 +121,15 @@ export default async function OverviewPage() {
             >
               <LiveTicker
                 /*
-                  The lot's REAL standing price and bid count. This used to
-                  pass `openingPts`, which the ticker then labelled as the last
-                  bid and nudged upward in the browser — see LiveTicker.
+                  The lot's REAL total presses. This used to pass
+                  `openingPts`, which the ticker then labelled as the last bid
+                  and nudged upward in the browser — see LiveTicker.
                 */
                 lots={liveLots.map((l) => ({
                   id: l.id,
                   code: l.code,
                   title: l.title,
-                  currentPts: l.currentPts ?? l.openingPts,
+                  currentPts: l.currentPts ?? 0,
                   bidCount: l.bidCount ?? 0,
                 }))}
               />
@@ -179,17 +179,17 @@ export default async function OverviewPage() {
                 <h2 className="display mt-2.5 text-[clamp(2rem,5.5vw,4rem)] leading-[0.95] tracking-[-0.035em] text-ink transition-colors group-hover:text-accent">
                   {live.title}
                 </h2>
-                <p className="mt-2 text-sm text-muted">
-                  {live.maker} · {live.year}
-                </p>
+                {byline(live) && (
+                  <p className="mt-2 text-sm text-muted">{byline(live)}</p>
+                )}
               </div>
 
               <dl className="grid grid-cols-2 gap-6 self-end md:col-span-5">
-                <Figure label={t.lot.estimate}>
-                  {pts(live.estimateLowPts)}–{pts(live.estimateHighPts)}
+                <Figure label={t.lot.pressCost}>
+                  {pts(live.pressCostPts)} {t.common.point}
                 </Figure>
-                <Figure label={t.lot.opening}>
-                  {ptsToMnt(live.openingPts)}
+                <Figure label={t.lot.totalPresses}>
+                  {t.room.times(live.currentPts ?? 0)}
                 </Figure>
               </dl>
             </div>

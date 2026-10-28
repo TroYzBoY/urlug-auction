@@ -6,13 +6,7 @@ import { RollingNumber } from "@/components/site/RollingNumber";
 import { LiveDot } from "@/components/lot/LotCard";
 import { LotPlate } from "@/components/lot/LotPlate";
 import { placeBid as submitBid } from "@/app/actions/bid";
-import {
-  LATE_ENTRY_FROM_ROUND,
-  LATE_JOIN_PENALTY_PTS,
-  ROUND_TIME_SCALE,
-  TOTAL_ROUNDS,
-} from "@/lib/auction";
-import { ptsToMnt } from "@/lib/format";
+import { ROUND_TIME_SCALE, TOTAL_ROUNDS } from "@/lib/auction";
 import { t } from "@/lib/copy";
 import { coverOf, type RoomState } from "@/lib/types";
 import { BidClock } from "./BidClock";
@@ -25,7 +19,7 @@ import { WinBurst, buzz } from "./RoomEffects";
 import { useAuctionRoom } from "./useAuctionRoom";
 import { useFocusMode } from "./useFocusMode";
 
-/** What the bidder is told when the server turns a bid down. */
+/** What the presser is told when the server turns a press down. */
 const REJECTION_COPY: Record<string, string> = {
   "round-closed": t.room.rejectClosed,
   "not-registered": t.room.rejectSignIn,
@@ -49,7 +43,7 @@ export function AuctionRoom({
   viewerName: string | null;
   /** Signed in, verified and not suspended. The server checks this too. */
   canBid: boolean;
-  /** The viewer's points. 0 when signed out. Only the join fee spends them. */
+  /** The viewer's points. 0 when signed out. Every press spends from them. */
   balancePts: number;
 }) {
   const {
@@ -64,32 +58,29 @@ export function AuctionRoom({
   const lot = state.lot;
   const [focus, setFocus] = useFocusMode();
 
-  // Only startTransition — never the pending flag. The bid button shows no
+  // Only startTransition — never the pending flag. The button shows no
   // loading state (the optimistic update is the feedback), so nothing reads it.
   const [, startTransition] = useTransition();
   const [rejection, setRejection] = useState<string | null>(null);
 
   /*
-   * Optimistic bidding, unchanged in shape from the stubbed version: the bid is
-   * applied on the click frame so the price and clock move immediately, and the
-   * network call follows.
-   *
-   * What changed is what it is optimistic ABOUT. `submitBid` is now a Server
-   * Function that re-validates against auction.ts under a row lock, so a
-   * rejection here is a real rejection rather than a stub that never rejected.
+   * Optimistic pressing: the press is applied on the click frame so the count,
+   * the lead and the clock move immediately, and the network call follows.
+   * `submitBid` is a Server Function that charges and records it under a row
+   * lock, so a rejection here is a real one, and rolls the press back.
    *
    * The idempotency key is generated once per attempt and travels with it. If
    * the connection drops after the server committed but before the response
-   * arrived, the retry resolves to the bid that already landed instead of
-   * placing a second one at a higher price.
+   * arrived, the retry resolves to the press that already landed instead of
+   * charging a second one.
    */
-  function attemptBid(points: number) {
-    const bidId = applyOptimistic(points);
+  function attemptPress() {
+    const bidId = applyOptimistic();
     const idempotencyKey = crypto.randomUUID();
     setRejection(null);
 
     startTransition(async () => {
-      const res = await submitBid(lot.id, points, idempotencyKey);
+      const res = await submitBid(lot.id, idempotencyKey);
       if (!res.ok) {
         rollback(bidId);
         setRejection(REJECTION_COPY[res.reason] ?? t.room.rejectError);
@@ -123,13 +114,11 @@ export function AuctionRoom({
 
   const frozen = state.outcome !== "running";
   /*
-   * Bidding is over and the house has not said who won.
+   * Pressing is over and the result has not arrived.
    *
    * It is a THIRD state, not a flavour of frozen: the clocks are stopped like a
-   * sold lot's, but there is no price to announce and no winner to name. Left
-   * as "sold" the room would show a hammer figure nobody has agreed to; left as
-   * "live" it would show a dead clock. What it shows instead is that something
-   * is still happening and that this screen will say so.
+   * sold lot's, but there is no winner to name yet. Normally it lasts no longer
+   * than the push: the lot goes to its winner in the transaction that closes it.
    */
   const underReview = state.outcome === "review";
 
@@ -147,10 +136,7 @@ export function AuctionRoom({
     state.round >= TOTAL_ROUNDS &&
     (expiredBidClock === state.bidClockEndsAt ||
       expiredRound === state.roundEndsAt);
-  /*
-   * The result is shown the moment it arrives. After the last clock the lot
-   * waits here until an admin names its winner, and only until they do.
-   */
+  /* The result is shown the moment it arrives. */
   const deciding = underReview || closing;
 
   /*
@@ -180,17 +166,6 @@ export function AuctionRoom({
      space instead (see the feed below). */
   const panelFills = deciding;
 
-  /*
-   * The join fee, and whether this bidder can cover it.
-   *
-   * It is the ONLY thing a bid spends from the balance — the hammer price is
-   * recorded as an obligation, never deducted — so this is the whole of what
-   * "insufficient funds" can mean in the room, and it applies to exactly one
-   * person: somebody entering a lot that is already past round 1.
-   */
-  const joinFeeApplies =
-    !frozen && !state.hasBid && state.round >= LATE_ENTRY_FROM_ROUND;
-  const shortOfJoinFee = joinFeeApplies && balancePts < LATE_JOIN_PENALTY_PTS;
   const bidClockTotalMs = spec.bidClockSec * 1000;
 
   /*
@@ -199,13 +174,13 @@ export function AuctionRoom({
    * already won, or one already past its first bid, does not burst, flash or
    * buzz.
    *
-   *   flash  a light behind the price whenever it moves
-   *   burst  neon sparks when the hammer falls to this bidder
-   *   buzz   a double pulse when somebody takes the lead from them, and a
-   *          longer one when they win — on phones that have a vibrator
+   *   flash  a light behind the count whenever it moves
+   *   burst  neon sparks when the lot goes to this presser
+   *   buzz   a double pulse when somebody presses after them, and a longer
+   *          one when they win — on phones that have a vibrator
    *
-   * A bid the server rejects rolls the lead back too, and that is not being
-   * outbid, so it does not buzz: the rejection message is the feedback.
+   * A press the server rejects rolls the lead back too, and that is not being
+   * overtaken, so it does not buzz: the rejection message is the feedback.
    */
   const [initialPts] = useState(state.currentPts);
   const [initialOutcome] = useState(state.outcome);
@@ -334,31 +309,11 @@ export function AuctionRoom({
             </div>
 
             {/*
-              Joining a sale already under way is chargeable, so it is disclosed
-              on arrival — before the bid, not after it, which would be a dark
-              pattern however small. Kept in focus mode for the same reason: it
-              is part of the bid, not decoration around it. It disappears on
-              this bidder's first bid, by which point they have accepted it.
-
-              ⚠ Gated on the ROUND. `placeBid` charges the join fee only from
-              LATE_ENTRY_FROM_ROUND onward — round 1 is free — and a disclosure
-              that overstates a charge is still a wrong disclosure.
-            */}
-            {joinFeeApplies && !deciding && (
-              <p className="border-flare/60 text-ink-soft flex flex-wrap items-baseline gap-x-2 gap-y-1 border-l-2 pl-3 text-xs leading-snug">
-                <span className="eyebrow text-flare">
-                  {t.room.joinPenaltyLabel}
-                </span>
-                <span>{t.room.joinPenalty(LATE_JOIN_PENALTY_PTS)}</span>
-              </p>
-            )}
-
-            {/*
               The picture takes whatever height the phone has left once the
               clocks and the panel are placed, down to a strip on the shortest
               screens — it gives way before the clock does.
 
-              ⚠ The price here is a `div` live region, not the row's `p`: only
+              ⚠ The count here is a `div` live region, not the row's `p`: only
               one of the two is ever displayed, so only one is announced, and
               the e2e suite locates the row's by that `p`.
             */}
@@ -389,7 +344,7 @@ export function AuctionRoom({
                 <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 px-3.5 pb-3">
                   <div className="shrink-0">
                     <p className="eyebrow short:hidden">
-                      {t.room.currentPrice}
+                      {t.room.totalPresses}
                     </p>
                     <div
                       aria-live="polite"
@@ -405,7 +360,7 @@ export function AuctionRoom({
                       )}
                       <RollingNumber value={state.currentPts} />
                       <span className="text-muted ml-1.5 align-baseline text-sm font-normal tracking-normal">
-                        {t.common.point}
+                        {t.room.timesUnit}
                       </span>
                     </div>
                   </div>
@@ -484,23 +439,21 @@ export function AuctionRoom({
                 </div>
               ))}
 
-            {/* Current price + leader. One row; in focus mode a smaller one,
-                without the tugrik conversion. On a phone showing the picture,
-                the picture carries them instead. */}
+            {/* Total presses + the last presser. One row; in focus mode a
+                smaller one. On a phone showing the picture, the picture
+                carries them instead. */}
             <div
               className={`border-line items-end justify-between gap-4 border-b sm:gap-6 ${
                 focused ? "pb-3" : "short:pb-2.5 pb-3.5 lg:pb-5"
               } ${showPicture ? "hidden lg:flex" : "flex"}`}
             >
-              {/* The price never gives way; a long name does, by truncating —
+              {/* The count never gives way; a long name does, by truncating —
                   wrapping it onto its own line cost the phone a whole row. */}
               <div className="shrink-0">
-                <p className="eyebrow">
-                  {deciding ? t.room.reviewStanding : t.room.currentPrice}
-                </p>
+                <p className="eyebrow">{t.room.totalPresses}</p>
                 {/* The headline number rolls rather than swaps. aria-live sits
                     on the wrapper with plain text, so assistive tech announces
-                    "1 208 оноо" once instead of narrating every digit. */}
+                    "120 удаа" once instead of narrating every digit. */}
                 <p
                   aria-live="polite"
                   aria-atomic="true"
@@ -510,7 +463,7 @@ export function AuctionRoom({
                       : "short:mt-1.5 short:text-[2.25rem] mt-2 text-[clamp(2.5rem,9vw,3.75rem)]"
                   }`}
                 >
-                  {/* Keyed on the price, so each new bid remounts it and
+                  {/* Keyed on the count, so each new press remounts it and
                       the flash plays again. Behind the digits, never over
                       them. */}
                   {state.currentPts !== initialPts && (
@@ -522,17 +475,9 @@ export function AuctionRoom({
                   )}
                   <RollingNumber value={state.currentPts} />
                   <span className="text-muted ml-2 align-baseline text-base font-normal tracking-normal">
-                    {t.common.point}
+                    {t.room.timesUnit}
                   </span>
                 </p>
-                {!focused && (
-                  <p
-                    data-numerals
-                    className="text-muted short:mt-1 mt-1.5 text-sm"
-                  >
-                    {ptsToMnt(state.currentPts)}
-                  </p>
-                )}
               </div>
 
               <div className="min-w-0 text-right">
@@ -578,7 +523,6 @@ export function AuctionRoom({
                             ? t.room.you
                             : (leaderName ?? state.leader),
                           isYou: isYourLead,
-                          points: state.currentPts,
                         }
                       : null
                   }
@@ -587,7 +531,7 @@ export function AuctionRoom({
             )}
           </div>
 
-          {/* ── Right: the bid panel. The last row of the column on phones,
+          {/* ── Right: the press panel. The last row of the column on phones,
               bled to the screen edges; a sticky sidebar from lg up. Either way
               it is on screen with the clocks, never a scroll away. ────────── */}
           <aside
@@ -607,9 +551,8 @@ export function AuctionRoom({
                 leaderName={leaderName}
                 canBid={canBid}
                 balancePts={balancePts}
-                shortOfJoinFee={shortOfJoinFee}
                 rejection={rejection}
-                onBid={attemptBid}
+                onPress={attemptPress}
               />
             )}
           </aside>

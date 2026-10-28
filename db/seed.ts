@@ -78,8 +78,8 @@ try {
       `
       INSERT INTO lots (id, code, title, maker, year, category, note, provenance,
                         condition, dimensions, estimate_low_pts, estimate_high_pts,
-                        opening_pts, starts_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+                        opening_pts, starts_at, press_cost_pts)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
       ON CONFLICT (id) DO UPDATE SET
         code = EXCLUDED.code, title = EXCLUDED.title, maker = EXCLUDED.maker,
         year = EXCLUDED.year, category = EXCLUDED.category, note = EXCLUDED.note,
@@ -88,6 +88,7 @@ try {
         estimate_low_pts = EXCLUDED.estimate_low_pts,
         estimate_high_pts = EXCLUDED.estimate_high_pts,
         opening_pts = EXCLUDED.opening_pts,
+        press_cost_pts = EXCLUDED.press_cost_pts,
         starts_at = EXCLUDED.starts_at, updated_at = now()
       `,
       [
@@ -105,6 +106,7 @@ try {
         lot.estimateHighPts,
         lot.openingPts,
         opensAtFor(lot.status, index),
+        lot.pressCostPts,
       ],
     );
 
@@ -128,7 +130,7 @@ try {
       `
       INSERT INTO auctions (lot_id, opens_at, round, current_pts, bid_clock_ends_at,
                             round_ends_at, outcome)
-      VALUES ($1, $2, 1, $3, $4, $5, 'scheduled')
+      VALUES ($1, $2, 1, 0, $3, $4, 'scheduled')
       ON CONFLICT (lot_id) DO UPDATE SET
         opens_at = EXCLUDED.opens_at,
         round = 1,
@@ -140,6 +142,8 @@ try {
         outcome = 'scheduled',
         hammer_round = NULL,
         settled_at = NULL,
+        designated_user_id = NULL,
+        designated_by = NULL,
         bid_count = 0,
         version = auctions.version + 1,
         updated_at = now()
@@ -147,7 +151,6 @@ try {
       [
         lot.id,
         opensAt,
-        lot.openingPts,
         new Date(opensAt.getTime() + bidClockMs(1)),
         new Date(opensAt.getTime() + roundEndOffsetMs(1)),
       ],

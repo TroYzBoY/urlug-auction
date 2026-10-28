@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "@/lib/copy";
-import { lotDate, pts } from "@/lib/format";
+import { byline, lotDate, pts } from "@/lib/format";
 import type { Lot, LotStatus } from "@/lib/types";
 import { LotPlate } from "./LotPlate";
 
@@ -121,35 +121,33 @@ export function QuickView({ lot }: { lot: Lot }) {
                 >
                   {lot.title}
                 </h2>
-                <p className="text-muted mt-1 text-sm">
-                  {lot.maker} · {lot.year}
-                </p>
+                {byline(lot) && (
+                  <p className="text-muted mt-1 text-sm">{byline(lot)}</p>
+                )}
 
                 <dl className="quick-view-facts" data-numerals>
                   <div>
                     <dt className="eyebrow">
-                      {sold ? t.lot.hammer : t.lot.estimate}
+                      {sold ? t.lot.totalPresses : t.lot.pressCost}
                     </dt>
                     <dd>
-                      {sold
-                        ? pts(lot.hammerPts ?? 0)
-                        : `${pts(lot.estimateLowPts)} – ${pts(lot.estimateHighPts)}`}{" "}
+                      {sold ? pts(lot.hammerPts ?? 0) : pts(lot.pressCostPts)}{" "}
                       <span className="text-muted text-xs">
-                        {t.common.point}
+                        {sold ? t.room.timesUnit : t.common.point}
                       </span>
                     </dd>
                   </div>
                   <div>
                     <dt className="eyebrow">
                       {live
-                        ? t.room.currentPrice
+                        ? t.room.totalPresses
                         : sold
                           ? t.lot.hammerRound
                           : t.lot.startsAt}
                     </dt>
                     <dd>
                       {live
-                        ? `${pts(lot.currentPts ?? lot.openingPts)} ${t.common.point}`
+                        ? t.room.times(lot.currentPts ?? 0)
                         : sold
                           ? `${lot.hammerRound ?? "—"} / 6`
                           : lotDate(lot.startsAt)}

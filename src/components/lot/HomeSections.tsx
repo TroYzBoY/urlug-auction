@@ -60,7 +60,7 @@ export function SoldStrip({ lots }: { lots: Lot[] }) {
                 >
                   {pts(lot.hammerPts ?? 0)}
                   <span className="text-muted ml-1 text-xs font-normal">
-                    {t.common.point}
+                    {t.room.timesUnit}
                   </span>
                 </p>
                 <p className="text-muted mt-1 text-xs" data-numerals>

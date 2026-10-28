@@ -51,9 +51,12 @@ test("an admin creates a lot and it appears in the catalogue", async ({
   await page.getByLabel(/Лотын дугаар/).fill("E90");
   await page.getByLabel(/^Код$/).fill("ЛОТ E90");
   await page.getByLabel(/Лотын нэр/).fill("Шалгах эдлэл");
-  await page.getByLabel(/Үнэлгээ — доод/).fill("1000");
-  await page.getByLabel(/Үнэлгээ — дээд/).fill("2000");
-  await page.getByLabel(/Нээлтийн үнэ/).fill("800");
+  await page.getByLabel(/Нэг дарах үнэ/).fill("4");
+
+  // The preview redraws the card as it is typed.
+  const preview = page.getByRole("complementary", { name: "Урьдчилан харах" });
+  await expect(preview.getByText("Шалгах эдлэл")).toBeVisible();
+  await expect(preview.getByText("ЛОТ E90").first()).toBeVisible();
 
   /*
    * A week out, at 20:00. A lot that opens in the past would be promoted by the
@@ -87,6 +90,30 @@ test("an admin creates a lot and it appears in the catalogue", async ({
   expect(response?.status()).toBe(200);
   await expect(
     page.getByRole("heading", { name: "Шалгах эдлэл" }),
+  ).toBeVisible();
+});
+
+test("a lot needs only its name, its press price and its time", async ({
+  page,
+}) => {
+  const admin = await makeAdmin("99110017", "Т-217");
+  await signIn(page, admin);
+  await page.goto("/admin");
+
+  await page.getByRole("button", { name: /Шинэ лот/ }).click();
+  await page.getByLabel(/Лотын нэр/).fill("Нэргүй эдлэл");
+  // The press price keeps its default of 1; the id and code are left empty.
+  const day = new Date(Date.now() + 7 * 24 * 3600_000)
+    .toISOString()
+    .slice(0, 10);
+  await page.getByLabel(/Эхлэх/).fill(`${day}T20:00`);
+  await page.getByRole("button", { name: /^Үүсгэх$/ }).click();
+
+  // Given the next free number, which is its code too.
+  const row = page.getByRole("row").filter({ hasText: "Нэргүй эдлэл" });
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await expect(
+    row.getByRole("link", { name: /^\d{3} Нэргүй эдлэл$/ }),
   ).toBeVisible();
 });
 

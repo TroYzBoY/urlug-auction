@@ -100,6 +100,8 @@ export async function seedRunningLot(
   opts: {
     lotId: string;
     openingPts?: number;
+    /** What one press costs. */
+    pressCostPts?: number;
     currentPts?: number;
     round?: number;
     openedMsAgo?: number;
@@ -110,6 +112,7 @@ export async function seedRunningLot(
   const {
     lotId,
     openingPts = 1200,
+    pressCostPts = 1,
     currentPts = openingPts,
     round = 1,
     openedMsAgo = 60_000,
@@ -125,11 +128,11 @@ export async function seedRunningLot(
     await client.query(
       `INSERT INTO lots (id, code, title, maker, year, category, note, provenance,
                          condition, dimensions, estimate_low_pts, estimate_high_pts,
-                         opening_pts, starts_at)
+                         opening_pts, press_cost_pts, starts_at)
        VALUES ($1, $2, 'Тест лот', 'Тодорхойгүй', '2026', 'antique', '', '', '', '',
-               $3, $4, $3, $5)
+               $3, $4, $3, $6, $5)
        ON CONFLICT (id) DO NOTHING`,
-      [lotId, `ЛОТ ${lotId}`, openingPts, openingPts * 2, opensAt],
+      [lotId, `ЛОТ ${lotId}`, openingPts, openingPts * 2, opensAt, pressCostPts],
     );
 
     await client.query(

@@ -1,89 +1,65 @@
 "use client";
 
-import { useId, useState } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  LATE_JOIN_PENALTY_PTS,
-  bidBasePts,
-  isLegalBid,
-  minIncrementPts,
-  minNextBidPts,
-  quickStepsPts,
-} from "@/lib/auction";
+import { motion } from "framer-motion";
 import { t } from "@/lib/copy";
-import { pts, ptsToMnt } from "@/lib/format";
+import { pts } from "@/lib/format";
 import type { RoomState } from "@/lib/types";
 
+/**
+ * The lot's one control: a button that costs `pressCostPts` a press.
+ *
+ * Named for the bid panel it used to be. There is nothing to choose — no
+ * amount, no step — because a press has no price of its own (auction.ts): it
+ * spends the lot's price from the balance, adds one to this presser's count,
+ * and makes them the last presser, who takes the lot if the clock runs out.
+ */
 export function BidPanel({
   state,
   isYourLead,
   leaderName,
   canBid,
   balancePts,
-  shortOfJoinFee,
   rejection,
-  onBid,
+  onPress,
 }: {
   state: RoomState;
+  /** This viewer pressed last. */
   isYourLead: boolean;
-  /** The leader's real name — shown for the winner when the lot is sold. */
+  /** The last presser's real name — shown for the winner when the lot is sold. */
   leaderName: string | null;
   /**
    * Signed in, phone verified, not suspended.
    *
-   * ⚠ A UX gate, not a control. The server re-checks all three on every bid —
-   * see src/app/actions/bid.ts. What this buys is that a signed-out visitor is
-   * shown a sign-in link instead of a button that fails.
+   * ⚠ A UX gate, not a control. The server re-checks all three on every press
+   * — see src/app/actions/bid.ts. What this buys is that a signed-out visitor
+   * is shown a sign-in link instead of a button that fails.
    */
   canBid: boolean;
-  /** The viewer's points. Shown only where they decide something. */
+  /** The viewer's points, as of the last render. */
   balancePts: number;
-  /**
-   * This bidder cannot cover the join fee, so their first bid on this lot will
-   * be refused. Computed in AuctionRoom, where the round is.
-   *
+  /** The server's reason for turning the last press down, already translated. */
+  rejection: string | null;
+  onPress: () => void;
+}) {
+  const { currentPts, outcome, leader, yourCount } = state;
+  const cost = state.lot.pressCostPts;
+
+  /*
    * ⚠ A UX gate like `canBid`, not a control. The balance is charged and
    * checked in one statement on the server (`bids.ts`), which is what actually
    * stops an overdraw; this only means somebody is told before they tap rather
    * than after.
    */
-  shortOfJoinFee: boolean;
-  /** The server's reason for turning the last bid down, already translated. */
-  rejection: string | null;
-  onBid: (points: number) => void;
-}) {
-  const { currentPts, round, hasBid, outcome, leader, yourPts } = state;
-
-  /*
-   * Built on the bidder's OWN price, not the lot's: every bidder raises their
-   * own, from the opening price. The server prices it the same way.
-   */
-  const basePts = bidBasePts(yourPts, state.lot.openingPts);
-  const minStep = minIncrementPts(round, hasBid);
-  const minTotal = minNextBidPts(basePts, round, hasBid);
-  const steps = quickStepsPts(round, hasBid);
-  const isLateEntry = !hasBid && round >= 2;
-
-  const [chosenStep, setChosenStep] = useState<number | null>(null);
-  const [customOpen, setCustomOpen] = useState(false);
-  const [custom, setCustom] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const customId = useId();
-
-  const step =
-    chosenStep !== null && chosenStep >= minStep ? chosenStep : minStep;
-
-  const total = basePts + step;
+  const short = canBid && balancePts < cost;
 
   /*
    * The result.
    *
    * `review` never reaches this component — AuctionRoom swaps the whole panel
-   * for DecisionPanel while the house decides, because announcing anything here
-   * would mean printing a hammer price and a winner nobody has agreed to. So
-   * this only ever appears as the END of that wait, arriving over the stream,
-   * and it comes in with a short rise to mark that the answer has landed.
+   * for DecisionPanel while the lot closes. So this only ever appears as the END
+   * of that wait, arriving over the stream, and it comes in with a short rise to
+   * mark that the answer has landed.
    *
    * The rise starts from a dimmed panel rather than an invisible one. Motion
    * renders `initial` into the server HTML, and a panel that began at opacity 0
@@ -100,19 +76,15 @@ export function BidPanel({
         <p className="eyebrow">
           {outcome === "sold" ? t.room.soldNote : t.room.unsold}
         </p>
-        <p className="display mt-2 text-5xl text-flare">
+        <p className="display text-flare mt-2 text-5xl">
           {outcome === "sold" ? t.room.sold : t.room.unsold}
         </p>
         {outcome === "sold" && (
-          <dl className="mt-4 flex items-end justify-between gap-4 border-t border-line pt-3">
+          <dl className="border-line mt-4 flex items-end justify-between gap-4 border-t pt-3">
             <div>
-              <dt className="eyebrow">{t.room.soldFor}</dt>
-              <dd data-numerals className="mt-1 text-xl font-medium text-ink">
-                {pts(currentPts)}{" "}
-                <span className="text-sm text-muted">{t.common.point}</span>
-              </dd>
-              <dd data-numerals className="text-sm text-muted">
-                {ptsToMnt(currentPts)}
+              <dt className="eyebrow">{t.room.totalPresses}</dt>
+              <dd data-numerals className="text-ink mt-1 text-xl font-medium">
+                {t.room.times(currentPts)}
               </dd>
             </div>
             <div className="text-right">
@@ -132,200 +104,91 @@ export function BidPanel({
     );
   }
 
-  function commit(points: number) {
-    /*
-     * ⚠ This check is an affordance, not a control: it saves a round trip on an
-     * obviously low bid and gives immediate feedback. The server runs the same
-     * function under a row lock and its answer is the one that counts.
-     */
-    if (!isLegalBid(points, basePts, round, hasBid)) {
-      setError(t.room.tooLow(minTotal));
-      return;
-    }
-    setError(null);
-    setCustom("");
-    setCustomOpen(false);
-    onBid(points);
-    setChosenStep(null);
-  }
-
   return (
-    <div className="border-line bg-surface/95 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md short:pt-2.5 lg:border lg:p-5 lg:pb-5">
-      {/* Status line */}
+    <div className="border-line bg-surface/95 short:pt-2.5 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md lg:border lg:p-5 lg:pb-5">
       {/*
-        At 320px the label takes two lines and the figure beside it broke across
-        them mid-number. `min-w-0` lets the label shrink, and each figure is
-        kept whole with the tugrik amount allowed to drop to its own line rather
-        than splitting — a price that wraps between its digits and its currency
-        is unreadable at exactly the moment it matters.
+        What a press costs, what this presser has pressed, and what they have
+        left to press with — the three numbers a press decides on. At 320px a
+        label may take two lines; `min-w-0` lets it, and each figure is kept
+        whole rather than wrapping between its digits and its unit.
       */}
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="eyebrow min-w-0">{t.room.minNext}</p>
-        <p className="shrink-0 text-right">
-          <span
+      <dl className="grid grid-cols-3 gap-2 text-xs">
+        <div className="min-w-0">
+          <dt className="eyebrow">{t.room.pressCost}</dt>
+          <dd
             data-numerals
-            className="text-sm font-semibold text-ink whitespace-nowrap"
+            className="text-ink mt-1 text-sm font-semibold whitespace-nowrap"
           >
-            {pts(minTotal)}{" "}
-            <span className="font-normal text-muted">{t.common.point}</span>
-          </span>
-          <span
-            data-numerals
-            className="ml-2 inline-block text-xs text-faint whitespace-nowrap"
-          >
-            {ptsToMnt(minTotal)}
-          </span>
-        </p>
-      </div>
-
-      {yourPts !== null && (
-        <div className="mt-1.5 flex items-baseline justify-between gap-2">
-          <p className="eyebrow min-w-0">{t.room.yourPrice}</p>
-          <p
-            data-numerals
-            className="shrink-0 text-sm font-semibold text-flare whitespace-nowrap"
-          >
-            {pts(yourPts)}{" "}
-            <span className="font-normal text-muted">{t.common.point}</span>
-          </p>
+            {pts(cost)}{" "}
+            <span className="text-muted font-normal">{t.common.point}</span>
+          </dd>
         </div>
-      )}
+        <div className="min-w-0 text-center">
+          <dt className="eyebrow">{t.room.yourCount}</dt>
+          <dd
+            data-numerals
+            className="text-flare mt-1 text-sm font-semibold whitespace-nowrap"
+          >
+            {t.room.times(yourCount ?? 0)}
+          </dd>
+        </div>
+        <div className="min-w-0 text-right">
+          <dt className="eyebrow">{t.room.balance}</dt>
+          <dd
+            data-numerals
+            className="text-ink-soft mt-1 text-sm font-semibold whitespace-nowrap"
+          >
+            {canBid ? pts(balancePts) : "—"}{" "}
+            {canBid && (
+              <span className="text-muted font-normal">{t.common.point}</span>
+            )}
+          </dd>
+        </div>
+      </dl>
 
       {isYourLead && (
-        <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-olive">
-          <span aria-hidden className="size-1.5 rounded-full bg-olive animate-ping" />
+        <p className="text-olive mt-2.5 flex items-center gap-1.5 text-xs font-medium">
+          <span
+            aria-hidden
+            className="bg-olive size-1.5 animate-ping rounded-full"
+          />
           {t.room.youLead}
         </p>
       )}
 
-      {isLateEntry && (
-        <p className="mt-2 border-l-2 border-flare pl-2.5 text-xs leading-snug text-muted">
-          {t.room.lateEntryHint(round, minStep)}
-        </p>
-      )}
-
-      {/* Step chips + custom toggle */}
-      <div className="mt-3 flex items-center gap-1.5 short:mt-2">
-        {steps.map((s) => (
-          <motion.button
-            key={s}
-            type="button"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => {
-              setChosenStep(s);
-              setCustomOpen(false);
-              setError(null);
-            }}
-            aria-pressed={step === s && !customOpen}
-            data-numerals
-            className={`h-11 flex-1 touch-manipulation border text-sm font-semibold transition-colors ${
-              step === s && !customOpen
-                ? "border-flare bg-flare/15 text-flare font-bold"
-                : "border-line text-ink-soft hover:border-line-strong hover:text-ink"
-            }`}
-          >
-            +{pts(s)}
-          </motion.button>
-        ))}
-        <motion.button
-          type="button"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => {
-            setCustomOpen((o) => !o);
-            setError(null);
-          }}
-          aria-expanded={customOpen}
-          className={`eyebrow h-11 shrink-0 touch-manipulation border px-3 transition-colors ${
-            customOpen
-              ? "border-flare text-flare bg-flare/10"
-              : "border-line hover:border-line-strong hover:text-ink"
-          }`}
-        >
-          {t.room.custom}
-        </motion.button>
-      </div>
-
-      <AnimatePresence>
-        {customOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="mt-2 flex items-center gap-1.5 overflow-hidden"
-          >
-            <label htmlFor={customId} className="sr-only">
-              {t.room.custom}
-            </label>
-            <input
-              id={customId}
-              type="number"
-              inputMode="numeric"
-              min={minTotal}
-              step={1}
-              value={custom}
-              onChange={(e) => {
-                setCustom(e.target.value);
-                setError(null);
-              }}
-              placeholder={pts(minTotal)}
-              data-numerals
-              className="h-11 min-w-0 flex-1 border border-line bg-ground px-3 text-base font-semibold text-ink placeholder:font-normal placeholder:text-faint focus:border-flare focus:outline-none font-sans"
-            />
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.96 }}
-              onClick={() => commit(Number.parseInt(custom, 10))}
-              className="eyebrow h-11 shrink-0 border border-line-strong px-4 text-ink transition-colors hover:border-flare hover:text-flare"
-            >
-              {t.room.customApply}
-            </motion.button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Main Bid Commit Button */}
+      {/* The press. */}
       <motion.button
         type="button"
         whileHover={{ scale: 1.01 }}
         whileTap={{ scale: 0.97 }}
-        onClick={() => commit(total)}
-        disabled={!canBid || shortOfJoinFee}
-        className="mt-2.5 flex h-14 short:h-12 w-full touch-manipulation items-center justify-between gap-3 bg-accent px-4 text-accent-ink transition-colors duration-150 disabled:opacity-60 font-sans shadow-lg"
+        onClick={onPress}
+        disabled={!canBid || short}
+        className="bg-accent text-accent-ink short:h-12 mt-3 flex h-14 w-full touch-manipulation items-center justify-between gap-3 px-4 font-sans shadow-lg transition-colors duration-150 disabled:opacity-60"
       >
         {/*
-          Always the plain label — never a "bidding…" pending state. The bid is
-          applied optimistically on the click frame (the price, the clock and
+          Always the plain label — never a "pressing…" pending state. The press
+          is applied optimistically on the click frame (the count, the clock and
           the feed all move at once), so a spinner here would be a loading
-          indicator for something that has already visibly happened. The whileTap
-          press is the only acknowledgement the tap needs.
+          indicator for something that has already visibly happened.
         */}
         <span className="text-[0.8125rem] font-bold tracking-[0.14em] uppercase">
           {t.room.placeBid}
         </span>
-        <span data-numerals className="text-right">
-          <span className="block text-base leading-tight font-bold">
-            +{pts(step)} → {pts(total)}
-          </span>
-          <span className="block text-[0.6875rem] leading-tight opacity-75">
-            {ptsToMnt(total)}
-          </span>
+        <span data-numerals className="text-base leading-tight font-bold">
+          −{pts(cost)} {t.common.point}
         </span>
       </motion.button>
 
       {/*
-        A signed-out visitor sees the whole panel — the price, the minimum, the
-        step chips — and one link. Hiding it would make the room unreadable to
-        anyone deciding whether to register, which is exactly who needs to read
-        it.
+        A signed-out visitor sees the whole panel — the price, the counts — and
+        one link. Hiding it would make the room unreadable to anyone deciding
+        whether to register, which is exactly who needs to read it.
       */}
       {!canBid && (
-        <p className="mt-2 text-xs leading-relaxed text-muted">
+        <p className="text-muted mt-2 text-xs leading-relaxed">
           <Link
             href={`/login?redirect=/auction/${state.lot.id}`}
-            className="font-medium text-flare underline underline-offset-2"
+            className="text-flare font-medium underline underline-offset-2"
           >
             {t.room.signInToBid}
           </Link>
@@ -333,36 +196,33 @@ export function BidPanel({
       )}
 
       {/*
-        Said here rather than left to the server's rejection. The bid would be
+        Said here rather than left to the server's rejection. The press would be
         refused for funds, and the difference between learning that before the
         tap and after it is the difference between a route out — top up — and a
         dead button with an error under it.
       */}
-      {canBid && shortOfJoinFee && (
-        <p className="mt-2 text-xs leading-relaxed text-rust">
-          {t.room.joinFeeShort(LATE_JOIN_PENALTY_PTS, balancePts)}{" "}
+      {short && (
+        <p className="text-rust mt-2 text-xs leading-relaxed">
+          {t.room.pressShort(cost, balancePts)}{" "}
           <Link
             href="/wallet"
-            className="font-medium text-flare underline underline-offset-2"
+            className="text-flare font-medium underline underline-offset-2"
           >
             {t.room.topUp}
           </Link>
         </p>
       )}
 
-      {/* Local validation first, then whatever the server said. Both are shown
-          in the same place so a bidder does not have to look in two. */}
-      {(error || rejection) && (
+      {rejection && (
         <motion.p
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           role="alert"
-          className="mt-2 text-xs font-medium text-rust"
+          className="text-rust mt-2 text-xs font-medium"
         >
-          {error ?? rejection}
+          {rejection}
         </motion.p>
       )}
     </div>
   );
 }
-

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  balanceFor,
   bidsOf,
   currentPts,
   makeBidder,
@@ -18,59 +19,28 @@ import {
  */
 
 /*
- * The app groups digits with U+2009 THIN SPACE, not a plain space. See
- * groupNumber in src/lib/format.ts, which is hand-rolled precisely because
- * Intl's mn-MN separator differs between Node and browser ICU builds. A test
- * typing a normal space matches nothing at all, which is how these assertions
- * failed for as long as nobody ran them.
+ * The headline number: the lot's total presses.
+ *
+ * Located by the live region it sits in, and by its screen-reader copy
+ * specifically, not the visible one. RollingNumber counts to a new value
+ * rather than jumping to it, so the visible span holds intermediate values for
+ * a few hundred milliseconds; the sr-only span is always the settled figure.
  */
-const THIN = " ";
+const TOTAL = 'p[aria-live="polite"][aria-atomic="true"] span.sr-only';
 
-/*
- * The headline price.
- *
- * `getByText` on the number alone matches five things — the estimate range, the
- * tugrik conversion, and the copies of both in the aside. So it is located by
- * the live region it sits in.
- *
- * The screen-reader copy specifically, not the visible one. RollingNumber
- * counts to a new price rather than jumping to it, so the visible span holds
- * intermediate values for a few hundred milliseconds; the sr-only span is
- * always the settled figure. Asserting on it is both what the number IS and
- * immune to catching the animation mid-count.
- *
- * (It used to assert an aria-label, because the odometer this replaced put all
- * ten digits of every column in the DOM and the text was unreadable.)
- */
-const PRICE = 'p[aria-live="polite"][aria-atomic="true"] span.sr-only';
-
-/*
- * The app's digit grouping, thin space and all — the same loop as groupNumber
- * in src/lib/format.ts. Copied rather than imported: format.ts pulls in
- * auction.ts, which reads NEXT_PUBLIC_ROUND_TIME_SCALE and has opinions about
- * the environment it is loaded in. Six lines is cheaper than giving the test
- * process a reason to care.
- */
-function grouped(n: number): string {
-  const digits = String(n);
-  let out = "";
-  for (let i = 0; i < digits.length; i++) {
-    if (i > 0 && (digits.length - i) % 3 === 0) out += THIN;
-    out += digits[i];
-  }
-  return out;
-}
+/* The press button, whose name also carries what it costs: "Дарах −1 оноо". */
+const PRESS = { name: /^Дарах/ } as const;
 
 test.beforeEach(async () => {
   await reset();
 });
 
-test("a signed-in bidder can place a bid and the price moves", async ({
+test("a signed-in presser presses, is charged, and the count moves", async ({
   page,
 }) => {
-  await makeLiveLot("E01", 1200);
-  const bidder = await makeBidder("99110001", "Т-201");
-  await signIn(page, bidder);
+  await makeLiveLot("E01", 3);
+  const presser = await makeBidder("99110001", "Т-201");
+  await signIn(page, presser);
 
   await page.goto("/auction/E01");
 
@@ -79,87 +49,72 @@ test("a signed-in bidder can place a bid and the price moves", async ({
     page.getByRole("heading", { name: "Хүрэл цоморлиг" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: /Үнэ хаях/ }).click();
+  await page.getByRole("button", PRESS).click();
 
   /*
-   * Asserted against the DATABASE, not the DOM. The client applies the bid
+   * Asserted against the DATABASE, not the DOM. The client applies the press
    * optimistically, so a DOM assertion would pass even if the Server Function
-   * had rejected it — which is precisely the failure this test exists to catch.
+   * had refused it — which is precisely the failure this test exists to catch.
    */
   await expect
     .poll(() => currentPts("E01"), { timeout: 10_000 })
-    .toBeGreaterThan(1200);
+    .toBe(1);
+  expect(await bidsOf("E01", presser.phone)).toEqual([1]);
+  expect(await balanceFor(presser.phone)).toBe(497);
 });
 
 test("a signed-out visitor sees the room but is asked to sign in", async ({
   page,
 }) => {
-  await makeLiveLot("E02", 1200);
+  await makeLiveLot("E02", 2);
   await page.goto("/auction/E02");
 
-  // The whole panel is readable — the price, the minimum, the steps. Hiding it
+  // The whole panel is readable — what a press costs, the counts. Hiding it
   // would make the room unintelligible to exactly the people deciding whether
   // to register.
-  await expect(page.getByText(/Дараагийн доод үнэ/)).toBeVisible();
+  await expect(page.getByText("Нэг дарах", { exact: true }).first()).toBeVisible();
   await expect(
-    page.getByRole("link", { name: /Хаялт хийхийн тулд нэвтэрнэ үү/ }),
+    page.getByRole("link", { name: /Дарахын тулд нэвтэрнэ үү/ }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: /Үнэ хаях/ })).toBeDisabled();
+  await expect(page.getByRole("button", PRESS)).toBeDisabled();
 
   // And nothing reached the database.
-  expect(await currentPts("E02")).toBe(1200);
+  expect(await currentPts("E02")).toBe(0);
 });
 
-test("a second tab sees the bid without reloading", async ({ browser }) => {
-  await makeLiveLot("E03", 1200);
+test("a second tab sees the press without reloading", async ({ browser }) => {
+  await makeLiveLot("E03");
   const alice = await makeBidder("99110002", "Т-202");
-  await makeBidder("99110003", "Т-203");
 
   const watcher = await browser.newContext();
   const watcherPage = await watcher.newPage();
   await watcherPage.goto("/auction/E03");
-  await expect(watcherPage.locator(PRICE)).toHaveText(`1${THIN}200`);
+  await expect(watcherPage.locator(TOTAL)).toHaveText("0");
 
-  const bidderContext = await browser.newContext();
-  const bidderPage = await bidderContext.newPage();
-  await signIn(bidderPage, alice);
-  await bidderPage.goto("/auction/E03");
-  await bidderPage.getByRole("button", { name: /Үнэ хаях/ }).click();
+  const presserContext = await browser.newContext();
+  const presserPage = await presserContext.newPage();
+  await signIn(presserPage, alice);
+  await presserPage.goto("/auction/E03");
+  await presserPage.getByRole("button", PRESS).click();
+  await expect.poll(() => currentPts("E03"), { timeout: 10_000 }).toBe(1);
 
   /*
    * The watcher never navigated. If this fails, the SSE stream is not
    * delivering — which is the single most load-bearing piece of the room and
-   * the one a bidder would experience as a frozen price.
+   * the one a presser would experience as a frozen count.
    */
-  /*
-   * What the increment is is not this test's business — bids.ts owns that, and
-   * hard-coding it here made an unrelated rule look like a broken stream: the
-   * tab was updating correctly to 1 220 while the assertion waited for 1 201.
-   * Read what the bid actually did, then require the untouched tab to show it.
-   */
-  await expect
-    .poll(() => currentPts("E03"), { timeout: 10_000 })
-    .toBeGreaterThan(1200);
-  const moved = await currentPts("E03");
-
-  await expect(watcherPage.locator(PRICE)).toHaveText(grouped(moved), {
+  await expect(watcherPage.locator(TOTAL)).toHaveText("1", {
     timeout: 15_000,
   });
 
   await watcher.close();
-  await bidderContext.close();
+  await presserContext.close();
 });
 
-test("each bidder raises their own price, and a double tap is two steps", async ({
+test("each presser counts their own, the last one leads, and a double tap is two presses", async ({
   browser,
 }) => {
-  /*
-   * No increments are hard-coded. The test server compresses time, so the
-   * round — and with it the step and the late-entry floor — moves while this
-   * runs. What is asserted is the rule: Bob's price is built on his own, far
-   * below the lot's, and each of his taps is one step on it.
-   */
-  await makeLiveLot("E05", 1200);
+  await makeLiveLot("E05");
   const alice = await makeBidder("99110005", "Т-205");
   const bob = await makeBidder("99110006", "Т-206");
 
@@ -167,76 +122,77 @@ test("each bidder raises their own price, and a double tap is two steps", async 
   const alicePage = await aliceContext.newPage();
   await signIn(alicePage, alice);
   await alicePage.goto("/auction/E05");
-  await alicePage.getByRole("button", { name: /Өөр дүн/ }).click();
-  await alicePage.getByLabel("Өөр дүн").fill("1500");
-  await alicePage.getByRole("button", { name: /^Хаях$/ }).click();
-  await expect.poll(() => currentPts("E05")).toBe(1500);
+  for (let i = 0; i < 3; i++) {
+    await alicePage.getByRole("button", PRESS).click();
+  }
+  await expect
+    .poll(() => bidsOf("E05", alice.phone), { timeout: 10_000 })
+    .toEqual([1, 2, 3]);
 
   const bobContext = await browser.newContext();
   const bobPage = await bobContext.newPage();
   await signIn(bobPage, bob);
   await bobPage.goto("/auction/E05");
-  await expect(bobPage.locator(PRICE)).toHaveText(`1${THIN}500`);
+  await expect(bobPage.locator(TOTAL)).toHaveText("3");
 
-  // Two taps without waiting for the first.
-  const bobBid = bobPage.getByRole("button", { name: /Үнэ хаях/ });
-  await bobBid.click();
-  await bobBid.click();
+  // Two taps without waiting for the first: two presses, counted from his own.
+  const press = bobPage.getByRole("button", PRESS);
+  await press.click();
+  await press.click();
   await expect
-    .poll(() => bidsOf("E05", "99110006"), { timeout: 10_000 })
-    .toHaveLength(2);
-  const [first, second] = await bidsOf("E05", "99110006");
+    .poll(() => bidsOf("E05", bob.phone), { timeout: 10_000 })
+    .toEqual([1, 2]);
+  expect(await currentPts("E05")).toBe(5);
 
-  // Built on his own price — the opening — not on Alice's 1 500.
-  expect(first!).toBeGreaterThan(1200);
-  expect(first!).toBeLessThan(1500);
-  // The second tap is a step on the first, not a refusal.
-  expect(second!).toBeGreaterThan(first!);
-  expect(second! - first!).toBeLessThanOrEqual(2);
-  await expect(bobPage.getByText(/хэтэрхий бага/)).toHaveCount(0);
-
-  // His price is shown as his, and the lot's is still Alice's.
+  // His count is his own, and pressing last is what leads — not pressing most.
   await expect(
-    bobPage.getByText("Таны үнэ", { exact: true }).first(),
+    bobPage.getByText("2 удаа", { exact: true }).filter({ visible: true }),
   ).toBeVisible();
-  await expect(bobPage.locator(PRICE)).toHaveText(`1${THIN}500`);
-  expect(await currentPts("E05")).toBe(1500);
+  await expect(
+    bobPage.getByText(/Та сүүлд дарсан/).filter({ visible: true }).first(),
+  ).toBeVisible();
+  await expect(
+    alicePage
+      .getByText("Таны араас өөр хүн дарсан")
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible({
+    timeout: 15_000,
+  });
 
   await aliceContext.close();
   await bobContext.close();
 });
 
-test("a custom amount below the minimum is refused and nothing moves", async ({
+test("a presser who cannot cover a press is told before tapping", async ({
   page,
 }) => {
-  await makeLiveLot("E04", 1200);
-  const bidder = await makeBidder("99110004", "Т-204");
-  await signIn(page, bidder);
+  await makeLiveLot("E04", 5);
+  const presser = await makeBidder("99110004", "Т-204", 3);
+  await signIn(page, presser);
   await page.goto("/auction/E04");
 
-  await page.getByRole("button", { name: /Өөр дүн/ }).click();
-  // Found by its (screen-reader-only) label rather than by the placeholder,
-  // which is a formatted number and moves whenever the price does.
-  // The standing price itself. Illegal in every round — a bid must exceed it.
-  await page.getByLabel("Өөр дүн").fill("1200");
-  await page.getByRole("button", { name: /^Хаях$/ }).click();
-
-  await expect(page.locator('p[role="alert"]')).toBeVisible();
-  expect(await currentPts("E04")).toBe(1200);
+  await expect(
+    page.getByText("Нэг дарахад 5 оноо шаардана. Танд 3 оноо байна."),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Оноо цэнэглэх" })).toBeVisible();
+  await expect(page.getByRole("button", PRESS)).toBeDisabled();
+  expect(await currentPts("E04")).toBe(0);
+  expect(await balanceFor(presser.phone)).toBe(3);
 
   /*
-   * This covers the panel refusing a typed amount. The SERVER never refuses
-   * for price — it raises a low bid to the bidder's own minimum instead, so a
-   * double tap is two steps — which is proved in
-   * src/lib/repo/bids.integration.test.ts, calling `placeBid` directly.
+   * This covers the panel. The SERVER's refusal — the balance checked and
+   * charged in one statement, so simultaneous presses cannot overdraw it — is
+   * proved in src/lib/repo/bids.integration.test.ts, calling `placeBid`
+   * directly.
    */
 });
 
 test("an unverified account is refused at the panel and at the server", async ({
   page,
 }) => {
-  await makeLiveLot("E05", 1200);
-  const bidder = await makeBidder("99110005", "Т-205");
+  await makeLiveLot("E06");
+  const presser = await makeBidder("99110007", "Т-207");
 
   /*
    * Sign in FIRST, then strip the verification.
@@ -247,7 +203,7 @@ test("an unverified account is refused at the panel and at the server", async ({
    * exactly what it is being asked about — a live session whose account is not
    * verified — instead of never getting past the login form.
    */
-  await signIn(page, bidder);
+  await signIn(page, presser);
 
   const { Client } = await import("pg");
   const client = new Client({
@@ -258,12 +214,12 @@ test("an unverified account is refused at the panel and at the server", async ({
   await client.connect();
   await client.query(
     "UPDATE users SET phone_verified_at = NULL WHERE phone = $1",
-    [bidder.phone],
+    [presser.phone],
   );
   await client.end();
 
-  await page.goto("/auction/E05");
+  await page.goto("/auction/E06");
 
-  await expect(page.getByRole("button", { name: /Үнэ хаях/ })).toBeDisabled();
-  expect(await currentPts("E05")).toBe(1200);
+  await expect(page.getByRole("button", PRESS)).toBeDisabled();
+  expect(await currentPts("E06")).toBe(0);
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   adjustBalanceAction,
@@ -20,8 +20,12 @@ import {
   updateLotAction,
   type AdminState,
 } from "@/app/actions/admin";
+import { LotCard } from "@/components/lot/LotCard";
 import { POINT_MNT } from "@/lib/auction";
 import { t } from "@/lib/copy";
+import { estimateText, pts } from "@/lib/format";
+import { parseHouseTime } from "@/lib/house-time";
+import type { Lot, LotCategory } from "@/lib/types";
 import { MAX_BONUS_PTS, MAX_PAYMENT_MNT } from "@/lib/validation";
 
 /**
@@ -103,9 +107,10 @@ export interface LotFormValues {
   maker: string;
   year: string;
   category: string;
+  /** 0 when not given — shown as an empty box. */
   estimateLowPts: number;
   estimateHighPts: number;
-  openingPts: number;
+  pressCostPts: number;
   dimensions: string;
   condition: string;
   provenance: string;
@@ -188,7 +193,18 @@ export function EditLotForm({
 
   return (
     <form action={action} className="border-line w-full border p-5">
-      <LotFields lot={lot} editing scheduleLocked={scheduleLocked} />
+      {/*
+        Keyed on the saved values, so a save that changes them remounts the
+        fields with what is now stored rather than with what was typed. Only
+        the fields: the form itself stays, and with it the message saying the
+        save went through.
+      */}
+      <LotFields
+        key={JSON.stringify(lot)}
+        lot={lot}
+        editing
+        scheduleLocked={scheduleLocked}
+      />
       <div className="mt-5">
         <Submit label={t.admin.save} />
       </div>
@@ -197,6 +213,56 @@ export function EditLotForm({
   );
 }
 
+/** The form's fields as typed — what the preview is drawn from. */
+interface LotDraft {
+  id: string;
+  code: string;
+  title: string;
+  maker: string;
+  year: string;
+  category: string;
+  estimateLowPts: string;
+  estimateHighPts: string;
+  pressCostPts: string;
+  dimensions: string;
+  condition: string;
+  provenance: string;
+  opensAt: string;
+  note: string;
+}
+
+const DRAFT_KEYS = [
+  "id",
+  "code",
+  "title",
+  "maker",
+  "year",
+  "category",
+  "estimateLowPts",
+  "estimateHighPts",
+  "pressCostPts",
+  "dimensions",
+  "condition",
+  "provenance",
+  "opensAt",
+  "note",
+] as const satisfies readonly (keyof LotDraft)[];
+
+function readDraft(form: HTMLFormElement): LotDraft {
+  const data = new FormData(form);
+  const draft = {} as LotDraft;
+  for (const key of DRAFT_KEYS) {
+    const value = data.get(key);
+    draft[key] = typeof value === "string" ? value : "";
+  }
+  return draft;
+}
+
+/**
+ * Only the name, the opening time and the press price are required
+ * (`lotSchema`). Everything else may be left empty: the id takes the next free
+ * number, the code takes the id, and an estimate left out is "not given".
+ */
 function LotFields({
   lot,
   editing = false,
@@ -207,148 +273,296 @@ function LotFields({
   scheduleLocked?: boolean;
 }) {
   const locked = `${field} read-only:text-muted read-only:border-dashed`;
+  /*
+   * The gallery is held here rather than in `ImagesField`, because an upload
+   * changes it without an input event the preview could hear.
+   */
+  const [images, setImages] = useState(lot?.images ?? "");
+  const [draft, setDraft] = useState<LotDraft | null>(null);
+  const fieldsRef = useRef<HTMLDivElement>(null);
+
+  const sync = () => {
+    const form = fieldsRef.current?.closest("form");
+    if (form) setDraft(readDraft(form));
+  };
+
+  useEffect(() => {
+    const form = fieldsRef.current?.closest("form");
+    if (!form) return;
+    setDraft(readDraft(form));
+    /*
+     * React resets the form after its action returns. The reset event fires
+     * BEFORE the fields are cleared, so the read waits a tick.
+     */
+    const onReset = () => setTimeout(() => setDraft(readDraft(form)), 0);
+    form.addEventListener("reset", onReset);
+    return () => form.removeEventListener("reset", onReset);
+  }, []);
 
   return (
-    <>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {/* In the lot's URL and on every bid placed on it: fixed once made. */}
-        <Labelled label={t.admin.lotId}>
-          <input
-            name="id"
-            required
-            maxLength={32}
-            readOnly={editing}
-            defaultValue={lot?.id}
-            className={locked}
-            placeholder="014"
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start">
+      <div ref={fieldsRef} onChange={sync}>
+        <p className="text-muted mb-4 text-xs">{t.admin.requiredNote}</p>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {/* In the lot's URL and on every press made on it: fixed once made. */}
+          <Labelled label={t.admin.lotId}>
+            <input
+              name="id"
+              maxLength={32}
+              readOnly={editing}
+              defaultValue={lot?.id}
+              className={locked}
+              placeholder={editing ? undefined : t.admin.lotIdAuto}
+            />
+          </Labelled>
+          <Labelled label={t.admin.lotCode}>
+            <input
+              name="code"
+              maxLength={40}
+              defaultValue={lot?.code}
+              className={field}
+              placeholder={t.admin.lotCodeAuto}
+            />
+          </Labelled>
+          {/*
+            `t.admin.lotTitle`, not `t.lot.viewLot`. The item's name is the most
+            consequential field on this form and it was labelled with the string
+            the catalogue uses for its "view the lot" link — so the box an
+            operator types the title into read "Лотыг үзэх".
+          */}
+          <Labelled label={`${t.admin.lotTitle} *`}>
+            <input
+              name="title"
+              required
+              defaultValue={lot?.title}
+              className={field}
+            />
+          </Labelled>
+          <Labelled label={`${t.admin.pressCost} *`}>
+            <input
+              name="pressCostPts"
+              type="number"
+              min={1}
+              step={1}
+              required
+              readOnly={scheduleLocked}
+              defaultValue={lot?.pressCostPts ?? 1}
+              className={locked}
+            />
+          </Labelled>
+          {/*
+            `datetime-local` carries no zone. The server reads it as Ulaanbaatar
+            time (src/lib/house-time.ts) whatever zone the server is in — and the
+            label says so, because the person typing it might not be in one.
+          */}
+          <Labelled label={`${t.lot.startsAt} · ${t.admin.houseTime} *`}>
+            <input
+              name="opensAt"
+              type="datetime-local"
+              required
+              readOnly={scheduleLocked}
+              defaultValue={lot?.opensAt}
+              className={locked}
+            />
+          </Labelled>
+          <Labelled label={t.admin.category}>
+            <select
+              name="category"
+              defaultValue={lot?.category ?? "antique"}
+              className={field}
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </Labelled>
+          <Labelled label={t.lot.maker}>
+            <input name="maker" defaultValue={lot?.maker} className={field} />
+          </Labelled>
+          <Labelled label={t.lot.year}>
+            <input name="year" defaultValue={lot?.year} className={field} />
+          </Labelled>
+          {/* 0 is how "not given" is stored; it shows as an empty box. */}
+          <Labelled label={`${t.lot.estimate} — ${t.admin.low}`}>
+            <input
+              name="estimateLowPts"
+              type="number"
+              min={0}
+              defaultValue={lot?.estimateLowPts || ""}
+              className={field}
+            />
+          </Labelled>
+          <Labelled label={`${t.lot.estimate} — ${t.admin.high}`}>
+            <input
+              name="estimateHighPts"
+              type="number"
+              min={0}
+              defaultValue={lot?.estimateHighPts || ""}
+              className={field}
+            />
+          </Labelled>
+          <Labelled label={t.lot.dimensions}>
+            <input
+              name="dimensions"
+              defaultValue={lot?.dimensions}
+              className={field}
+            />
+          </Labelled>
+          <Labelled label={t.lot.condition}>
+            <input
+              name="condition"
+              defaultValue={lot?.condition}
+              className={field}
+            />
+          </Labelled>
+          <Labelled label={t.lot.provenance}>
+            <input
+              name="provenance"
+              defaultValue={lot?.provenance}
+              className={field}
+            />
+          </Labelled>
+        </div>
+        {scheduleLocked && (
+          <p className="text-muted mt-2 text-xs">{t.admin.scheduleLocked}</p>
+        )}
+
+        <Labelled label={t.lot.note} className="mt-4">
+          <textarea
+            name="note"
+            rows={5}
+            defaultValue={lot?.note}
+            className={`${field} h-auto py-2`}
           />
         </Labelled>
-        <Labelled label={t.admin.lotCode}>
-          <input
-            name="code"
-            required
-            defaultValue={lot?.code}
-            className={field}
-            placeholder="ЛОТ 014"
-          />
-        </Labelled>
-        {/*
-          `t.admin.lotTitle`, not `t.lot.viewLot`. The item's name is the most
-          consequential field on this form and it was labelled with the string
-          the catalogue uses for its "view the lot" link — so the box an
-          operator types the title into read "Лотыг үзэх".
-        */}
-        <Labelled label={t.admin.lotTitle}>
-          <input
-            name="title"
-            required
-            defaultValue={lot?.title}
-            className={field}
-          />
-        </Labelled>
-        <Labelled label={t.lot.maker}>
-          <input name="maker" defaultValue={lot?.maker} className={field} />
-        </Labelled>
-        <Labelled label={t.lot.year}>
-          <input name="year" defaultValue={lot?.year} className={field} />
-        </Labelled>
-        <Labelled label={t.admin.category}>
-          <select
-            name="category"
-            required
-            defaultValue={lot?.category ?? "antique"}
-            className={field}
-          >
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </Labelled>
-        <Labelled label={`${t.lot.estimate} — ${t.admin.low}`}>
-          <input
-            name="estimateLowPts"
-            type="number"
-            min={0}
-            required
-            defaultValue={lot?.estimateLowPts}
-            className={field}
-          />
-        </Labelled>
-        <Labelled label={`${t.lot.estimate} — ${t.admin.high}`}>
-          <input
-            name="estimateHighPts"
-            type="number"
-            min={0}
-            required
-            defaultValue={lot?.estimateHighPts}
-            className={field}
-          />
-        </Labelled>
-        <Labelled label={t.lot.opening}>
-          <input
-            name="openingPts"
-            type="number"
-            min={0}
-            required
-            readOnly={scheduleLocked}
-            defaultValue={lot?.openingPts}
-            className={locked}
-          />
-        </Labelled>
-        <Labelled label={t.lot.dimensions}>
-          <input
-            name="dimensions"
-            defaultValue={lot?.dimensions}
-            className={field}
-          />
-        </Labelled>
-        <Labelled label={t.lot.condition}>
-          <input
-            name="condition"
-            defaultValue={lot?.condition}
-            className={field}
-          />
-        </Labelled>
-        <Labelled label={t.lot.provenance}>
-          <input
-            name="provenance"
-            defaultValue={lot?.provenance}
-            className={field}
-          />
-        </Labelled>
-        {/*
-          `datetime-local` carries no zone. The server reads it as Ulaanbaatar
-          time (src/lib/house-time.ts) whatever zone the server is in — and the
-          label says so, because the person typing it might not be in one.
-        */}
-        <Labelled label={`${t.lot.startsAt} · ${t.admin.houseTime}`}>
-          <input
-            name="opensAt"
-            type="datetime-local"
-            required
-            readOnly={scheduleLocked}
-            defaultValue={lot?.opensAt}
-            className={locked}
-          />
-        </Labelled>
+
+        <ImagesField text={images} setText={setImages} />
       </div>
-      {scheduleLocked && (
-        <p className="text-muted mt-2 text-xs">{t.admin.scheduleLocked}</p>
-      )}
 
-      <Labelled label={t.lot.note} className="mt-4">
-        <textarea
-          name="note"
-          rows={5}
-          defaultValue={lot?.note}
-          className={`${field} h-auto py-2`}
-        />
-      </Labelled>
+      {/* Beside the fields on a desktop, under them on a phone. */}
+      <LotFormPreview draft={draft} images={images} />
+    </div>
+  );
+}
 
-      <ImagesField defaultValue={lot?.images ?? ""} />
-    </>
+/*
+ * The paths the image optimiser serves (`images.localPatterns` in
+ * next.config.ts). Anything else — a path half typed, a URL from elsewhere —
+ * would make `next/image` throw, so the preview falls back to the drawn plate.
+ */
+const SERVABLE_IMAGE = /^\/(?:media|api\/images)\/[^?#\s]+$/;
+
+/**
+ * The lot as the catalogue will show it, redrawn on every keystroke: the very
+ * card the grid uses, made inert so a click on it goes nowhere, and under it
+ * the details a bidder reads on the lot's page.
+ */
+function LotFormPreview({
+  draft,
+  images,
+}: {
+  /** Null until the form has been read once, after mount. */
+  draft: LotDraft | null;
+  images: string;
+}) {
+  if (!draft) return null;
+
+  const [url = "", caption = ""] = (toLines(images)[0] ?? "")
+    .split("|")
+    .map((part) => part.trim());
+  const opens = parseHouseTime(draft.opensAt);
+  const title = draft.title.trim() || t.admin.previewUntitled;
+
+  const lot: Lot = {
+    id: draft.id.trim() || "preview",
+    code: draft.code.trim() || draft.id.trim() || "—",
+    title,
+    maker: draft.maker.trim(),
+    year: draft.year.trim(),
+    category: (CATEGORIES as readonly string[]).includes(draft.category)
+      ? (draft.category as LotCategory)
+      : "antique",
+    note: draft.note.trim(),
+    provenance: draft.provenance.trim(),
+    condition: draft.condition.trim(),
+    dimensions: draft.dimensions.trim(),
+    estimateLowPts: Number(draft.estimateLowPts) || 0,
+    estimateHighPts: Number(draft.estimateHighPts) || 0,
+    openingPts: 0,
+    pressCostPts: Number(draft.pressCostPts) || 0,
+    images: SERVABLE_IMAGE.test(url) ? [{ url, alt: caption || title }] : [],
+    status: "upcoming",
+    // A time not yet typed counts down from now rather than printing NaN.
+    startsAt: Number.isNaN(opens.getTime())
+      ? new Date().toISOString()
+      : opens.toISOString(),
+  };
+  const estimate = estimateText(lot);
+
+  return (
+    <aside
+      aria-label={t.admin.preview}
+      className="border-line border-t pt-5 lg:sticky lg:top-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6"
+    >
+      <p className="eyebrow">{t.admin.preview}</p>
+      <p className="text-muted mt-1 mb-4 text-xs">{t.admin.previewHint}</p>
+
+      <div inert className="mx-auto max-w-[17rem]">
+        <LotCard lot={lot} />
+      </div>
+
+      <dl className="border-line mt-5 grid grid-cols-2 gap-x-5 gap-y-3 border-t pt-4">
+        {estimate && (
+          <PreviewFact label={t.lot.estimate}>
+            <span data-numerals>
+              {estimate} {t.common.point}
+            </span>
+          </PreviewFact>
+        )}
+        {lot.dimensions && (
+          <PreviewFact label={t.lot.dimensions}>{lot.dimensions}</PreviewFact>
+        )}
+        {lot.condition && (
+          <PreviewFact label={t.lot.condition} span>
+            {lot.condition}
+          </PreviewFact>
+        )}
+        {lot.provenance && (
+          <PreviewFact label={t.lot.provenance} span>
+            {lot.provenance}
+          </PreviewFact>
+        )}
+        {lot.note && (
+          <PreviewFact label={t.lot.note} span>
+            <span className="line-clamp-6 whitespace-pre-line">{lot.note}</span>
+          </PreviewFact>
+        )}
+        <PreviewFact label={t.lot.pressCost}>
+          <span data-numerals>
+            {pts(lot.pressCostPts)} {t.common.point}
+          </span>
+        </PreviewFact>
+      </dl>
+    </aside>
+  );
+}
+
+function PreviewFact({
+  label,
+  children,
+  span = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  span?: boolean;
+}) {
+  return (
+    <div className={span ? "col-span-2" : ""}>
+      <dt className="eyebrow">{label}</dt>
+      <dd className="text-ink-soft mt-1 text-xs leading-relaxed">{children}</dd>
+    </div>
   );
 }
 
@@ -364,8 +578,13 @@ const UPLOAD_MAX_EDGE = 2000;
  * of thumbnails is those lines drawn as pictures, with a way to make one the
  * cover and a way to drop one. Any other reordering is cutting a line.
  */
-function ImagesField({ defaultValue }: { defaultValue: string }) {
-  const [text, setText] = useState(defaultValue);
+function ImagesField({
+  text,
+  setText,
+}: {
+  text: string;
+  setText: React.Dispatch<React.SetStateAction<string>>;
+}) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -708,8 +927,8 @@ export interface WinnerCandidate {
   userId: number;
   name: string;
   paddle: string;
-  topPts: number;
-  topRound: number;
+  spentPts: number;
+  lastRound: number;
   bidCount: number;
   status: "active" | "suspended" | "closed";
 }
@@ -719,10 +938,10 @@ export interface WinnerCandidate {
  * THE DECISION, AS A FORM
  *
  * Two controls, deliberately unequal in weight. The dropdown defaults to the
- * highest bidder, because that is the answer nearly every time and an operator
- * working through a queue should be able to confirm it without reading. What
- * costs a deliberate act is DEPARTING from it: choosing anyone else raises a
- * warning above the note field, and the note is what the audit row carries.
+ * last presser, because that is who the format gives the lot to, and an
+ * operator should be able to confirm it without reading. What costs a
+ * deliberate act is DEPARTING from it: choosing anyone else raises a warning
+ * above the note field, and the note is what the audit row carries.
  *
  * Giving the lot to nobody is a separate, two-step control rather than an
  * option in the same dropdown. It is not a kind of winner, and a list where
@@ -761,7 +980,7 @@ export function WinnerPicker({
     IDLE,
   );
 
-  /* Candidates arrive highest bid first, so the standing leader is [0]. */
+  /* Candidates arrive last presser first, so the would-be winner is [0]. */
   const standing = candidates[0] ?? null;
   const start =
     candidates.find(
@@ -804,8 +1023,7 @@ export function WinnerPicker({
           >
             {candidates.map((c) => (
               <option key={c.userId} value={c.userId}>
-                {c.name} · {c.paddle} — {c.topPts} оноо ({c.topRound}-р тойрог,{" "}
-                {c.bidCount} хаялт)
+                {`${c.name} · ${c.paddle} — ${c.bidCount} удаа дарсан`}
                 {c.status !== "active"
                   ? ` · ${t.admin.reviewSuspendedMark}`
                   : ""}

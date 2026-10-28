@@ -24,8 +24,8 @@ import type { Bid, RoomState } from "@/lib/types";
  *   • An SSE stream pushes every subsequent state. Rounds advancing, the hammer
  *     falling and rivals' bids all arrive that way — there is no local
  *     simulation and no local decision about when a lot ends.
- *   • Your own bid is applied optimistically on the click frame and reconciled
- *     when the push arrives.
+ *   • Your own press is applied optimistically on the click frame and
+ *     reconciled when the push arrives.
  *
  * ── Why the local reducer still exists ───────────────────────────────────────
  *
@@ -43,7 +43,7 @@ const OPTIMISTIC_TTL_MS = 6_000;
 type Action =
   /** Authoritative. Replaces everything the server owns. */
   | { type: "sync"; state: RoomState }
-  /** Local prediction of a bid this client just sent. */
+  /** Local prediction of a press this client just sent. */
   | { type: "optimistic"; bid: Bid; bidClockEndsAt: number }
   /** The server rejected it, or it timed out. */
   | { type: "rollback"; bidId: string };
@@ -56,33 +56,32 @@ interface State {
 }
 
 /**
- * The server state with any unconfirmed local bids laid over it.
+ * The server state with any unconfirmed local presses laid over it.
  *
- * A pending bid is dropped once the server's figure for THIS bidder's own price
- * has reached or passed it: that is the confirmation. Not the lot's price — a
- * bidder's price is their own, and a bid of theirs below the lot's price is
- * still a bid. Matching on id would not work either — the server assigns its
- * own — and matching on the feed would fail whenever the bid fell outside the
- * 40 most recent.
+ * A pending press is dropped once the server's count for THIS presser has
+ * reached its number: that is the confirmation. Each press carries the
+ * presser's count after it, so the server having counted that far means it has
+ * this one. Matching on id would not work — the server assigns its own — and
+ * matching on the feed would fail whenever the press fell outside the 40 most
+ * recent.
  */
 function confirmed(bid: Bid, server: RoomState): boolean {
-  return server.yourPts !== null && server.yourPts >= bid.points;
+  return server.yourCount !== null && server.yourCount >= bid.points;
 }
 
 function project(state: State): RoomState {
   const live = state.pending.filter((p) => !confirmed(p.bid, state.server));
   if (live.length === 0) return state.server;
 
-  // The bidder's own bids only rise, so the newest is their price.
+  // Every press makes its presser the last one, so the newest is theirs.
   const top = live[live.length - 1]!;
-  const leads = top.bid.points > state.server.currentPts;
   return {
     ...state.server,
-    currentPts: leads ? top.bid.points : state.server.currentPts,
-    leader: leads ? top.bid.paddle : state.server.leader,
+    currentPts: state.server.currentPts + live.length,
+    leader: top.bid.paddle,
     bidClockEndsAt: top.bidClockEndsAt,
     hasBid: true,
-    yourPts: top.bid.points,
+    yourCount: top.bid.points,
     bids: [...live.map((p) => p.bid).reverse(), ...state.server.bids].slice(
       0,
       40,
@@ -202,52 +201,51 @@ export function useAuctionRoom(
 
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
-  const applyOptimistic = useCallback(
-    (points: number): string => {
-      const paddle = viewerPaddle ?? "—";
-      const name = viewerName ?? paddle;
-      const now = serverNow();
-      const id = `local-${now}-${points}`;
-      const clockMs = roundSpec(internal.server.round).bidClockSec * 1000;
+  const applyOptimistic = useCallback((): string => {
+    const paddle = viewerPaddle ?? "—";
+    const name = viewerName ?? paddle;
+    const now = serverNow();
+    // Their count after this press, counting presses still in flight.
+    const points = (project(internal).yourCount ?? 0) + 1;
+    const id = `local-${now}-${points}`;
+    const clockMs = roundSpec(internal.server.round).bidClockSec * 1000;
 
-      /*
-       * `serverNow()`, not `Date.now()` — the projected deadline is counted down
-       * against the corrected clock, so producing it from the uncorrected one
-       * would make the optimistic clock jump by the offset the instant the
-       * server's real deadline replaced it.
-       */
-      dispatch({
-        type: "optimistic",
-        bid: {
-          id,
-          paddle,
-          name,
-          points,
-          round: internal.server.round,
-          at: now,
-          isYou: true,
-        },
-        bidClockEndsAt: now + clockMs,
-      });
-
-      /*
-       * A bid whose response never arrives — the tab slept, the request was
-       * dropped — must not leave the price showing a lead this bidder does not
-       * have. After the TTL the projection reverts to whatever the server last
-       * said, which is the truth.
-       */
-      timers.current.set(
+    /*
+     * `serverNow()`, not `Date.now()` — the projected deadline is counted down
+     * against the corrected clock, so producing it from the uncorrected one
+     * would make the optimistic clock jump by the offset the instant the
+     * server's real deadline replaced it.
+     */
+    dispatch({
+      type: "optimistic",
+      bid: {
         id,
-        setTimeout(() => {
-          timers.current.delete(id);
-          dispatch({ type: "rollback", bidId: id });
-        }, OPTIMISTIC_TTL_MS),
-      );
+        paddle,
+        name,
+        points,
+        round: internal.server.round,
+        at: now,
+        isYou: true,
+      },
+      bidClockEndsAt: now + clockMs,
+    });
 
-      return id;
-    },
-    [internal.server.round, viewerPaddle, viewerName],
-  );
+    /*
+     * A press whose response never arrives — the tab slept, the request was
+     * dropped — must not leave the room showing a lead this presser does not
+     * have. After the TTL the projection reverts to whatever the server last
+     * said, which is the truth.
+     */
+    timers.current.set(
+      id,
+      setTimeout(() => {
+        timers.current.delete(id);
+        dispatch({ type: "rollback", bidId: id });
+      }, OPTIMISTIC_TTL_MS),
+    );
+
+    return id;
+  }, [internal, viewerPaddle, viewerName]);
 
   const rollback = useCallback((bidId: string) => {
     const timer = timers.current.get(bidId);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstError, loginSchema, registerSchema } from "./validation";
+import { firstError, loginSchema, lotSchema, registerSchema } from "./validation";
 import { MINIMUM_AGE } from "./legal";
 
 /**
@@ -174,5 +174,63 @@ describe("loginSchema", () => {
       password: "test-password-123",
     });
     expect(parsed.success).toBe(false);
+  });
+});
+
+describe("lotSchema", () => {
+  /* What the form sends when only the required boxes are filled. */
+  const MINIMAL = {
+    id: "",
+    code: "",
+    title: "Мөнгөн аяга",
+    category: "antique",
+    estimateLowPts: 0,
+    estimateHighPts: 0,
+    pressCostPts: 2,
+    images: "",
+    opensAt: "2026-11-01T20:00",
+  };
+
+  it("needs only a name, an opening time and a press price", () => {
+    const parsed = lotSchema.safeParse(MINIMAL);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data).toMatchObject({
+      id: "",
+      code: "",
+      maker: "",
+      note: "",
+      images: [],
+      pressCostPts: 2,
+      // Read as Ulaanbaatar time, eight hours ahead of UTC.
+      opensAt: "2026-11-01T12:00:00.000Z",
+    });
+  });
+
+  it("refuses a lot without a name", () => {
+    expect(lotSchema.safeParse({ ...MINIMAL, title: "  " }).success).toBe(
+      false,
+    );
+  });
+
+  it("refuses a press that costs nothing, or a fraction", () => {
+    for (const pressCostPts of [0, -1, 1.5, Number.NaN]) {
+      expect(lotSchema.safeParse({ ...MINIMAL, pressCostPts }).success).toBe(
+        false,
+      );
+    }
+  });
+
+  it("takes an upper estimate left empty as the lower one alone", () => {
+    expect(
+      lotSchema.safeParse({ ...MINIMAL, estimateLowPts: 1200 }).success,
+    ).toBe(true);
+    expect(
+      lotSchema.safeParse({
+        ...MINIMAL,
+        estimateLowPts: 1200,
+        estimateHighPts: 900,
+      }).success,
+    ).toBe(false);
   });
 });

@@ -94,7 +94,7 @@ export default async function LotsPage(props: PageProps<"/lots">) {
       id: lot.id,
       code: lot.code,
       title: lot.title,
-      currentPts: p?.currentPts ?? lot.currentPts ?? lot.openingPts,
+      currentPts: p?.currentPts ?? lot.currentPts ?? 0,
       bidCount: p?.bidCount ?? lot.bidCount ?? 0,
       round: p?.round ?? 1,
     };

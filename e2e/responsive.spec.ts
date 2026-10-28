@@ -130,12 +130,12 @@ for (const width of WIDTHS) {
 for (const width of WIDTHS) {
   test(`the auction room fits at ${width}px`, async ({ page }) => {
     /*
-     * The room is checked signed IN. Signed out it hides the bid panel's
-     * controls behind a sign-in link, which is the easy case — the step chips,
-     * the custom-amount row and the commit button are what has to fit.
+     * The room is checked signed IN. Signed out it puts a sign-in link under
+     * the press panel, which is the easy case — the three figures and the
+     * press button are what has to fit.
      */
     const lotId = `R${width}`;
-    await makeLiveLot(lotId, 1200);
+    await makeLiveLot(lotId);
     const bidder = await makeBidder(`9911${String(width).padStart(4, "0")}`, `Т-${width}`);
 
     await page.setViewportSize({ width, height: HEIGHT });

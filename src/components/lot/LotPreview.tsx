@@ -4,7 +4,7 @@ import { Footer } from "@/components/site/Footer";
 import { WatchButton } from "./WatchButton";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { LotGallery } from "./LotGallery";
-import { bidClockLabel, lotDate, pts, ptsToMnt } from "@/lib/format";
+import { bidClockLabel, byline, estimateText, lotDate, pts } from "@/lib/format";
 import { ROUNDS, TOTAL_ROUNDS } from "@/lib/auction";
 import { t } from "@/lib/copy";
 import type { Lot } from "@/lib/types";
@@ -37,14 +37,6 @@ export function LotPreview({
    */
   const isReview = lot.status === "review";
   const isDone = isSold || isUnsold || isReview;
-
-  /* Did it beat the estimate? The single most interesting fact about a result. */
-  const overEstimate =
-    isSold && (lot.hammerPts ?? 0) > lot.estimateHighPts
-      ? t.lot.aboveEstimate
-      : isSold && (lot.hammerPts ?? 0) < lot.estimateLowPts
-        ? t.lot.belowEstimate
-        : null;
 
   return (
     <>
@@ -97,29 +89,23 @@ export function LotPreview({
             <h1 className="display mt-3 text-[clamp(2rem,7vw,3.5rem)] text-ink">
               {lot.title}
             </h1>
-            <p className="mt-2 text-sm text-muted">
-              {lot.maker} · {lot.year}
-            </p>
+            {byline(lot) && (
+              <p className="mt-2 text-sm text-muted">{byline(lot)}</p>
+            )}
 
             {/* ── The headline fact, which differs by status ──────────────── */}
             <div className="mt-7 border-y border-line py-5">
               {isSold ? (
                 <>
-                  <p className="eyebrow">{t.lot.hammer}</p>
+                  <p className="eyebrow">{t.lot.totalPresses}</p>
                   <p
                     data-numerals
                     className="display mt-2 text-[clamp(2.25rem,8vw,3rem)] text-olive"
                   >
                     {pts(lot.hammerPts ?? 0)}
                     <span className="ml-2 align-baseline text-base font-normal tracking-normal text-muted">
-                      {t.common.point}
+                      {t.room.timesUnit}
                     </span>
-                  </p>
-                  <p data-numerals className="mt-1 text-sm text-muted">
-                    {ptsToMnt(lot.hammerPts ?? 0)}
-                    {overEstimate && (
-                      <span className="ml-2 text-flare">· {overEstimate}</span>
-                    )}
                   </p>
                 </>
               ) : isReview ? (
@@ -137,7 +123,7 @@ export function LotPreview({
                     {t.lot.statusUnsold}
                   </p>
                   <p className="mt-2 text-xs text-muted">
-                    Хаялт үнэлгээний доод хязгаарт хүрсэнгүй.
+                    Энэ лотод ялагч тодроогүй.
                   </p>
                 </>
               ) : (
@@ -147,7 +133,7 @@ export function LotPreview({
                     {lotDate(lot.startsAt)}
                   </p>
                   <p className="mt-2 text-xs text-muted">
-                    {TOTAL_ROUNDS} тойрог · 2 цаг 45 минут · хаялтын хугацаа{" "}
+                    {TOTAL_ROUNDS} тойрог · 2 цаг 45 минут · дарах хугацаа{" "}
                     {bidClockLabel(ROUNDS[0].bidClockSec)} →{" "}
                     {bidClockLabel(ROUNDS[ROUNDS.length - 1].bidClockSec)}
                   </p>
@@ -156,21 +142,24 @@ export function LotPreview({
             </div>
 
             <dl className="mt-7 grid grid-cols-2 gap-x-6 gap-y-6">
-              <Fact label={t.lot.estimate}>
+              <Fact label={t.lot.pressCost}>
                 <span data-numerals>
-                  {pts(lot.estimateLowPts)} – {pts(lot.estimateHighPts)}{" "}
-                  {t.common.point}
+                  {pts(lot.pressCostPts)} {t.common.point}
                 </span>
               </Fact>
 
               {isDone ? (
                 <Fact label={t.lot.bidCount}>
-                  <span data-numerals>{lot.bidCount ?? 0}</span>
+                  <span data-numerals>{t.room.times(lot.bidCount ?? 0)}</span>
                 </Fact>
               ) : (
-                <Fact label={t.lot.opening}>
-                  <span data-numerals>{ptsToMnt(lot.openingPts)}</span>
-                </Fact>
+                estimateText(lot) && (
+                  <Fact label={t.lot.estimate}>
+                    <span data-numerals>
+                      {estimateText(lot)} {t.common.point}
+                    </span>
+                  </Fact>
+                )
               )}
 
               {isSold && lot.hammerRound && (
@@ -223,6 +212,8 @@ function Fact({
   children: React.ReactNode;
   span?: boolean;
 }) {
+  // Every field but the name is optional; one left out is left off.
+  if (children === "" || children == null || children === false) return null;
   return (
     <div className={span ? "col-span-2" : ""}>
       <dt className="eyebrow">{label}</dt>

@@ -95,12 +95,12 @@ export default async function AdminLotPage(
       )}
 
       {/*
-        Before bidding stops the admin can choose the winner in advance: the
-        same picker, over the same bidders. The lot keeps running and goes to
-        them when it ends.
+        While the lot runs the admin can choose an instant winner: the same
+        picker, over the same pressers. The lot keeps running and goes to them
+        when it ends, whoever pressed last.
       */}
       {(live || (!pending && row.outcome === "scheduled")) && (
-        <Panel heading={t.admin.reviewQueue} empty="—" isEmpty={false}>
+        <Panel heading={t.admin.instantWinner} empty="—" isEmpty={false}>
           {live && bidders.length > 0 ? (
             <WinnerPicker
               key={row.designatedUserId ?? "none"}
@@ -121,8 +121,8 @@ export default async function AdminLotPage(
           <p className="text-ink-soft mb-4 text-sm">
             <span className="eyebrow text-muted">{t.admin.reviewStanding}</span>{" "}
             <span data-numerals>
-              {pending.standingPaddle ?? "—"} · {pts(pending.standingPts)}{" "}
-              {t.common.point}
+              {pending.standingPaddle ?? "—"} ·{" "}
+              {t.room.times(pending.standingPts)}
             </span>
           </p>
           <WinnerPicker
@@ -134,8 +134,9 @@ export default async function AdminLotPage(
       )}
 
       {/*
-        Every bidder, at a glance and not only inside a dropdown: how many
-        times each bid, their best, and what they hold to pay with.
+        Every presser, at a glance and not only inside a dropdown: how many
+        times each pressed, what it cost them, and what they hold to press with.
+        Last presser first — who takes the lot if nobody presses again.
       */}
       {bidders.length > 0 && (
         <Panel heading={t.admin.biddersHeading} empty="—" isEmpty={false}>
@@ -150,7 +151,7 @@ export default async function AdminLotPage(
                     {t.admin.biddersColBids}
                   </th>
                   <th className="eyebrow py-3 pr-4 font-normal">
-                    {t.admin.biddersColTop}
+                    {t.admin.biddersColSpent}
                   </th>
                   <th className="eyebrow py-3 pr-4 font-normal">
                     {t.admin.biddersColRound}
@@ -168,6 +169,11 @@ export default async function AdminLotPage(
                       <span data-numerals className="text-muted text-xs">
                         {b.paddle}
                       </span>
+                      {b.paddle === row.leaderPaddle && (
+                        <span className="eyebrow text-olive ml-2 text-[0.625rem]">
+                          {t.admin.lastPresserBadge}
+                        </span>
+                      )}
                       {b.userId === row.designatedUserId && (
                         <span className="eyebrow text-flare ml-2 text-[0.625rem]">
                           {t.admin.designatedBadge}
@@ -183,10 +189,10 @@ export default async function AdminLotPage(
                       {b.bidCount}
                     </td>
                     <td data-numerals className="text-ink py-3 pr-4">
-                      {pts(b.topPts)}
+                      {pts(b.spentPts)}
                     </td>
                     <td data-numerals className="text-muted py-3 pr-4">
-                      {b.topRound}
+                      {b.lastRound}
                     </td>
                     <td data-numerals className="text-muted py-3">
                       {pts(b.balancePts)}
@@ -199,13 +205,8 @@ export default async function AdminLotPage(
         </Panel>
       )}
 
-      {/*
-        Keyed on the saved values, so a save that changes them remounts the
-        form with what is now stored rather than with what was typed.
-      */}
       <Panel heading={t.admin.editLot} empty="—" isEmpty={false}>
         <EditLotForm
-          key={JSON.stringify(formValues(full))}
           lot={formValues(full)}
           scheduleLocked={row.outcome !== "scheduled"}
         />
@@ -233,7 +234,7 @@ function formValues(lot: Lot): LotFormValues {
     category: lot.category,
     estimateLowPts: lot.estimateLowPts,
     estimateHighPts: lot.estimateHighPts,
-    openingPts: lot.openingPts,
+    pressCostPts: lot.pressCostPts,
     dimensions: lot.dimensions,
     condition: lot.condition,
     provenance: lot.provenance,

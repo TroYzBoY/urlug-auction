@@ -10,11 +10,15 @@
  *
  *   6 round, 2h45m total
  *   1 round — 5min bid clock  (25 min)   1000₮ = 1 point
- *   2 round — 3min bid clock  (25 min)   үнэ өсгөх доод лимит 2 point
- *   3 round — 1min bid clock  (25 min)   дундаас нь орохоор болвол round × 10
+ *   2 round — 3min bid clock  (25 min)
+ *   3 round — 1min bid clock  (25 min)
  *   4 round — 30sec bid clock (25 min)
  *   5 round — 15sec bid clock (25 min)
  *   6 round — 5sec bid clock  (40 min)
+ *
+ * (The spec's price rules — a raise of at least 2 points, round × 10 to join
+ * late — belonged to the auction this used to be, and went with it. See "The
+ * last to press wins" below.)
  *
  * Two independent clocks run at once, which is the heart of the format. One is
  * SOFT — the bidders move it — and one is HARD:
@@ -46,14 +50,16 @@
  * The hard clock is what keeps that bounded: however the bidding goes, the sale
  * is over by 2h45m.
  *
- * ── Every bidder has their own price ─────────────────────────────────────────
+ * ── The last to press wins ───────────────────────────────────────────────────
  *
- * A bid raises the BIDDER'S OWN price, not the room's: each one is their own
- * last bid plus the step (`bidBasePts`), starting from the opening price. Two
- * bidders tapping at once therefore never collide — neither one's bid is made
- * stale by the other's, so neither is refused as too low. Everybody still sees
- * every bid, and the lot's price is the highest of them; the admin names the
- * winner from the bidders when it ends.
+ * Not an auction: there is no price to raise. A lot has one button. Each press
+ * costs the lot's `pressCostPts`, charged from the presser's balance, adds one
+ * to their count, and resets the bid clock. When the clocks finally close the
+ * lot, whoever pressed LAST takes it — unless an admin chose an instant winner
+ * beforehand. The winner pays nothing more; the presses were the price.
+ *
+ * So nobody's press can be "too low" or made stale by anybody else's, and a
+ * double tap is simply two presses.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -106,47 +112,16 @@ export interface RoundSpec {
   bidClockSec: number;
   /** Wall-clock length of the round, in minutes. */
   durationMin: number;
-  /** Smallest legal raise, in points, for a bidder already in the auction. */
-  minIncrementPts: number;
 }
 
 export const ROUNDS: readonly RoundSpec[] = [
-  { n: 1, bidClockSec: 5 * 60, durationMin: 25, minIncrementPts: 1 },
-  { n: 2, bidClockSec: 3 * 60, durationMin: 25, minIncrementPts: 2 },
-  { n: 3, bidClockSec: 60, durationMin: 25, minIncrementPts: 2 },
-  { n: 4, bidClockSec: 30, durationMin: 25, minIncrementPts: 2 },
-  { n: 5, bidClockSec: 15, durationMin: 25, minIncrementPts: 2 },
-  { n: 6, bidClockSec: 5, durationMin: 40, minIncrementPts: 2 },
+  { n: 1, bidClockSec: 5 * 60, durationMin: 25 },
+  { n: 2, bidClockSec: 3 * 60, durationMin: 25 },
+  { n: 3, bidClockSec: 60, durationMin: 25 },
+  { n: 4, bidClockSec: 30, durationMin: 25 },
+  { n: 5, bidClockSec: 15, durationMin: 25 },
+  { n: 6, bidClockSec: 5, durationMin: 40 },
 ] as const;
-
-/**
- * Late-entry floor. A bidder who has not yet bid on this lot must enter at
- * `round × LATE_ENTRY_MULTIPLIER` points above the opening price — so joining
- * in round 3 costs at least +30 pts, and round 6 at least +60 pts. Applies
- * from round 2 onward; round 1 is open at the normal increment because nobody
- * is "joining from the middle" yet.
- *
- * ⚠ Confirmed with the client as: late joiner's FIRST bid ≥ round × 10.
- */
-export const LATE_ENTRY_MULTIPLIER = 10;
-export const LATE_ENTRY_FROM_ROUND = 2;
-
-/**
- * Flat charge, in points, for opening a lot that is already under way.
- *
- * Deliberately NOT the same rule as LATE_ENTRY_MULTIPLIER above, though both
- * exist to price joining late:
- *
- *   • LATE_ENTRY_MULTIPLIER raises the floor of your first *bid* on that lot
- *     (round × 10 above the opening price). It costs you nothing unless you bid.
- *   • LATE_JOIN_PENALTY_PTS is deducted from your own balance for entering a
- *     running lot at all, whether or not you go on to bid.
- *
- * ⚠ Front-end only, and the back end must own the real deduction — a balance
- * the client can edit is not a balance. What is shown here is a disclosure of a
- * charge, not the charge itself.
- */
-export const LATE_JOIN_PENALTY_PTS = 10;
 
 export const TOTAL_ROUNDS = ROUNDS.length;
 
@@ -179,57 +154,6 @@ export function roundEndOffsetMs(n: number): number {
 /** Length of round `n`'s bid clock in ms. Never scaled — see ROUND_TIME_SCALE. */
 export function bidClockMs(n: number): number {
   return roundSpec(n).bidClockSec * 1000;
-}
-
-/**
- * What a bidder's next bid is built on: their own highest bid on the lot, or
- * the opening price before their first.
- */
-export function bidBasePts(yourPts: number | null, openingPts: number): number {
-  return yourPts ?? openingPts;
-}
-
-/**
- * The smallest legal next bid, in points, on top of `basePts` — the bidder's
- * own price, from `bidBasePts`.
- *
- * `hasBid` is the signed-in bidder's own history on this lot — it is what
- * separates a regular raise from a late entry.
- */
-export function minNextBidPts(
-  basePts: number,
-  round: number,
-  hasBid: boolean,
-): number {
-  const spec = roundSpec(round);
-  const step =
-    !hasBid && round >= LATE_ENTRY_FROM_ROUND
-      ? round * LATE_ENTRY_MULTIPLIER
-      : spec.minIncrementPts;
-  return basePts + step;
-}
-
-/** The raise itself, in points — what the button label needs. */
-export function minIncrementPts(round: number, hasBid: boolean): number {
-  const spec = roundSpec(round);
-  return !hasBid && round >= LATE_ENTRY_FROM_ROUND
-    ? round * LATE_ENTRY_MULTIPLIER
-    : spec.minIncrementPts;
-}
-
-/** Quick-bid offsets above the minimum, so the panel has one-tap options. */
-export function quickStepsPts(round: number, hasBid: boolean): number[] {
-  const base = minIncrementPts(round, hasBid);
-  return [base, base * 2, base * 5];
-}
-
-export function isLegalBid(
-  points: number,
-  basePts: number,
-  round: number,
-  hasBid: boolean,
-): boolean {
-  return Number.isFinite(points) && points >= minNextBidPts(basePts, round, hasBid);
 }
 
 export type Urgency = "calm" | "warm" | "hot";

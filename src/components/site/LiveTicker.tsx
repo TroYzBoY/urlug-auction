@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { t } from "@/lib/copy";
-import { pts } from "@/lib/format";
 
 export type TickerLot = {
   id: string;
@@ -100,14 +99,11 @@ export function LiveTicker({ lots }: { lots: TickerLot[] }) {
               data-numerals
               className="shrink-0 font-semibold whitespace-nowrap text-flare"
             >
-              {pts(lot.currentPts)}
-              {/* The bid count is what the invented movement was pretending to
+              {/* The count is what the invented movement was pretending to
                   convey. Stated plainly it does the same job and is true. */}
-              <span className="ml-2 text-xs font-normal text-muted">
-                {lot.bidCount > 0
-                  ? t.home.bidsSoFar(lot.bidCount)
-                  : t.room.noBidsYet}
-              </span>
+              {lot.bidCount > 0
+                ? t.home.bidsSoFar(lot.bidCount)
+                : t.room.noBidsYet}
             </span>
           </motion.div>
         </AnimatePresence>

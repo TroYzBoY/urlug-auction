@@ -5,7 +5,7 @@ import { FeaturedCarousel } from "./FeaturedCarousel";
 import { HeroTitle } from "./HeroTitle";
 import { StageParallax } from "./StageParallax";
 import { POINT_MNT, TOTAL_MINUTES, TOTAL_ROUNDS } from "@/lib/auction";
-import { groupNumber, pts } from "@/lib/format";
+import { byline, groupNumber, pts } from "@/lib/format";
 import { t } from "@/lib/copy";
 import { coverOf, type Lot, type LotStatus } from "@/lib/types";
 
@@ -44,9 +44,9 @@ function FeaturedSlide({ lot, first }: { lot: Lot; first: boolean }) {
           <h2 className="text-ink group-hover:text-accent mt-2 truncate text-lg font-semibold">
             {lot.title}
           </h2>
-          <p className="text-muted mt-1 text-xs">
-            {lot.maker} · {lot.year}
-          </p>
+          {byline(lot) && (
+            <p className="text-muted mt-1 text-xs">{byline(lot)}</p>
+          )}
         </div>
         <span className="featured-lot-arrow" aria-hidden>
           ↗
@@ -54,14 +54,14 @@ function FeaturedSlide({ lot, first }: { lot: Lot; first: boolean }) {
       </div>
       <dl className="featured-price">
         <dt className="eyebrow text-[0.625rem]">
-          {lot.status === "sold" ? t.lot.hammer : t.lot.estimate}
+          {lot.status === "sold" ? t.lot.totalPresses : t.lot.pressCost}
         </dt>
         <dd className="text-signal mt-1.5 text-sm font-semibold" data-numerals>
           {lot.status === "sold"
             ? pts(lot.hammerPts ?? 0)
-            : `${pts(lot.estimateLowPts)} – ${pts(lot.estimateHighPts)}`}
+            : pts(lot.pressCostPts)}
           <span className="text-muted ml-1.5 text-xs font-normal">
-            {t.common.point}
+            {lot.status === "sold" ? t.room.timesUnit : t.common.point}
           </span>
         </dd>
       </dl>

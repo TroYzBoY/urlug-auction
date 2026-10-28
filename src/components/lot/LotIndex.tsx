@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { LotPlate } from "./LotPlate";
 import { t } from "@/lib/copy";
-import { lotDate, pts } from "@/lib/format";
+import { byline, lotDate, pts } from "@/lib/format";
 import { coverOf, type Lot } from "@/lib/types";
 
 /**
@@ -33,7 +33,7 @@ export function LotIndex({ lots }: { lots: Lot[] }) {
         <div className="hidden grid-cols-[3rem_minmax(0,1fr)_8rem_7rem] items-baseline border-b border-line-strong/30 pb-3 md:grid">
           <p className="eyebrow">{t.home.colLot}</p>
           <p className="eyebrow">{t.home.colObject}</p>
-          <p className="eyebrow text-right">{t.home.colEstimate}</p>
+          <p className="eyebrow text-right">{t.home.colPressCost}</p>
           <p className="eyebrow text-right">{t.home.colStatus}</p>
         </div>
 
@@ -70,8 +70,8 @@ export function LotIndex({ lots }: { lots: Lot[] }) {
                     <span className="block truncate text-base font-medium tracking-[-0.01em] text-ink transition-colors group-hover:text-accent md:text-lg">
                       {lot.title}
                     </span>
-                    <span className="mt-0.5 block truncate text-xs text-muted">
-                      {lot.maker} · {lot.year}
+                    <span className="mt-0.5 block min-h-4 truncate text-xs text-muted">
+                      {byline(lot)}
                     </span>
                   </span>
                 </span>
@@ -80,7 +80,7 @@ export function LotIndex({ lots }: { lots: Lot[] }) {
                   data-numerals
                   className="hidden text-right text-sm text-ink-soft md:block"
                 >
-                  {pts(lot.estimateLowPts)}–{pts(lot.estimateHighPts)}
+                  {pts(lot.pressCostPts)} {t.common.point}
                 </span>
 
                 <span className="text-right">
@@ -154,7 +154,7 @@ function StatusMark({ lot }: { lot: Lot }) {
   if (lot.status === "sold") {
     return (
       <span data-numerals className="eyebrow text-olive">
-        {pts(lot.hammerPts ?? 0)}
+        {t.room.times(lot.hammerPts ?? 0)}
       </span>
     );
   }

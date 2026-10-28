@@ -5,7 +5,7 @@ import { BidClockBar, LivePrice, StartsIn } from "./CardLive";
 import { CardWatch } from "./CardWatch";
 import { QuickView } from "./QuickView";
 import { t } from "@/lib/copy";
-import { lotDate, pts } from "@/lib/format";
+import { byline, lotDate, pts } from "@/lib/format";
 import { coverOf, type Lot, type LotStatus } from "@/lib/types";
 
 export function LiveDot() {
@@ -92,24 +92,23 @@ export function LotCard({
           <h3 className="text-ink group-hover:text-accent mt-3 min-h-10 font-sans text-sm leading-5 font-semibold tracking-[-0.02em] transition-colors duration-300 sm:text-base">
             {lot.title}
           </h3>
-          <p className="text-muted mt-1 text-xs">
-            {lot.maker} · {lot.year}
-          </p>
+          {/* Kept when empty, so cards with and without one line up. */}
+          <p className="text-muted mt-1 min-h-4 text-xs">{byline(lot)}</p>
 
-          {/* Stacked at two-up, where a ~170px card cannot hold the estimate
+          {/* Stacked at two-up, where a ~170px card cannot hold the price
               and the date on one line, then side by side once there is room. */}
           <dl className="border-line/30 mt-3.5 flex flex-col gap-2 border-t pt-2.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
             {isSold ? (
               <>
                 <div>
-                  <dt className="eyebrow">{t.lot.hammer}</dt>
+                  <dt className="eyebrow">{t.lot.totalPresses}</dt>
                   <dd
                     data-numerals
                     className="text-olive mt-1 text-xs font-semibold"
                   >
                     {pts(lot.hammerPts ?? 0)}
                     <span className="text-muted ml-1 text-xs font-normal">
-                      {t.common.point}
+                      {t.room.timesUnit}
                     </span>
                   </dd>
                 </div>
@@ -126,12 +125,12 @@ export function LotCard({
             ) : (
               <>
                 <div>
-                  <dt className="eyebrow">{t.lot.estimate}</dt>
+                  <dt className="eyebrow">{t.lot.pressCost}</dt>
                   <dd
                     data-numerals
                     className="text-ink-soft mt-1 text-xs font-medium"
                   >
-                    {pts(lot.estimateLowPts)} – {pts(lot.estimateHighPts)}
+                    {pts(lot.pressCostPts)}
                     <span className="text-muted ml-1 text-xs">
                       {t.common.point}
                     </span>
@@ -140,17 +139,17 @@ export function LotCard({
                 <div className="sm:text-right">
                   {isLive ? (
                     <>
-                      <dt className="eyebrow">{t.room.currentPrice}</dt>
+                      <dt className="eyebrow">{t.room.totalPresses}</dt>
                       <dd
                         data-numerals
                         className="text-signal mt-1 text-xs font-semibold"
                       >
                         <LivePrice
                           lotId={lot.id}
-                          initialPts={lot.currentPts ?? lot.openingPts}
+                          initialPts={lot.currentPts ?? 0}
                         />
                         <span className="text-muted ml-1 text-xs font-normal">
-                          {t.common.point}
+                          {t.room.timesUnit}
                         </span>
                       </dd>
                     </>

@@ -10,9 +10,9 @@
  * text, and the text is in the repository. A deploy that changes one without
  * the other would be lying.
  */
-export const TERMS_VERSION = "2026-10-04";
+export const TERMS_VERSION = "2026-10-28";
 export const PRIVACY_VERSION = "2026-08-21";
-export const RULES_VERSION = "2026-08-21";
+export const RULES_VERSION = "2026-10-28";
 
 /** How long personal data is kept after an account closes. */
 export const RETENTION_YEARS = 5;

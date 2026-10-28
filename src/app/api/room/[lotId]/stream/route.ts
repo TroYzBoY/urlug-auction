@@ -2,8 +2,8 @@ import type { NextRequest } from "next/server";
 import { ON_VERCEL } from "@/lib/env";
 import {
   projectForViewer,
-  viewerTopPts,
-  yourTopBid,
+  viewerCount,
+  yourPressCount,
 } from "@/lib/repo/lots";
 import { subscribe } from "@/lib/realtime";
 import { readRoom } from "@/lib/room-cache";
@@ -83,7 +83,7 @@ export async function GET(
   const { lotId } = await ctx.params;
 
   /*
-   * Read on the server, never from a query parameter. `hasBid`, `yourPts` and `isYou` are
+   * Read on the server, never from a query parameter. `hasBid`, `yourCount` and `isYou` are
    * per-viewer, and a client that could name its own viewer id would see
    * another bidder's participation state — and, through `hasBid`, could dodge
    * the late-entry floor.
@@ -97,13 +97,13 @@ export async function GET(
   }
 
   /*
-   * Read once, here. A bidder's own price only rises, and each new bid of
-   * theirs is the newest in the feed when it is pushed, so it is raised from
-   * the feed below rather than re-queried on every push. That is what keeps a
-   * push at zero per-subscriber queries. It matters: their next bid is built
-   * on it, and whether they have bid decides the late-entry floor.
+   * Read once, here. A presser's count only rises, and each new press of
+   * theirs is the newest in the feed when it is pushed, carrying the count, so
+   * it is raised from the feed below rather than re-queried on every push.
+   * That is what keeps a push at zero per-subscriber queries.
    */
-  let viewerPts = viewerId !== null ? await yourTopBid(lotId, viewerId) : null;
+  let viewerPresses =
+    viewerId !== null ? await yourPressCount(lotId, viewerId) : null;
 
   const encoder = new TextEncoder();
   let unsubscribe: (() => void) | null = null;
@@ -140,8 +140,8 @@ export async function GET(
         }
       };
 
-      viewerPts = viewerTopPts(snapshot, viewerId, viewerPts);
-      send("state", projectForViewer(snapshot, viewerId, viewerPts));
+      viewerPresses = viewerCount(snapshot, viewerId, viewerPresses);
+      send("state", projectForViewer(snapshot, viewerId, viewerPresses));
 
       const push = async () => {
         try {
@@ -153,9 +153,9 @@ export async function GET(
           const next = await readRoom(lotId, true);
           if (!next) return;
 
-          viewerPts = viewerTopPts(next, viewerId, viewerPts);
+          viewerPresses = viewerCount(next, viewerId, viewerPresses);
 
-          send("state", projectForViewer(next, viewerId, viewerPts));
+          send("state", projectForViewer(next, viewerId, viewerPresses));
         } catch (err) {
           console.error("[stream] read failed", lotId, err);
         }

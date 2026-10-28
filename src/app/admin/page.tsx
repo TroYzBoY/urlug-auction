@@ -28,7 +28,6 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-
 export default async function AdminPage() {
   /*
    * The only gate. `src/lib/repo/admin.ts` checks nothing itself, so every path
@@ -39,25 +38,25 @@ export default async function AdminPage() {
 
   const [figures, lotRows, pending, userRows, inbox, audit, drift] =
     await Promise.all([
-    stats(),
-    lots(),
-    /*
-     * The decision queue leads the page below the alarms: a lot sitting in
-     * review is a bidder waiting on an answer, and it is the only thing here
-     * that gets worse the longer nobody looks at it.
-     */
-    reviewQueue(),
-    users(),
-    contactMessages(),
-    recentAudit(),
-    /*
-     * Run on every page load rather than on a schedule. It is a single
-     * aggregate, and a drift between `balances` and `ledger_entries` means
-     * money has appeared or vanished — the sooner someone sees it, the smaller
-     * the window of bids placed against a wrong balance.
-     */
-    reconcileBalances(),
-  ]);
+      stats(),
+      lots(),
+      /*
+       * The decision queue leads the page below the alarms: a lot sitting in
+       * review is a bidder waiting on an answer, and it is the only thing here
+       * that gets worse the longer nobody looks at it.
+       */
+      reviewQueue(),
+      users(),
+      contactMessages(),
+      recentAudit(),
+      /*
+       * Run on every page load rather than on a schedule. It is a single
+       * aggregate, and a drift between `balances` and `ledger_entries` means
+       * money has appeared or vanished — the sooner someone sees it, the smaller
+       * the window of bids placed against a wrong balance.
+       */
+      reconcileBalances(),
+    ]);
 
   /* Counted here rather than queried: the rows are already in memory. */
   const unhandled = inbox.filter((m) => m.handledAt === null).length;
@@ -149,66 +148,73 @@ export default async function AdminPage() {
         )}
       </section>
 
-      <Panel
-        heading={t.admin.reviewQueue}
-        empty={t.admin.reviewQueueEmpty}
-        isEmpty={pending.length === 0}
-      >
-        <p className="text-muted mb-5 max-w-prose text-sm leading-relaxed">
-          {t.admin.reviewQueueHint}
-        </p>
+      {/*
+        Only when something waits: a lot is handed to its winner the moment it
+        closes, so this holds just the rare lot that could not be — and any
+        left from when every winner was named by hand.
+      */}
+      {pending.length > 0 && (
+        <Panel
+          heading={t.admin.reviewQueue}
+          empty={t.admin.reviewQueueEmpty}
+          isEmpty={pending.length === 0}
+        >
+          <p className="text-muted mb-5 max-w-prose text-sm leading-relaxed">
+            {t.admin.reviewQueueHint}
+          </p>
 
-        <ul className="flex flex-col gap-5">
-          {pending.map((lot) => (
-            <li key={lot.lotId} className="border-line border p-4 sm:p-5">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-                <p className="min-w-0">
-                  <Link
-                    href={`/admin/lots/${encodeURIComponent(lot.lotId)}`}
-                    className="hover:text-accent transition-colors"
-                  >
-                    <span data-numerals className="text-muted">
-                      {lot.code}
-                    </span>{" "}
-                    <span className="text-ink">{lot.title}</span>
-                  </Link>
+          <ul className="flex flex-col gap-5">
+            {pending.map((lot) => (
+              <li key={lot.lotId} className="border-line border p-4 sm:p-5">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+                  <p className="min-w-0">
+                    <Link
+                      href={`/admin/lots/${encodeURIComponent(lot.lotId)}`}
+                      className="hover:text-accent transition-colors"
+                    >
+                      <span data-numerals className="text-muted">
+                        {lot.code}
+                      </span>{" "}
+                      <span className="text-ink">{lot.title}</span>
+                    </Link>
+                  </p>
+                  <p data-numerals className="text-faint text-xs">
+                    {t.admin.reviewClosedAt}:{" "}
+                    {lot.closedAt ? lotDate(lot.closedAt) : "—"} ·{" "}
+                    {lot.closedInRound}-{t.common.roundWord} · {lot.bidCount}{" "}
+                    {t.lot.bidCount.toLowerCase()}
+                  </p>
+                </div>
+
+                {/*
+                  The standing bid is shown as a fact above the control rather
+                  than only as the selected option inside it. An operator should
+                  be able to see what the clock decided without opening a
+                  dropdown — that is the number they are being asked to confirm
+                  or to depart from.
+                */}
+                <p className="text-ink-soft mt-2 text-sm">
+                  <span className="eyebrow text-muted">
+                    {t.admin.reviewStanding}
+                  </span>{" "}
+                  <span data-numerals>
+                    {lot.standingPaddle ?? "—"} ·{" "}
+                    {t.room.times(lot.standingPts)}
+                  </span>
                 </p>
-                <p data-numerals className="text-faint text-xs">
-                  {t.admin.reviewClosedAt}:{" "}
-                  {lot.closedAt ? lotDate(lot.closedAt) : "—"} ·{" "}
-                  {lot.closedInRound}-{t.common.roundWord} · {lot.bidCount}{" "}
-                  {t.lot.bidCount.toLowerCase()}
-                </p>
-              </div>
 
-              {/*
-                The standing bid is shown as a fact above the control rather
-                than only as the selected option inside it. An operator should
-                be able to see what the clock decided without opening a
-                dropdown — that is the number they are being asked to confirm
-                or to depart from.
-              */}
-              <p className="text-ink-soft mt-2 text-sm">
-                <span className="eyebrow text-muted">
-                  {t.admin.reviewStanding}
-                </span>{" "}
-                <span data-numerals>
-                  {lot.standingPaddle ?? "—"} · {pts(lot.standingPts)}{" "}
-                  {t.common.point}
-                </span>
-              </p>
-
-              <div className="border-line mt-4 border-t pt-4">
-                <WinnerPicker
-                  lotId={lot.lotId}
-                  candidates={lot.candidates}
-                  defaultUserId={lot.designatedUserId}
-                />
-              </div>
-            </li>
-          ))}
-        </ul>
-      </Panel>
+                <div className="border-line mt-4 border-t pt-4">
+                  <WinnerPicker
+                    lotId={lot.lotId}
+                    candidates={lot.candidates}
+                    defaultUserId={lot.designatedUserId}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
 
       <Panel heading={t.admin.lots} empty="—" isEmpty={false}>
         <div className="mb-5">
@@ -231,7 +237,7 @@ export default async function AdminPage() {
                   {t.room.round}
                 </th>
                 <th className="eyebrow py-3 pr-4 font-normal">
-                  {t.room.currentPrice}
+                  {t.room.leader}
                 </th>
                 <th className="eyebrow py-3 pr-4 font-normal">
                   {t.lot.bidCount}
@@ -276,12 +282,7 @@ export default async function AdminPage() {
                     {lot.round}
                   </td>
                   <td data-numerals className="text-ink py-3 pr-4">
-                    {pts(lot.currentPts)}
-                    {lot.leaderPaddle && (
-                      <span className="text-muted ml-2 text-xs">
-                        {lot.leaderPaddle}
-                      </span>
-                    )}
+                    {lot.leaderPaddle ?? "—"}
                   </td>
                   <td data-numerals className="text-muted py-3 pr-4">
                     {lot.bidCount}

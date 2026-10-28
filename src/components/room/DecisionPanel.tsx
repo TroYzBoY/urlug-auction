@@ -2,27 +2,24 @@
 
 import { Spinner } from "@/components/site/Spinner";
 import { t } from "@/lib/copy";
-import { pts } from "@/lib/format";
 import type { Bid } from "@/lib/types";
 
-/** How many of the leading bidders the panel goes over. */
+/** How many of the last pressers the panel goes over. */
 const SHOWN = 3;
 
 /**
- * Each bidder's best bid, highest first, for the leading few.
+ * The last few people to press, most recent first, each with their count.
  *
- * Prices only ever rise, so the feed (newest first) is already in descending
- * order and a bidder's first appearance in it is their best. Sorted anyway: the
- * feed's order is a property of how it is built, and this list's correctness
- * should not quietly depend on it.
+ * The feed is newest first, so a presser's first appearance in it is their
+ * last press — the one that counts, since the last presser takes the lot.
  */
 function standings(bids: readonly Bid[]): Bid[] {
-  const best = new Map<string, Bid>();
+  const seen = new Map<string, Bid>();
   for (const bid of bids) {
-    const held = best.get(bid.paddle);
-    if (!held || bid.points > held.points) best.set(bid.paddle, bid);
+    if (!seen.has(bid.paddle)) seen.set(bid.paddle, bid);
+    if (seen.size === SHOWN) break;
   }
-  return [...best.values()].sort((a, b) => b.points - a.points).slice(0, SHOWN);
+  return [...seen.values()];
 }
 
 /**
@@ -34,9 +31,10 @@ function standings(bids: readonly Bid[]): Bid[] {
  *
  *   closing — the final clock reached zero on THIS screen and the server's
  *             answer has not landed yet. Usually under a second. The button is
- *             already gone because the server refuses a late bid regardless.
- *   review  — bidding is over and an admin has not named the winner yet
- *             (`awardLot`).
+ *             already gone because the server refuses a late press regardless.
+ *   review  — the lot has closed and its result has not arrived. It goes to
+ *             its winner in the transaction that closes it, so this lasts no
+ *             longer than the push.
  *
  * What it shows is a loading screen over the leading bids: a sweeping bar, a
  * band passing down the list, each row lighting in turn. That is decoration,
@@ -100,10 +98,7 @@ export function DecisionPanel({
                   </span>
                 </span>
                 <span data-numerals className="shrink-0 font-semibold">
-                  {pts(bid.points)}{" "}
-                  <span className="text-muted text-xs font-normal">
-                    {t.common.point}
-                  </span>
+                  {t.room.times(bid.points)}
                 </span>
               </li>
             ))}

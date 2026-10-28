@@ -12,7 +12,7 @@ import type { BidResult } from "@/lib/api";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * PLACE A BID
+ * PRESS A LOT'S BUTTON (named for the auction this used to be)
  *
  * A Server Function, which is to say an HTTP endpoint with a nice calling
  * convention. Everything a browser can reach, curl can reach — so this
@@ -22,22 +22,20 @@ import type { BidResult } from "@/lib/api";
  *   which paddle       → the users row, never an argument
  *   whether you have bid on this lot before → lot_participants
  *   which round it is  → the auction row, settled against the server clock
- *   what the bid costs → auction.ts, on the bidder's own price, under the row
- *                        lock
+ *   what the press costs → the lot's price, read under the row lock, charged
+ *                          from the balance
  *
  * What it does NOT do is rate limit. See the note where the limiter used to be.
  *
- * A bid is never refused for its price: each bidder's price is their own, so
- * no rival's bid can make it stale, and one below their own minimum is raised
- * to it (see `placeBid`).
+ * A press is never refused for its price — it has none of its own. It is
+ * refused only when the lot has closed or the balance cannot cover it.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 export async function placeBid(
   lotId: string,
-  points: number,
   idempotencyKey: string,
 ): Promise<BidResult> {
-  const parsed = bidSchema.safeParse({ lotId, points, idempotencyKey });
+  const parsed = bidSchema.safeParse({ lotId, idempotencyKey });
   // Only a hand-made request fails this; the room always sends a whole price.
   if (!parsed.success) return { ok: false, reason: "error" };
 
@@ -63,10 +61,9 @@ export async function placeBid(
    *
    *   • the row lock in `placeBid` serialises every bid on a lot, so a flood
    *     queues rather than racing
-   *   • each bidder's own price must strictly increase, so N bids cost N × the
-   *     increment — a script cannot bid a thousand times without spending a
-   *     thousand times
-   *   • `bids_user_price_idx` refuses one bidder two bids at one price
+   *   • every press is charged from the balance, so a script cannot press a
+   *     thousand times without paying for a thousand presses
+   *   • `bids_user_price_idx` refuses one presser the same count twice
    *   • the join fee and the balance are charged from the server's numbers
    *
    * If a flood ever does become a problem, put the per-LOT bucket back first —
@@ -82,14 +79,13 @@ export async function placeBid(
      */
     const result = await timed(
       "bid.placed",
-      { lotId: parsed.data.lotId, userId: user.id, points: parsed.data.points },
+      { lotId: parsed.data.lotId, userId: user.id },
       () =>
         placeBidInRepo({
           lotId: parsed.data.lotId,
           userId: user.id,
           paddle: user.paddle,
           name: user.name,
-          points: parsed.data.points,
           idempotencyKey: parsed.data.idempotencyKey,
           ip,
           userAgent,
@@ -108,7 +104,7 @@ export async function placeBid(
         action: "bid.rejected",
         targetType: "lot",
         targetId: parsed.data.lotId,
-        detail: { reason: result.reason, points: parsed.data.points },
+        detail: { reason: result.reason },
         ip,
         userAgent,
       });
@@ -141,7 +137,7 @@ export async function placeBid(
      */
     refresh();
 
-    return { ok: true, acceptedPts: result.acceptedPts };
+    return { ok: true, count: result.count };
   } catch (err) {
     reportError(err, {
       event: "bid.error",

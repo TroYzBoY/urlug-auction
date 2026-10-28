@@ -3,25 +3,24 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { t } from "@/lib/copy";
-import { pts, ptsToMnt } from "@/lib/format";
 import type { Bid } from "@/lib/types";
 
-/** Who the lot was sold to, and at what: their own top bid. */
+/** Who the lot went to. */
 export interface FeedWinner {
   paddle: string;
   /** Display name, already "Та" for the viewer. */
   name: string;
   isYou: boolean;
-  points: number;
 }
 
 /**
- * The bids, newest first, exactly as the server accepted them.
+ * The presses, newest first, exactly as the server accepted them — each with
+ * the presser's own count after it, so the list says who pressed how often.
  *
  * Once the lot is sold the winner goes on a line of its own above the list,
- * and their winning bid is tagged where it actually is. The list itself is
- * never reordered: when an admin names someone other than the last bidder,
- * the feed must still say who bid when.
+ * and their last press is tagged where it actually is. The list itself is
+ * never reordered: when an instant winner is someone other than the last
+ * presser, the feed must still say who pressed when.
  */
 export function BidFeed({
   bids,
@@ -34,11 +33,11 @@ export function BidFeed({
      get the shine, so the feed does not greet a page load with one. */
   const [firstId] = useState(bids[0]?.id);
 
-  /* The winner's top bid — the price they were sold at. */
-  const winningId = winner
-    ? bids.find((b) => b.paddle === winner.paddle && b.points === winner.points)
-        ?.id
+  /* The winner's last press: their first appearance, newest first. */
+  const winningBid = winner
+    ? bids.find((b) => b.paddle === winner.paddle)
     : undefined;
+  const winningId = winningBid?.id;
 
   return (
     <section aria-label={t.room.feed}>
@@ -67,12 +66,14 @@ export function BidFeed({
               {winner.name}
             </span>
           </div>
-          <p data-numerals className="text-ink shrink-0 text-sm font-semibold">
-            {pts(winner.points)}
-            <span className="text-muted ml-1 text-xs font-normal">
-              {t.common.point}
-            </span>
-          </p>
+          {winningBid && (
+            <p
+              data-numerals
+              className="text-ink shrink-0 text-sm font-semibold"
+            >
+              {t.room.times(winningBid.points)}
+            </p>
+          )}
         </div>
       )}
 
@@ -119,17 +120,12 @@ export function BidFeed({
                   )}
                 </div>
 
-                <div className="text-right">
-                  <p data-numerals className="text-ink text-sm font-medium">
-                    {pts(bid.points)}
-                    <span className="text-muted ml-1 text-xs font-normal">
-                      {t.common.point}
-                    </span>
-                  </p>
-                  <p data-numerals className="text-faint text-[0.6875rem]">
-                    {ptsToMnt(bid.points)}
-                  </p>
-                </div>
+                <p
+                  data-numerals
+                  className="text-ink shrink-0 text-right text-sm font-medium"
+                >
+                  {t.room.pressNo(bid.points)}
+                </p>
               </motion.li>
             ))}
           </AnimatePresence>

@@ -47,7 +47,9 @@ export interface Actor {
 /* ── Lots ────────────────────────────────────────────────────────────────── */
 
 export interface LotInput {
+  /** Empty for a new lot: the next free number is used (`nextLotId`). */
   id: string;
+  /** Empty: the lot's id. */
   code: string;
   title: string;
   maker: string;
@@ -57,9 +59,11 @@ export interface LotInput {
   provenance: string;
   condition: string;
   dimensions: string;
+  /** 0 and 0 when not given. */
   estimateLowPts: number;
   estimateHighPts: number;
-  openingPts: number;
+  /** What one press costs, in points. Fixed once the lot opens. */
+  pressCostPts: number;
   images: { url: string; alt: string }[];
   /** ISO timestamp. The auction's clocks are all derived from it. */
   opensAt: string;
@@ -100,16 +104,16 @@ async function writeSchedule(
   client: PoolClient,
   lotId: string,
   opensAt: Date,
-  openingPts: number,
 ): Promise<void> {
+  // `current_pts` is the lot's total presses, so a lot not yet open has none.
   await client.query(
     `INSERT INTO auctions (lot_id, opens_at, round, current_pts, bid_clock_ends_at,
                            round_ends_at, outcome)
-     VALUES ($1, $2, 1, $3, $4, $5, 'scheduled')
+     VALUES ($1, $2, 1, 0, $3, $4, 'scheduled')
      ON CONFLICT (lot_id) DO UPDATE SET
        opens_at = EXCLUDED.opens_at,
        round = 1,
-       current_pts = EXCLUDED.current_pts,
+       current_pts = 0,
        leader_user_id = NULL,
        leader_paddle = NULL,
        bid_clock_ends_at = EXCLUDED.bid_clock_ends_at,
@@ -124,67 +128,97 @@ async function writeSchedule(
     [
       lotId,
       opensAt,
-      openingPts,
       new Date(opensAt.getTime() + bidClockMs(1)),
       new Date(opensAt.getTime() + roundEndOffsetMs(1)),
     ],
   );
 }
 
-export type CreateLotResult =
-  { ok: true } | { ok: false; reason: "duplicate-id" };
+/**
+ * The next free lot number, for a lot created without one: one more than the
+ * highest all-digit id, padded to three digits ("014"). Only a suggestion —
+ * two admins saving at once can both get it, and `createLot` retries.
+ */
+async function nextLotId(client: PoolClient): Promise<string> {
+  const res = await client.query<{ top: string | null }>(
+    `SELECT max(id::bigint)::text AS top FROM lots WHERE id ~ '^[0-9]{1,15}$'`,
+  );
+  const next = BigInt(res.rows[0]?.top ?? "0") + BigInt(1);
+  return String(next).padStart(3, "0");
+}
 
+export type CreateLotResult =
+  | { ok: true; id: string; code: string }
+  | { ok: false; reason: "duplicate-id" };
+
+/**
+ * Lists a new lot. Only the name, the opening time and the press price are
+ * needed: an id left empty takes the next free number, a code left empty
+ * takes the id, and an estimate left empty is "not given".
+ */
 export async function createLot(
   input: LotInput,
   actor: Actor,
 ): Promise<CreateLotResult> {
-  return transaction(async (client) => {
-    const opensAt = new Date(input.opensAt);
+  /*
+   * A generated id can be taken by another admin saving in the same instant;
+   * that is a reason to try the next number, not to fail. A typed one that is
+   * taken is the admin's to change.
+   */
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const result = await transaction(async (client) => {
+      const id = input.id || (await nextLotId(client));
+      const code = input.code || id;
+      const opensAt = new Date(input.opensAt);
 
-    const inserted = await client.query(
-      `INSERT INTO lots (id, code, title, maker, year, category, note, provenance,
-                         condition, dimensions, estimate_low_pts, estimate_high_pts,
-                         opening_pts, starts_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-       ON CONFLICT (id) DO NOTHING`,
-      [
-        input.id,
-        input.code,
-        input.title,
-        input.maker,
-        input.year,
-        input.category,
-        input.note,
-        input.provenance,
-        input.condition,
-        input.dimensions,
-        input.estimateLowPts,
-        input.estimateHighPts,
-        input.openingPts,
-        opensAt,
-      ],
-    );
-    if (inserted.rowCount === 0) return { ok: false, reason: "duplicate-id" };
+      const inserted = await client.query(
+        `INSERT INTO lots (id, code, title, maker, year, category, note, provenance,
+                           condition, dimensions, estimate_low_pts, estimate_high_pts,
+                           opening_pts, press_cost_pts, starts_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,$13,$14)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          id,
+          code,
+          input.title,
+          input.maker,
+          input.year,
+          input.category,
+          input.note,
+          input.provenance,
+          input.condition,
+          input.dimensions,
+          input.estimateLowPts,
+          Math.max(input.estimateHighPts, input.estimateLowPts),
+          input.pressCostPts,
+          opensAt,
+        ],
+      );
+      if (inserted.rowCount === 0) return null;
 
-    await writeImages(client, input.id, input.images);
-    await writeSchedule(client, input.id, opensAt, input.openingPts);
+      await writeImages(client, id, input.images);
+      await writeSchedule(client, id, opensAt);
 
-    await record(client, {
-      actorUserId: actor.id,
-      action: "admin.lot_created",
-      targetType: "lot",
-      targetId: input.id,
-      detail: {
-        title: input.title,
-        opensAt: input.opensAt,
-        openingPts: input.openingPts,
-      },
-      ip: actor.ip,
-      userAgent: actor.userAgent,
+      await record(client, {
+        actorUserId: actor.id,
+        action: "admin.lot_created",
+        targetType: "lot",
+        targetId: id,
+        detail: {
+          title: input.title,
+          opensAt: input.opensAt,
+          pressCostPts: input.pressCostPts,
+        },
+        ip: actor.ip,
+        userAgent: actor.userAgent,
+      });
+
+      return { ok: true as const, id, code };
     });
-
-    return { ok: true };
-  });
+    if (result) return result;
+    if (input.id) break;
+  }
+  return { ok: false, reason: "duplicate-id" };
 }
 
 export type UpdateLotResult =
@@ -194,8 +228,8 @@ export type UpdateLotResult =
  * Edits catalogue text, and reschedules the lot if it has not opened.
  *
  * ⚠ A lot that is running or finished can have its DESCRIPTION corrected but
- * not its price or its schedule. Moving the opening price of a lot people are
- * already bidding on changes what every existing bid meant; that is a
+ * not its press price or its schedule. Changing what a press costs while
+ * people are pressing changes what every press already made meant; that is a
  * cancellation, not an edit, and it is a separate function with its own audit
  * action so nobody can do it by accident through a text field.
  */
@@ -217,13 +251,13 @@ export async function updateLot(
       `UPDATE lots SET code = $2, title = $3, maker = $4, year = $5, category = $6,
                        note = $7, provenance = $8, condition = $9, dimensions = $10,
                        estimate_low_pts = $11, estimate_high_pts = $12,
-                       opening_pts = CASE WHEN $14 THEN $13 ELSE opening_pts END,
+                       press_cost_pts = CASE WHEN $14 THEN $13 ELSE press_cost_pts END,
                        starts_at = CASE WHEN $14 THEN $15::timestamptz ELSE starts_at END,
                        updated_at = now()
         WHERE id = $1`,
       [
         input.id,
-        input.code,
+        input.code || input.id,
         input.title,
         input.maker,
         input.year,
@@ -233,27 +267,22 @@ export async function updateLot(
         input.condition,
         input.dimensions,
         input.estimateLowPts,
-        input.estimateHighPts,
-        input.openingPts,
+        Math.max(input.estimateHighPts, input.estimateLowPts),
+        input.pressCostPts,
         notYetOpen,
         input.opensAt,
       ],
     );
 
     /*
-     * Photographs can be corrected on a RUNNING lot, unlike its price or its
-     * schedule. A better picture of a fault is information a bidder should have
+     * Photographs can be corrected on a RUNNING lot, unlike its press price or
+     * its schedule. A better picture of a fault is information a bidder should have
      * as soon as it exists; it does not change what an existing bid meant.
      */
     await writeImages(client, input.id, input.images);
 
     if (notYetOpen) {
-      await writeSchedule(
-        client,
-        input.id,
-        new Date(input.opensAt),
-        input.openingPts,
-      );
+      await writeSchedule(client, input.id, new Date(input.opensAt));
     }
 
     await record(client, {
@@ -277,13 +306,9 @@ export type ControlResult =
   | { ok: false; reason: "not-found" | "already-settled" | "not-running" };
 
 /**
- * Stops the bidding on a running lot immediately.
- *
- * ⚠ This does NOT award the lot. It puts it where an expired clock would have
- * put it — `review` — and the winner is then named through `awardLot` like any
- * other. The honest use is a technical failure mid-sale; separating "stop the
- * clock" from "give it to this person" means an operator hitting the emergency
- * button is not also, silently, deciding the outcome.
+ * Stops a running lot immediately, and decides it exactly as its clocks would
+ * have: to the instant winner if an admin chose one, otherwise to whoever
+ * pressed last (`closeBidding`). A lot nobody pressed is unsold.
  *
  * Recorded as `admin.auction_closed` rather than as an ordinary close, so the
  * audit trail distinguishes a lot that ran its course from one an operator
@@ -313,7 +338,7 @@ export async function closeAuction(
     if (auction.outcome !== "running")
       return { ok: false, reason: "not-running" };
 
-    // A lot nobody bid on has nothing to review; it is simply unsold.
+    // A lot nobody pressed has nobody to give it to; it is simply unsold.
     const outcome = auction.leader_paddle ? "review" : "unsold";
 
     await client.query(
@@ -325,6 +350,9 @@ export async function closeAuction(
       [lotId, outcome],
     );
 
+    // Handed over in this transaction, as the ticker would have.
+    const sold = outcome === "review" && (await closeBidding(client, lotId));
+
     await record(client, {
       actorUserId: actor.id,
       action: "admin.auction_closed",
@@ -332,9 +360,9 @@ export async function closeAuction(
       targetId: lotId,
       detail: {
         reason,
-        outcome,
-        standingPts: auction.current_pts,
-        standingLeader: auction.leader_paddle,
+        outcome: sold ? "sold" : outcome,
+        totalPresses: auction.current_pts,
+        lastPresser: auction.leader_paddle,
         round: auction.round,
       },
       ip: actor.ip,
@@ -349,34 +377,28 @@ export async function closeAuction(
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * THE DECISION
+ * A LOT LEFT IN REVIEW
  *
- * A clock cannot tell the difference between the highest bid and the highest
- * bid the house is willing to honour. `review` exists so that a person makes
- * that call, and these two functions are the only ways out of it: the lot goes
- * to somebody, or it goes to nobody.
+ * Nothing waits in `review` by design any more: the moment a lot closes it goes
+ * to its instant winner or its last presser (`closeBidding`). These two are
+ * the way out for a lot that could not be handed over — and for any lot left
+ * there from when an admin named every winner by hand: it goes to somebody, or
+ * it goes to nobody.
  *
  * ── What is checked, and why each check is here ──────────────────────────────
  *
  * **The lot is settled inside this transaction before anything else.** The
  * stored row may still say `running` if the ticker has not reached it; an admin
- * who can see the lot in the queue must be able to act on it, and the
- * alternative is a dashboard whose buttons fail for a second after every clock
- * expiry.
+ * who can see the lot in the queue must be able to act on it.
  *
- * **The winner must have bid on this lot.** The dropdown is built from the
- * bids, but a Server Function is an HTTP endpoint and the form is not its only
- * caller. Awarding a lot to somebody who never bid on it would also have no
- * price to quote — there would be no bid to read one from.
- *
- * **The price is the winner's own highest bid, never the standing price.** If
- * the house passes over the top bidder, the lot is not sold at the top bidder's
- * price; it is sold at what the person who actually gets it offered.
+ * **The winner must have pressed on this lot.** The dropdown is built from the
+ * presses, but a Server Function is an HTTP endpoint and the form is not its
+ * only caller.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 export type AwardResult =
-  | { ok: true; hammerPts: number; paddle: string; name: string }
+  | { ok: true; presses: number; paddle: string; name: string }
   | {
       ok: false;
       reason: "not-found" | "not-in-review" | "not-a-bidder" | "already-decided";
@@ -474,8 +496,7 @@ export async function awardLot(
         note,
         winnerUserId,
         winnerPaddle: winning.paddle,
-        hammerPts: winning.hammerPts,
-        hammerRound: winning.hammerRound,
+        winnerPresses: winning.presses,
         standingLeader: row.leader_paddle,
         standingPts: row.current_pts,
         overrodeStandingLeader: row.leader_paddle !== winning.paddle,
@@ -486,7 +507,7 @@ export async function awardLot(
 
     return {
       ok: true,
-      hammerPts: winning.hammerPts,
+      presses: winning.presses,
       paddle: winning.paddle,
       name: winning.name,
     };
@@ -581,12 +602,12 @@ export async function designateWinner(
 }
 
 /**
- * Ends a lot in review with no winner.
+ * Ends a lot left in review with no winner.
  *
- * For the case where every standing bid is one the house will not honour. It is
- * not a cancellation: the bidding happened, the record of it stands, and no
- * join fee is refunded, because the lot ran. `cancelAuction` is for a lot that
- * should never have run at all.
+ * Only for the rare lot `closeBidding` could not hand over. It is not a
+ * cancellation: the presses happened, the record of them stands, and nothing
+ * is refunded, because the lot ran. `cancelAuction` is for a lot that should
+ * never have run at all.
  */
 export async function declareUnsold(
   lotId: string,
@@ -631,18 +652,19 @@ export async function declareUnsold(
       userAgent: actor.userAgent,
     });
 
-    return { ok: true, hammerPts: 0, paddle: "—", name: "—" };
+    return { ok: true, presses: 0, paddle: "—", name: "—" };
   });
 }
 
 /**
- * Voids a lot: nobody wins, and every join fee paid on it is refunded.
+ * Voids a lot: nobody wins, and every point spent on it — each press, and any
+ * join fee — is refunded.
  *
- * The refund is the point. Cancelling a lot people paid to enter and keeping
- * their fees is taking money for a service not delivered, and it is the kind of
- * thing that gets forgotten because the auction code has already moved on. It
- * happens in the same transaction as the cancellation, so the two cannot come
- * apart.
+ * The refund is the point. Cancelling a lot people paid to press on and keeping
+ * what they paid is taking money for a service not delivered, and it is the
+ * kind of thing that gets forgotten because the lot's code has already moved
+ * on. It happens in the same transaction as the cancellation, so the two cannot
+ * come apart.
  */
 export async function cancelAuction(
   lotId: string,
@@ -668,8 +690,20 @@ export async function cancelAuction(
       [lotId],
     );
 
-    const fees = await client.query<{ user_id: number; join_fee_pts: number }>(
-      "SELECT user_id, join_fee_pts FROM lot_participants WHERE lot_id = $1 AND join_fee_pts > 0",
+    /*
+     * Everything each person spent on the lot: every press, and the join fee
+     * lots from the auction format charged. One refund row per person.
+     */
+    const fees = await client.query<{ user_id: number; pts: number }>(
+      `SELECT user_id, sum(pts)::int AS pts FROM (
+         SELECT user_id, join_fee_pts AS pts FROM lot_participants
+          WHERE lot_id = $1 AND join_fee_pts > 0
+         UNION ALL
+         SELECT user_id, cost_pts AS pts FROM bids
+          WHERE lot_id = $1 AND cost_pts IS NOT NULL
+       ) spent
+       GROUP BY user_id
+       HAVING sum(pts) > 0`,
       [lotId],
     );
 
@@ -681,14 +715,14 @@ export async function cancelAuction(
        */
       const inserted = await client.query(
         `INSERT INTO ledger_entries (user_id, delta_pts, kind, ref_type, ref_id, memo)
-         VALUES ($1, $2, 'refund', 'lot', $3, 'Дуудлага цуцлагдсан — нэгдэх төлбөр буцаагдав')
+         VALUES ($1, $2, 'refund', 'lot', $3, 'Лот цуцлагдсан — зарцуулсан оноо буцаагдав')
          ON CONFLICT DO NOTHING`,
-        [fee.user_id, fee.join_fee_pts, lotId],
+        [fee.user_id, fee.pts, lotId],
       );
       if (inserted.rowCount === 1) {
         await client.query(
           "UPDATE balances SET pts = pts + $2, updated_at = now() WHERE user_id = $1",
-          [fee.user_id, fee.join_fee_pts],
+          [fee.user_id, fee.pts],
         );
       }
     }
@@ -737,17 +771,7 @@ export async function rescheduleAuction(
     if (auction.bid_count > 0) return { ok: false, reason: "has-bids" };
 
     const when = new Date(opensAt);
-    const lot = await client.query<{ opening_pts: number }>(
-      "SELECT opening_pts FROM lots WHERE id = $1",
-      [lotId],
-    );
-
-    await writeSchedule(
-      client,
-      lotId,
-      when,
-      lot.rows[0]?.opening_pts ?? auction.current_pts,
-    );
+    await writeSchedule(client, lotId, when);
     await client.query(
       "UPDATE lots SET starts_at = $2, updated_at = now() WHERE id = $1",
       [lotId, when],

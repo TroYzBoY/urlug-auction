@@ -77,3 +77,26 @@ export function wallClock(at: number): string {
   const p = houseParts(at);
   return `${p.hour}:${p.minute}:${p.second}`;
 }
+
+/**
+ * "Зохиогч · Он", leaving out whichever the admin did not give — every field
+ * of a lot but its name is optional. Empty when neither was given.
+ */
+export function byline(lot: { maker: string; year: string }): string {
+  return [lot.maker, lot.year].filter(Boolean).join(" · ");
+}
+
+/**
+ * A lot's estimate as text, "1 200 – 1 800" or "1 200", or null when it has
+ * none — an estimate left out is stored as 0 and 0, and "0 – 0" would read as
+ * a worthless lot rather than an unknown one.
+ */
+export function estimateText(lot: {
+  estimateLowPts: number;
+  estimateHighPts: number;
+}): string | null {
+  const { estimateLowPts: low, estimateHighPts: high } = lot;
+  if (low === 0 && high === 0) return null;
+  if (high <= low) return pts(low);
+  return `${pts(low)} – ${pts(high)}`;
+}

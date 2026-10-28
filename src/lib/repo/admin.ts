@@ -171,10 +171,11 @@ export interface ReviewCandidate {
   userId: number;
   name: string;
   paddle: string;
-  /** Their highest bid on this lot — what they would pay if awarded it. */
-  topPts: number;
-  /** Which round that bid landed in. */
-  topRound: number;
+  /** Every point their presses on this lot cost them. */
+  spentPts: number;
+  /** The round of their last press. */
+  lastRound: number;
+  /** How many times they pressed. */
   bidCount: number;
   status: "active" | "suspended" | "closed";
   /** Their wallet balance now — whether they can pay for what they bid. */
@@ -189,7 +190,7 @@ export interface ReviewLotRow {
   closedAt: string | null;
   /** The round the clock ran out in. */
   closedInRound: number;
-  /** The bid that was standing when the clock stopped — the default choice. */
+  /** The lot's total presses when the clock stopped. */
   standingPts: number;
   standingPaddle: string | null;
   standingUserId: number | null;
@@ -203,13 +204,16 @@ export interface ReviewLotRow {
 }
 
 /**
- * Every lot waiting on a decision, newest first.
+ * Every lot waiting on a person, newest first: closed, but not handed over
+ * (`closeBidding`) — the rare lot with nobody to give it to, or one left from
+ * when every winner was named by hand.
  *
- * ⚠ Rows whose stored outcome is still `running` are included and then settled
- * in memory, for the same reason every other read in this codebase does it: the
- * ticker persists the transition, but a reader that trusts the stored value
- * shows an empty queue for however long the ticker takes to notice. An admin
- * refreshing the dashboard the second a clock hits zero must see the lot.
+ * ⚠ Rows whose stored outcome is still `running` are settled in memory, for
+ * the same reason every other read in this codebase does it: the ticker
+ * persists the transition, but a reader that trusts the stored value shows an
+ * empty queue for however long the ticker takes to notice. One that has
+ * somebody to go to — an instant winner or a last presser — is left out: the
+ * ticker hands it over when it gets there, and nobody need decide anything.
  */
 export async function reviewQueue(): Promise<ReviewLotRow[]> {
   const rows = await query<{
@@ -252,7 +256,12 @@ export async function reviewQueue(): Promise<ReviewLotRow[]> {
         now,
       ),
     }))
-    .filter(({ live }) => live.outcome === "review");
+    .filter(
+      ({ row, live }) =>
+        live.outcome === "review" &&
+        (row.outcome === "review" ||
+          (row.designated_user_id ?? row.leader_user_id) === null),
+    );
 
   if (pending.length === 0) return [];
 
@@ -297,22 +306,26 @@ async function candidatesFor(
     user_id: number;
     name: string;
     paddle: string;
-    top_pts: number;
-    top_round: number;
-    bid_count: number;
     status: ReviewCandidate["status"];
+    bid_count: number;
+    spent_pts: number;
+    last_round: number;
     balance_pts: number;
   }>(
-    `SELECT DISTINCT ON (b.lot_id, b.user_id)
-            b.lot_id, b.user_id, u.name, b.paddle, u.status,
-            b.points AS top_pts, b.round AS top_round,
-            (SELECT count(*)::int FROM bids x
-              WHERE x.lot_id = b.lot_id AND x.user_id = b.user_id) AS bid_count,
+    /*
+     * The last presser first — who takes the lot if nobody presses again, and
+     * so the ordinary answer — then everyone else by how recently they pressed.
+     */
+    `SELECT b.lot_id, b.user_id, u.name, u.paddle, u.status,
+            count(*)::int AS bid_count,
+            COALESCE(sum(b.cost_pts), 0)::int AS spent_pts,
+            max(b.round) AS last_round,
             COALESCE((SELECT pts FROM balances WHERE user_id = b.user_id), 0)
               AS balance_pts
        FROM bids b JOIN users u ON u.id = b.user_id
       WHERE b.lot_id = ANY($1::text[])
-      ORDER BY b.lot_id, b.user_id, b.points DESC`,
+      GROUP BY b.lot_id, b.user_id, u.name, u.paddle, u.status
+      ORDER BY b.lot_id, max(b.id) DESC`,
     [lotIds],
   );
 
@@ -323,23 +336,20 @@ async function candidatesFor(
       userId: c.user_id,
       name: c.name,
       paddle: c.paddle,
-      topPts: c.top_pts,
-      topRound: c.top_round,
+      spentPts: c.spent_pts,
+      lastRound: c.last_round,
       bidCount: c.bid_count,
       status: c.status,
       balancePts: c.balance_pts,
     });
     byLot.set(c.lot_id, list);
   }
-  // Highest bid first: the standing leader heads every list, so the ordinary
-  // decision is the top of the dropdown.
-  for (const list of byLot.values()) list.sort((a, b) => b.topPts - a.topPts);
   return byLot;
 }
 
 /**
- * The bidders on one lot, for deciding it before bidding has stopped — the
- * same list the queue offers once it has.
+ * The pressers on one lot, last presser first — the same list the queue offers
+ * once it has closed.
  */
 export async function lotCandidates(lotId: string): Promise<ReviewCandidate[]> {
   return (await candidatesFor([lotId])).get(lotId) ?? [];

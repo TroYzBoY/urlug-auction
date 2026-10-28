@@ -88,9 +88,10 @@ function fields(formData: FormData) {
     provenance: get("provenance") ?? "",
     condition: get("condition") ?? "",
     dimensions: get("dimensions") ?? "",
-    estimateLowPts: Number(get("estimateLowPts")),
-    estimateHighPts: Number(get("estimateHighPts")),
-    openingPts: Number(get("openingPts")),
+    // An empty box is 0 — "not given" for an estimate.
+    estimateLowPts: Number(get("estimateLowPts") ?? ""),
+    estimateHighPts: Number(get("estimateHighPts") ?? ""),
+    pressCostPts: Number(get("pressCostPts")),
     images: get("images") ?? "",
     opensAt: get("opensAt"),
   };
@@ -111,9 +112,9 @@ export async function createLotAction(
     return { status: "error", message: "Энэ дугаартай лот аль хэдийн байна." };
   }
 
-  log.info({ event: "admin.lot_created", lotId: parsed.data.id, actorId: who.id });
+  log.info({ event: "admin.lot_created", lotId: result.id, actorId: who.id });
   refresh();
-  return { status: "ok", message: `${parsed.data.code} үүслээ.` };
+  return { status: "ok", message: `${result.code} үүслээ.` };
 }
 
 export async function updateLotAction(
@@ -136,7 +137,10 @@ export async function updateLotAction(
    */
   await publish(parsed.data.id);
   refresh();
-  return { status: "ok", message: `${parsed.data.code} шинэчлэгдлээ.` };
+  return {
+    status: "ok",
+    message: `${parsed.data.code || parsed.data.id} шинэчлэгдлээ.`,
+  };
 }
 
 export async function closeAuctionAction(
@@ -169,7 +173,7 @@ export async function closeAuctionAction(
   // switches from bidding to "being checked" on this push.
   await publish(parsed.data.lotId);
   refresh();
-  return { status: "ok", message: t.admin.closedToReview };
+  return { status: "ok", message: t.admin.closedNow };
 }
 
 export async function cancelAuctionAction(
@@ -212,7 +216,7 @@ export async function cancelAuctionAction(
 const DECISION_ERROR: Record<string, string> = {
   "not-found": "Лот олдсонгүй.",
   "not-in-review": "Энэ лот хараахан шалгах шатанд ороогүй байна.",
-  "not-a-bidder": "Сонгосон хэрэглэгч энэ лотод хаялт хийгээгүй байна.",
+  "not-a-bidder": "Сонгосон хэрэглэгч энэ лотод дараагүй байна.",
   "already-decided": "Энэ лотын шийдвэр аль хэдийн гарсан байна.",
 };
 
@@ -254,7 +258,7 @@ export async function awardWinnerAction(
     event: "admin.winner_declared",
     lotId: parsed.data.lotId,
     winnerUserId: parsed.data.winnerUserId,
-    hammerPts: result.hammerPts,
+    presses: result.presses,
     actorId: who.id,
   });
 
@@ -262,15 +266,15 @@ export async function awardWinnerAction(
   refresh();
   return {
     status: "ok",
-    message: t.admin.winnerDeclared(result.name, result.hammerPts),
+    message: t.admin.winnerDeclared(result.name),
   };
 }
 
 const DESIGNATE_ERROR: Record<string, string> = {
   "not-found": "Лот олдсонгүй.",
   "not-running": "Лот хараахан эхлээгүй байна.",
-  "not-a-bidder": "Сонгосон хэрэглэгч энэ лотод хаялт хийгээгүй байна.",
-  closed: "Лотын хаялт хаагдсан байна. Хуудсыг дахин ачаалж ялагчийг зарлана уу.",
+  "not-a-bidder": "Сонгосон хэрэглэгч энэ лотод дараагүй байна.",
+  closed: "Лот хаагдсан байна. Хуудсыг дахин ачаална уу.",
 };
 
 /**
@@ -393,7 +397,7 @@ export async function rescheduleAction(
       status: "error",
       message:
         result.reason === "has-bids"
-          ? "Хаялт хийгдсэн лотыг хойшлуулах боломжгүй. Цуцлаад дахин үүсгэнэ үү."
+          ? "Дарагдсан лотыг хойшлуулах боломжгүй. Цуцлаад дахин үүсгэнэ үү."
           : "Лот олдсонгүй.",
     };
   }

@@ -115,6 +115,21 @@ CREATE TABLE IF NOT EXISTS lots (
 
 CREATE INDEX IF NOT EXISTS lots_starts_idx ON lots (starts_at);
 
+-- ── The format: the last to press wins ──────────────────────────────────────
+--
+-- Not an auction. Every press of a lot's button costs `press_cost_pts`, charged
+-- from the presser's balance (`placeBid` in src/lib/repo/bids.ts); each press
+-- resets the bid clock; when the clock finally runs out, whoever pressed LAST
+-- takes the lot — or the admin's instant winner, if one was chosen. Set per lot
+-- by an admin, and fixed once the lot opens: changing what a press costs while
+-- people are pressing would change what the presses already made meant.
+--
+-- `opening_pts` and the estimates are left from the auction format. The
+-- estimates still describe what an item is worth when given; nothing reads
+-- `opening_pts` any more.
+ALTER TABLE lots ADD COLUMN IF NOT EXISTS press_cost_pts INT NOT NULL DEFAULT 1
+  CHECK (press_cost_pts > 0);
+
 -- ── Live auction state ───────────────────────────────────────────────────────
 --
 -- One row per lot. This row is the SERIALIZATION POINT: every bid takes
@@ -217,9 +232,10 @@ CREATE TABLE IF NOT EXISTS bids (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS bids_idempotency_idx ON bids (lot_id, idempotency_key);
--- Each bidder's price is their own and strictly increases, so ONE bidder can
--- never bid the same price twice on a lot — two different bidders can, and
--- often will. (It was (lot_id, points) while the lot had one shared price.)
+-- `points` is each presser's own running count (see `cost_pts` below), so ONE
+-- presser can never hold the same count twice on a lot — two different
+-- pressers can, and always will. (It was (lot_id, points) while the lot had
+-- one shared price.)
 DROP INDEX IF EXISTS bids_price_idx;
 CREATE UNIQUE INDEX IF NOT EXISTS bids_user_price_idx ON bids (lot_id, user_id, points);
 CREATE INDEX        IF NOT EXISTS bids_feed_idx       ON bids (lot_id, id DESC);
@@ -244,6 +260,14 @@ CREATE TRIGGER bids_no_update BEFORE UPDATE OR DELETE ON bids
 -- else here; NULL for bids placed before it was recorded.
 ALTER TABLE bids ADD COLUMN IF NOT EXISTS clock_left_ms INT
   CHECK (clock_left_ms IS NULL OR clock_left_ms >= 0);
+
+-- One row is one PRESS. `points` holds the presser's running count on the lot —
+-- 1 for their first press, 2 for their second — which is what the room shows
+-- beside each press. (Rows from the auction format hold a price instead.)
+-- `cost_pts` is what that press was charged, a copy of the lot's price at the
+-- time; the matching ledger row is kind 'press' with this row as its ref.
+ALTER TABLE bids ADD COLUMN IF NOT EXISTS cost_pts INT
+  CHECK (cost_pts IS NULL OR cost_pts > 0);
 
 -- ── Participation ────────────────────────────────────────────────────────────
 --
@@ -281,6 +305,15 @@ CREATE TABLE IF NOT EXISTS ledger_entries (
   memo       TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- 'press' is a press of a lot's button (ref: the bids row). The list is
+-- rebuilt rather than added to: CREATE TABLE above does nothing on a database
+-- that already has the table, so its CHECK can only grow here. Re-adding it
+-- each run is safe — every existing row already satisfies the wider list.
+ALTER TABLE ledger_entries DROP CONSTRAINT IF EXISTS ledger_entries_kind_check;
+ALTER TABLE ledger_entries ADD CONSTRAINT ledger_entries_kind_check CHECK (kind IN (
+  'topup', 'join_fee', 'hammer_settlement', 'refund', 'adjustment', 'bonus', 'press'
+));
 
 CREATE INDEX IF NOT EXISTS ledger_user_idx ON ledger_entries (user_id, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS ledger_once_idx

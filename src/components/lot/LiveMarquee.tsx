@@ -21,8 +21,9 @@ export type MarqueeLot = {
 const MIN_ITEMS = 8;
 
 /**
- * The live lots sliding past under the hero, each with its standing price,
- * bid count and round — prices roll as the shared poll brings new bids.
+ * The live lots sliding past under the hero, each with how many times it has
+ * been pressed and its round — the counts roll as the shared poll brings new
+ * presses.
  *
  * The track is the list twice over and slides exactly one copy's width, so
  * the loop is seamless. It holds still under a pointer or keyboard focus so an
@@ -54,12 +55,11 @@ export function LiveMarquee({ lots }: { lots: MarqueeLot[] }) {
           <span className="marquee-price" data-numerals>
             <RollingNumber value={live?.currentPts ?? lot.currentPts} />
             <span className="text-muted ml-1 text-xs font-normal">
-              {t.common.point}
+              {t.room.timesUnit}
             </span>
           </span>
           <span className="marquee-meta" data-numerals>
-            {t.lots.roundShort(live?.round ?? lot.round)} ·{" "}
-            {t.lots.bidsCount(live?.bidCount ?? lot.bidCount)}
+            {t.lots.roundShort(live?.round ?? lot.round)}
           </span>
         </Link>
       );

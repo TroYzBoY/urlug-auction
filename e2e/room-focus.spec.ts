@@ -46,7 +46,7 @@ for (const { width, height } of PHONES) {
       }, focus);
       await page.goto("/auction/F01");
 
-      const bid = page.getByRole("button", { name: /Үнэ хаях/ });
+      const bid = page.getByRole("button", { name: /^Дарах/ });
       await expect(bid).toBeVisible();
       const box = (await bid.boundingBox())!;
       expect(
@@ -92,7 +92,7 @@ test("focus mode keeps the clocks and the bid, and is remembered", async ({
     0,
   );
   await expect(page.getByRole("timer")).toHaveCount(2);
-  await expect(page.getByRole("button", { name: /Үнэ хаях/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Дарах/ })).toBeVisible();
   // The name leaves the screen, not the page: still the heading.
   await expect(
     page.getByRole("heading", { name: "Хүрэл цоморлиг" }),
@@ -122,7 +122,7 @@ test("a phone shows the picture, the clocks and the bid, and the description on 
 
   await expect(page.locator(".lot-plate")).toBeVisible();
   await expect(page.getByRole("timer")).toHaveCount(2);
-  await expect(page.getByRole("button", { name: /Үнэ хаях/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Дарах/ })).toBeVisible();
   // The words are not on the page until they are asked for.
   await expect(page.getByText("Тест лот.")).toHaveCount(0);
 
@@ -135,7 +135,7 @@ test("a phone shows the picture, the clocks and the bid, and the description on 
   // Closing puts the bidder back in the room, bid button and all.
   await page.keyboard.press("Escape");
   await expect(sheet).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Үнэ хаях/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Дарах/ })).toBeVisible();
 
   // A desktop has no picture to carry the button; it stands under the title.
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -143,7 +143,7 @@ test("a phone shows the picture, the clocks and the bid, and the description on 
   await expect(page.getByRole("button", { name: "Дэлгэрэнгүй" })).toBeVisible();
 });
 
-test("the last clock reaching zero takes the bid button away before the server answers", async ({
+test("the last clock reaching zero takes the press button away before the server answers", async ({
   page,
 }) => {
   await makeLiveLot("F03");
@@ -161,10 +161,10 @@ test("the last clock reaching zero takes the bid button away before the server a
   await finalRoundEndingIn("F03", 4_000);
   await page.goto("/auction/F03");
 
-  await expect(page.getByRole("button", { name: /Үнэ хаях/ })).toBeVisible();
-  await expect(page.getByText("Хаялт хаагдаж байна")).toBeVisible({
+  await expect(page.getByRole("button", { name: /^Дарах/ })).toBeVisible();
+  await expect(page.getByText("Лот хаагдаж байна")).toBeVisible({
     timeout: 10_000,
   });
-  await expect(page.getByRole("button", { name: /Үнэ хаях/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Дарах/ })).toHaveCount(0);
   await expect(page.getByRole("timer")).toHaveCount(0);
 });

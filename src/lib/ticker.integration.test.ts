@@ -53,18 +53,18 @@ beforeEach(async () => {
 });
 
 /**
- * A round-6 lot with one bid on it, decided by the clock, whose bid clock runs
- * out `msFromNow` from now. Round 6 because there an expiring clock ends the
- * sale; in rounds 1–5 it only moves the lot up a round.
+ * A round-6 lot with one press on it, whose bid clock runs out `msFromNow`
+ * from now. Round 6 because there an expiring clock ends the lot; in rounds
+ * 1–5 it only moves the lot up a round.
  */
 async function seedLot(msFromNow: number): Promise<void> {
-  // An admin, so a closing lot has somebody to tell.
+  // An admin, to show that closing a lot no longer needs one told.
   const admin = await seedUser(url, { phone: "99119999", paddle: "Т-001" });
   await query("UPDATE users SET role = 'admin' WHERE id = $1", [admin.id]);
   const bidder = await seedUser(url, { phone: "99110001", paddle: "Т-100" });
   await seedRunningLot(url, {
     lotId: LOT,
-    currentPts: 1300,
+    currentPts: 1,
     round: 6,
     bidClockMsFromNow: msFromNow,
     leaderPaddle: bidder.paddle,
@@ -74,8 +74,8 @@ async function seedLot(msFromNow: number): Promise<void> {
     bidder.id,
   ]);
   await query(
-    `INSERT INTO bids (lot_id, user_id, paddle, points, round, idempotency_key)
-     VALUES ($1, $2, $3, 1300, 6, 'seed-1300')`,
+    `INSERT INTO bids (lot_id, user_id, paddle, points, cost_pts, round, idempotency_key)
+     VALUES ($1, $2, $3, 1, 1, 6, 'seed-1')`,
     [LOT, bidder.id, bidder.paddle],
   );
 }
@@ -99,8 +99,8 @@ describe("tickFor", () => {
 
     expect(report.leader).toBe(true);
     expect(report.settled).toBe(1);
-    // Closed for an admin to decide — the clock no longer sells anything.
-    expect(await outcome()).toBe("review");
+    // Closed and handed to the last presser in the same call.
+    expect(await outcome()).toBe("sold");
 
     /*
      * It stayed for a clock 1.5s away rather than leaving it to the next call,
@@ -109,7 +109,7 @@ describe("tickFor", () => {
     expect(took).toBeGreaterThanOrEqual(1_500);
     expect(took).toBeLessThan(4_000);
 
-    // The admins' message went with the call that closed the lot.
+    // The winner's message went with the call that closed the lot.
     const pending = await query(
       "SELECT 1 FROM notifications WHERE status = 'pending'",
     );

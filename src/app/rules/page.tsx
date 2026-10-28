@@ -3,14 +3,7 @@ import { Footer } from "@/components/site/Footer";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { Reveal } from "@/components/site/Reveal";
 import { RoundLadder } from "@/components/site/RoundLadder";
-import {
-  LATE_ENTRY_FROM_ROUND,
-  LATE_ENTRY_MULTIPLIER,
-  POINT_MNT,
-  ROUNDS,
-  TOTAL_MINUTES,
-  TOTAL_ROUNDS,
-} from "@/lib/auction";
+import { POINT_MNT, ROUNDS, TOTAL_MINUTES, TOTAL_ROUNDS } from "@/lib/auction";
 import { bidClockLabel, groupNumber } from "@/lib/format";
 import { t } from "@/lib/copy";
 
@@ -60,8 +53,8 @@ export default function RulesPage() {
                 {t.rules.clocksTitle}
               </h2>
               <p className="mt-4 text-sm leading-relaxed text-muted">
-                Хаялтын хугацаа тойрог бүрд хумирна. Доорх зураглал нь тойрог
-                тус бүрийн хаялтын хугацааг харьцангуй хэмжээгээр харуулж байна.
+                Дарах хугацаа тойрог бүрд хумирна. Доорх зураглал нь тойрог тус
+                бүрийн дарах хугацааг харьцангуй хэмжээгээр харуулж байна.
               </p>
             </div>
             <RoundLadder />
@@ -75,14 +68,12 @@ export default function RulesPage() {
           </h2>
 
           <div className="mt-6 -mx-5 overflow-x-auto px-5 md:mx-0 md:px-0">
-            <table className="w-full min-w-[34rem] border-collapse text-sm">
+            <table className="w-full min-w-[20rem] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-line-strong">
                   <Th>{t.rules.table.round}</Th>
                   <Th>{t.rules.table.bidClock}</Th>
                   <Th>{t.rules.table.duration}</Th>
-                  <Th>{t.rules.table.increment}</Th>
-                  <Th>{t.rules.table.lateEntry}</Th>
                 </tr>
               </thead>
               <tbody>
@@ -94,14 +85,6 @@ export default function RulesPage() {
                       <Td accent={isLast}>{bidClockLabel(r.bidClockSec)}</Td>
                       <Td>
                         {r.durationMin} {t.common.min}
-                      </Td>
-                      <Td>
-                        {r.minIncrementPts} {t.common.point}
-                      </Td>
-                      <Td>
-                        {r.n >= LATE_ENTRY_FROM_ROUND
-                          ? `${r.n * LATE_ENTRY_MULTIPLIER} ${t.common.point}`
-                          : "—"}
                       </Td>
                     </tr>
                   );
@@ -129,8 +112,8 @@ export default function RulesPage() {
             of its own rather than a clause buried in one of the other two.
           */}
           <Rule title={t.rules.clocksEndTitle} body={t.rules.clocksEndBody} />
-          <Rule title={t.rules.incrementTitle} body={t.rules.incrementBody} />
-          <Rule title={t.rules.lateTitle} body={t.rules.lateBody} highlight />
+          <Rule title={t.rules.winnerTitle} body={t.rules.winnerBody} highlight />
+          <Rule title={t.rules.lateTitle} body={t.rules.lateBody} />
         </Reveal>
       </main>
 

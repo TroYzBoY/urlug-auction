@@ -137,17 +137,17 @@ export const resetSchema = z.object({
  * in an INT column is a database error rather than a rejection, and a rejection
  * is what the bidder should see.
  */
+/*
+ * A press carries no amount: what it costs is the lot's, read by the server
+ * under the row lock (src/lib/repo/bids.ts), never a number the browser sent.
+ */
 export const bidSchema = z.object({
   lotId: z.string().min(1).max(32),
-  points: z
-    .number()
-    .int("Үнэ бүхэл тоо байна.")
-    .positive("Үнэ эерэг байна.")
-    .max(2_000_000_000, "Үнэ хэт өндөр байна."),
   /*
    * Client-generated, and the reason a retried request after a dropped
-   * connection cannot place a second bid. Format is not enforced beyond
-   * length — it is opaque to the server, only its uniqueness matters.
+   * connection cannot press — and charge — a second time. Format is not
+   * enforced beyond length — it is opaque to the server, only its uniqueness
+   * matters.
    */
   idempotencyKey: z.string().min(8).max(64),
 });
@@ -234,19 +234,24 @@ const houseTimeSchema = (message: string) =>
     .refine((d) => !Number.isNaN(d.getTime()), message)
     .transform((d) => d.toISOString());
 
+/*
+ * Only the name, the opening time and the press price are needed. An id left
+ * empty takes the next free number and a code left empty takes the id
+ * (`createLot`); an estimate left empty is "not given".
+ */
 export const lotSchema = z
   .object({
     /* Appears in the URL, so it is restricted to what is safe there. */
     id: z
       .string()
       .trim()
-      .min(1, "Лотын дугаар шаардлагатай.")
       .max(32)
       .regex(
-        /^[A-Za-z0-9_-]+$/,
+        /^[A-Za-z0-9_-]*$/,
         "Лотын дугаар зөвхөн үсэг, тоо, зураас байна.",
-      ),
-    code: z.string().trim().min(1, "Кодыг бичнэ үү.").max(40),
+      )
+      .default(""),
+    code: z.string().trim().max(40).default(""),
     title: z.string().trim().min(1, "Нэрийг бичнэ үү.").max(160),
     maker: z.string().trim().max(120).default(""),
     year: z.string().trim().max(40).default(""),
@@ -257,7 +262,11 @@ export const lotSchema = z
     dimensions: z.string().trim().max(200).default(""),
     estimateLowPts: ptsField("Доод үнэлгээ"),
     estimateHighPts: ptsField("Дээд үнэлгээ"),
-    openingPts: ptsField("Нээлтийн үнэ"),
+    pressCostPts: z
+      .number({ message: "Нэг дарах үнэ тоо байна." })
+      .int("Нэг дарах үнэ бүхэл тоо байна.")
+      .min(1, "Нэг дарах үнэ 1 онооноос багагүй байна.")
+      .max(1_000_000, "Нэг дарах үнэ хэт өндөр байна."),
     /*
      * The gallery, as newline-separated `url | alt | credit` lines — the shape
      * a textarea produces. Parsed here so the repository receives a real list
@@ -316,7 +325,8 @@ export const lotSchema = z
       ),
     opensAt: houseTimeSchema("Эхлэх хугацаа буруу байна."),
   })
-  .refine((v) => v.estimateHighPts >= v.estimateLowPts, {
+  // An upper estimate left empty means the lower one alone.
+  .refine((v) => v.estimateHighPts === 0 || v.estimateHighPts >= v.estimateLowPts, {
     message: "Дээд үнэлгээ доод үнэлгээнээс бага байж болохгүй.",
     path: ["estimateHighPts"],
   });

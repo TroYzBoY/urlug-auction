@@ -66,14 +66,14 @@ export async function getRoomState(
 }
 
 /**
- * The shape a bid attempt resolves to.
+ * The shape a press resolves to.
  *
  * Kept exported from here because `BidPanel` and `AuctionRoom` import it, and
  * the real implementation now lives behind a Server Function — see
  * `src/app/actions/bid.ts`.
  */
 export type BidResult =
-  | { ok: true; acceptedPts: number }
+  | { ok: true; /** The presser's count after it. */ count: number }
   | {
       ok: false;
       reason:
